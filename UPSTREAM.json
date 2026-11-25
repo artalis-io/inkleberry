@@ -1,0 +1,28 @@
+{
+  "repository": "https://github.com/tensorfish/squid5090",
+  "revision": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "files": {
+    "LICENSE": "1b5d326b444bb555cfc1f3a67b13e4339d66d38e019b654499b44e03759ef08e",
+    "build.zig": "be0b0dbf9bc9b61af20b2c180aa97da4de1410a9e79f4df77477897fbb0176c5",
+    "cuda/config.hpp": "aac9af6fbe2c4399634691926fd9a021d16b69b770a0457a869c6bc5e7284bf6",
+    "cuda/cuda_abi.cu": "887475d97a93888cc18cfa81f8149497aaeaa560c9c59dd8dd2aa714596150e8",
+    "cuda/kernels.hpp": "69c233c188ba6c78037847d5fe2f7f4134ca03201fd0e9a27682e862016476d3",
+    "cuda/kernels_common.cuh": "ba38d0008d95cc5620682fa2aaf3429d7189b2d6738deb18065d5fb13e008028",
+    "cuda/kernels_dspark.cu": "9612cf8ddf8163c2c142fbd11e5639c18cea8a1a479839a44879c0972fb7ca1b",
+    "cuda/kernels_gemv.cu": "5b0a3e9fa796571635eb81757868d9d4c6d62ce56cf187897de66273d2d139d7",
+    "cuda/kernels_inkling.cu": "da44793cd4596da64117aeaa50f160f43b31f7353f8113cbdf326017d24effd3",
+    "cuda/kernels_prefill.cu": "69320ec051750aef4341ac61c4f443e1c526ea4275b51963ddaba3e72beacc21",
+    "cuda/weights.hpp": "56caa3100339f6065bfaac77899109e32b102836f551bc1a98a90da23aee74c9",
+    "src/constants.zig": "0cb5bb596cb8292ce24badc00276314e7fc6eb5dd6d8ec933d695be37e3abb1f",
+    "src/cuda.zig": "756fad46652ce5fecfa208ff5d178a3fcd969322d8e5d53648c19d2c904a3e4d",
+    "src/engine.zig": "ab0a077967507539cb395c11db5112ee0457f0d2df06b957f0fd64384e87e350",
+    "src/main.zig": "8bef31c92f169c7b5f070ee233a522f3a05d4ee2e070a4ddd632fd9aa674bb35",
+    "src/safetensors.zig": "61ef4bf09b1440b3d71518e4098d326494559b655576d538a9144cf764ebbd11",
+    "src/server.zig": "5679c6eaa1ece58ab8fb0f41208ba4fa2aeb32b071224e29985f2251eb51569c",
+    "src/tiger.zig": "f9c238ce9ca09b3b0b3d8a6d69b68cef8040b6d129197aca19e5a73a8a2b1718",
+    "src/tokenizer.zig": "5cd361cc6e098a5d448598f0a0c7d585711d769032a42b3732be3fadb812986e",
+    "src/vram_arena.zig": "75112e04283e347ab5a2d4e7ff873c33d92b9a08f47e6daa33c8c146b8986b91",
+    "src/weights.zig": "96a379d4210bf32e57bcac58242b7c976c0ca3ca049a9a26ecb1f6bfb88d0f14"
+  },
+  "policy": "CUDA mathematics and Zig oracle remain unchanged in the first port slice. Local host code is separate."
+}

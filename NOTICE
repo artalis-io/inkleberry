@@ -37,3 +37,10 @@ following open-source projects:
 
 4. Inkling-2-Mini model architecture & tokenizer specification (Apache License 2.0)
    Thinking Machines / Inkling-2-Mini.
+
+Artalis C host port
+Copyright (c) 2026 Artalis
+C host additions and translations are identified in their file headers.
+Repository/API/testing practices reference artalis-io/jev-bush at
+85fd51f8c99b1b8b7ea26d33e02413e681a9271d (0BSD); its numerical engine is not
+used by this port.
