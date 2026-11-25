@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
-#include <sq_gpu.h>
+#include <sq_engine.h>
 
 int main(void) {
+    sq_session *session = NULL;
+    if (sq_session_create(NULL, NULL, NULL, &session) != SQ_INVALID_ARGUMENT || session ||
+        sq_session_destroy(&session) != SQ_OK)
+        return 1;
     sq_weight_config config = SQ_WEIGHT_CONFIG_INIT;
     sq_gpu_weights *weights = NULL;
     sq_weight_plan plan;

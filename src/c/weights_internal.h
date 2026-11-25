@@ -36,6 +36,7 @@ struct sq_gpu_weights {
     sq_weight_span spans[SQ_WEIGHT_MAX_SPANS];
     sq_weight_view views[SQ_WEIGHT_MAX_VIEWS];
     size_t span_count, view_count, offset, capacity;
+    size_t session_users;
     bool execute, ready;
     const sq_inkling_checkpoint *checkpoint;
     sq_status status;

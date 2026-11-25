@@ -7,7 +7,7 @@
 
 int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "--version")) {
-        printf("squid-c %s (checkpoint/tokenizer tools; generation not ported)\n", sq_version());
+        printf("squid-c %s (host tools; optional CUDA AR CLI)\n", sq_version());
         return 0;
     }
     if ((argc == 3 || argc == 4) && !strcmp(argv[1], "weight-plan")) {
@@ -91,8 +91,9 @@ int main(int argc, char **argv) {
     if (argc != 3 || strcmp(argv[1], "inspect")) {
         fputs("usage: squid-c inspect FILE.safetensors | tokenize TOKENIZER.json TEXT | "
               "validate-model MAIN.safetensors [MTP.safetensors] | "
-              "weight-plan exact|fp8|nvfp4 [ar|mtp|mtp-bf16] | --version\nC generation is not "
-              "implemented yet.\n",
+              "weight-plan exact|fp8|nvfp4 [ar|mtp|mtp-bf16] | --version\nGeneration requires the "
+              "optional "
+              "squid-c-generate CUDA target.\n",
               stderr);
         return 2;
     }

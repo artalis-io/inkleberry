@@ -1,0 +1,446 @@
+{
+  "date": "2026-11-25",
+  "upstream_commit": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "base_port_commit": "fe5d198",
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+  "gpu_uuid": "GPU-5a215cb3-57b0-0a6e-d511-e90bb05c0e05",
+  "driver": "595.104.02",
+  "cuda": "13.5.37",
+  "zig": "0.17.1",
+  "architecture": "sm_120a",
+  "host_compiler": "GCC 13.3.0 Ubuntu 24.04",
+  "model_files": [
+    {
+      "name": "model-00001-of-00001.safetensors",
+      "bytes": 19526019168,
+      "sha256": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1"
+    },
+    {
+      "name": "mtp.safetensors",
+      "bytes": 635801416,
+      "sha256": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+    }
+  ],
+  "tokenizer_sha256": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+  "ordinary": {
+    "repetitions": 1,
+    "timing": "qualification, not benchmark",
+    "contexts": "real repeated tokenized text, not synthetic KV",
+    "cases": [
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 0,
+        "kv": 0,
+        "graphs": false,
+        "wall_seconds": 3.4069597130001057
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 0,
+        "kv": 0,
+        "graphs": true,
+        "wall_seconds": 3.354958854004508
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 0,
+        "kv": 1,
+        "graphs": false,
+        "wall_seconds": 3.30705447201035
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 0,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 3.303415362985106
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 30,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 0,
+        "kv": 2,
+        "graphs": false,
+        "wall_seconds": 3.2511806480179075
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 30,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 0,
+        "kv": 2,
+        "graphs": true,
+        "wall_seconds": 3.153606793988729
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 1,
+        "kv": 0,
+        "graphs": false,
+        "wall_seconds": 3.097673993004719
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 1,
+        "kv": 0,
+        "graphs": true,
+        "wall_seconds": 3.1029755970230326
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 1,
+        "kv": 1,
+        "graphs": false,
+        "wall_seconds": 3.1049808289972134
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 1,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 3.1128284609876573
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 1,
+        "kv": 2,
+        "graphs": false,
+        "wall_seconds": 3.1024537709890865
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 1,
+        "kv": 2,
+        "graphs": true,
+        "wall_seconds": 3.102040619996842
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 0,
+        "graphs": false,
+        "wall_seconds": 3.0519102459948044
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 0,
+        "graphs": true,
+        "wall_seconds": 3.1030816290003713
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": false,
+        "wall_seconds": 3.104252696997719
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 3.1037399120104965
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 2,
+        "graphs": false,
+        "wall_seconds": 3.0539208780101035
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 33,
+        "logits_compared": 1000290,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 2,
+        "graphs": true,
+        "wall_seconds": 3.104477158980444
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 1,
+        "logits_compared": 200058,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 2.902850894985022
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 7,
+        "logits_compared": 200058,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 2.902129016991239
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 8,
+        "logits_compared": 200058,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 2.9048801600001752
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 9,
+        "logits_compared": 400116,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 2.9515989940264262
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 31,
+        "logits_compared": 800232,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 3.0525150109897368
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 32,
+        "logits_compared": 800232,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 3.106580210995162
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 2047,
+        "logits_compared": 51214848,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 7.357526577980025
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 2048,
+        "logits_compared": 51214848,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 7.255420645000413
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 2049,
+        "logits_compared": 51414906,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 7.358529966993956
+      }
+    ]
+  },
+  "long": {
+    "repetitions": 1,
+    "timing": "qualification, not benchmark",
+    "contexts": "real repeated tokenized text, not synthetic KV",
+    "cases": [
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 8192,
+        "logits_compared": 204859392,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.135426,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 22.679024466022383
+      },
+      {
+        "c_ar_parity": true,
+        "prompt_tokens": 131072,
+        "logits_compared": 3277750272,
+        "generated_tokens": 32,
+        "cancel_return_seconds": 0.0,
+        "caller_context_preserved": true,
+        "mode": 2,
+        "kv": 1,
+        "graphs": true,
+        "wall_seconds": 354.6871547070041
+      }
+    ]
+  },
+  "tests": {
+    "host_linux": "passed",
+    "host_macos_arm64": "passed",
+    "installed_gpu_c_and_cpp": "passed",
+    "asan_ubsan_linux": "passed",
+    "tsan_linux": "passed",
+    "parser_fuzzers": 2,
+    "fuzzer_runs_each": 3000,
+    "c_only_memcheck": {
+      "errors": 0,
+      "leaked_bytes": 0,
+      "prompt_tokens": 46,
+      "generated_tokens": 64,
+      "mode": "nvfp4",
+      "kv": "fp8",
+      "graphs": true
+    },
+    "native_eos": {
+      "prompt_tokens": 21,
+      "generated_tokens": 37,
+      "finish_reason": "EOS"
+    },
+    "native_request_isolation": "A/B/A plus callback stop, cancellation and invalid input recovery",
+    "final_diagnostic_changes_native_smoke": "33-token NVFP4/FP8 graph parity and C-only memcheck passed"
+  },
+  "compiled_artifacts_sha256": {
+    ".build/ar-oracle": "e2d715d001a6a701487fc7560eba247d4c4536b0e3371bd5e31c30a7157bdfb9",
+    "squid-c-generate": "8e90ddc50dba33c6f1d61b727f71f94fa0ea49ca77475aa8bc21385e981d0f49",
+    ".build/checked-weights.cuda.o": "b06a6a49822b8f2149a12db0f1f2ad97365130a8bd680ba886a9bb053faa1343",
+    ".build/checked-prefill.cuda.o": "5044b997f81a36dbc8231cec7c87b9e20a85545cb5ecc0ca354c763962891811",
+    ".build/kernels_gemv.cuda.o": "8b7366ef117301cd72a64054c0eadda67cbb18e5519cb3a98877783a17eae4af",
+    ".build/kernels_inkling.cuda.o": "767913a7e05b11b4479af46c959e0470f293fb160d4bf87ae1ee17f2f1ecf5d0",
+    ".build/kernels_dspark.cuda.o": "187a3657392a3956d3e17aa525e9c79b517d62e3a02d8a3389b6c924c0a3db09"
+  },
+  "translation_sources_sha256": {
+    "src/c/engine_bind.c": "316bb2cac199b019b86351261db6b835b843ae70ea0a259d4f128caa62a78de5",
+    "src/c/engine_forward.c": "fde170cd78ef5aee53b6849dbf4e10b049cb0b8b59fe3ab5ced0b6a2b770bd23",
+    "src/c/engine_layout.c": "c32dae760ea97534341608804eca9e575c9378b21e9c3199189b344d23b58b6f",
+    "src/c/engine_prefill.c": "6a24e498e4372c153a54cdb087d259433816860bf121b2d14f9e28f858277b30",
+    "src/c/engine_runtime.c": "328c8e52f667b003c1d8ed3a8379b390573d6e75fbaa9265b7c7d78eec7c94d4",
+    "src/cuda/checked_prefill.cu": "4c785b3cb00fd9be8622ebda6787c9256398763017bbb21f422a0238be5f6489",
+    "src/cuda/checked_weights.cu": "db55834b7ec32ad750abd7069876725a031c45580c5f18830ff89f601aa8abfc"
+  },
+  "not_qualified": [
+    "stochastic sampling",
+    "DSpark/speculation",
+    "prefix caching",
+    "serving",
+    "retrieval quality",
+    "throughput speedups",
+    "contexts beyond 131072 tokens"
+  ],
+  "notes": [
+    "One repetition per qualification case, not a performance benchmark",
+    "Logits compare every vocabulary value at the last position of each eight-token teacher-forced batch",
+    "Long inputs are actual repeated tokenized text prefills, not synthetic KV allocations",
+    "Context restoration and post-cancellation reuse tested; cancellation latency is one observation, not a worst-case guarantee",
+    "The 27-case matrix was rerun after adding A/B/A isolation; long fixtures ran before final nonnumerical error-path hardening, followed by a native short parity and memcheck rerun"
+  ]
+}

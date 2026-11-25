@@ -13,6 +13,7 @@ typedef struct {
 int sq_cuda_enter(int, sq_device_scope *);
 int sq_cuda_leave(const sq_device_scope *);
 int sq_cuda_available(size_t *);
+int sq_cuda_launch_status(void);
 int sq_cuda_pack(const void *, void *, void *, void *, int, int, int, float *, void *);
 int sq_cuda_expert(const void *, const void *, void *, void *, void *, int, int, int, void *);
 int sq_cuda_rnn(const void *, void *, void *, void *, void *);

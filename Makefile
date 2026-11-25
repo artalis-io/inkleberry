@@ -60,10 +60,11 @@ generated-check:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 .build/inkling-test: test/inkling.c libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/weights-test: test/weights_runtime.c libsq.a .build/config
+.build/weights-test: test/weights_runtime.c test/mock_gpu.h libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-check: .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
+check: .build/engine_forward.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
 	.build/unit
+	.build/engine-test
 	python3 test/weights_plan.py ./squid-c
 	.build/inkling-test
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
@@ -80,10 +81,11 @@ sanitize:
 	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test squid-c
+	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test squid-c
 	.build/concurrency
 	.build/tokenizer-test .build/tokenizer-fixture.json
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
+	.build/engine-test
 fuzz-smoke: | .build
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
@@ -98,7 +100,7 @@ lint: generated-check
 	python3 tools/lint.py
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib/pkgconfig $(DESTDIR)$(PREFIX)/bin
-	cp include/sq.h include/sq_weights.h include/sq_gpu.h $(DESTDIR)$(PREFIX)/include/
+	cp include/sq.h include/sq_weights.h include/sq_gpu.h include/sq_engine.h $(DESTDIR)$(PREFIX)/include/
 	cp libsq.a $(SHARED) $(DESTDIR)$(PREFIX)/lib/
 	cp squid-c $(DESTDIR)$(PREFIX)/bin/
 	sed 's|@PREFIX@|$(PREFIX)|g' sq.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/squid-c.pc
@@ -126,7 +128,7 @@ cuda-abi-check: generated-check .build/abi-probe
 cuda-check: cuda-abi-check .build/cuda-smoke
 	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/cuda-smoke
 clean:
-	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a squid-c-weights
+	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a squid-c-weights squid-c-generate
 -include $(wildcard .build/*.d)
 
 # GPU backend is opt-in; the host library still builds without CUDA.
@@ -134,7 +136,8 @@ clean:
 gpu: generated-check libsq-gpu.a
 .build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-libsq-gpu.a: .build/gpu_cuda.o .build/checked-weights.cuda.o $(CUDA_OBJECTS)
+libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
+	rm -f $@
 	$(AR) rcs $@ $^
 .build/gpu-weight-compare.o: test/gpu_weights_compare.c include/sq_gpu.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
@@ -166,3 +169,27 @@ gpu-install-check: install-gpu
 	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/gpu-stage/usr/local/include -c test/installed_gpu_consumer.c -o .build/installed-gpu.o
 	$(CXX) .build/installed-gpu.o .build/gpu-stage/usr/local/lib/libsq-gpu.a .build/gpu-stage/usr/local/lib/libsq.a $(CUDA_LIBS) -o .build/installed-gpu
 	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/installed-gpu
+	$(CXX) -std=c++11 -Wall -Wextra -Werror -I.build/gpu-stage/usr/local/include -x c++ -c test/installed_gpu_consumer.c -o .build/installed-gpu-cpp.o
+	$(CXX) .build/installed-gpu-cpp.o .build/gpu-stage/usr/local/lib/libsq-gpu.a .build/gpu-stage/usr/local/lib/libsq.a $(CUDA_LIBS) -o .build/installed-gpu-cpp
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/installed-gpu-cpp
+.build/generate.o: cli/generate.c include/sq_engine.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+squid-c-generate: .build/generate.o libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+.build/ar-compare.o: test/ar_compare.c include/sq_engine.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.PHONY: ar-oracle
+ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/engine.zig -Mengine=src/engine.zig .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/ar-oracle
+
+.build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/c/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+
+.build/engine-test: test/engine.c test/mock_gpu.h .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) test/engine.c .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+
+.build/session-context.o: test/session_context.cu include/sq_engine.h .build/config
+	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
+
+.build/check-ar-cpp.o: test/installed_gpu_consumer.c include/sq_engine.h .build/config
+	$(CXX) -std=c++11 -Wall -Wextra -Werror -Iinclude -x c++ -c $< -o $@

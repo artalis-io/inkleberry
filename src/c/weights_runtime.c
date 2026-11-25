@@ -210,6 +210,10 @@ sq_status sq_weights_destroy(sq_gpu_weights **handle) {
         return sq_error(SQ_OK, "");
     if (!acquire(w))
         return sq_error(SQ_BUSY, "weight operation already active");
+    if (w->session_users) {
+        unlock(w);
+        return sq_error(SQ_BUSY, "GPU image is retained by a session");
+    }
     w->status = SQ_OK;
     w->failure[0] = 0;
     w->backend_error = 0;
