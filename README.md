@@ -17,7 +17,7 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - Optional C greedy AR sessions with retained weights, owned KV/recurrent state, recoverable cuBLAS dispatch, graph/eager execution and cancellation/reset.
 - Optional owned CUDA weight upload/packing with exact/FP8/NVFP4, full-vocabulary MTP, bounded readback, recoverable errors and retryable cleanup; full payload parity against the pinned Zig loader.
 
-**C autoregressive, fixed-width and adaptive speculative generation are implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Temperature/top-p/top-k sampling and fixed-width DSpark speculation are also implemented. Adaptive 2/4/8-token verification and verified prompt lookup are implemented. Prefix caching and serving remain subsequent slices. Model-backed validation is documented below. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md); [sampling/speculation contract](docs/speculation-validation.md); [adaptive/lookup contract](docs/adaptive-validation.md).
+**C autoregressive, fixed-width and adaptive speculative generation are implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Temperature/top-p/top-k sampling and fixed-width DSpark speculation are also implemented. Adaptive 2/4/8-token verification and verified prompt lookup are implemented. Session-private prefix caching is available by explicit opt-in. Serving remains a subsequent slice. Model-backed validation is documented below. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md); [sampling/speculation contract](docs/speculation-validation.md); [adaptive/lookup contract](docs/adaptive-validation.md); [prefix-cache contract](docs/prefix-validation.md).
 
 ## Build and use
 
@@ -104,6 +104,23 @@ acceptance counters and the fixed-width scope. For adaptive verification append
 Both options are explicit; existing commands keep their previous behavior. See
 [adaptive validation](docs/adaptive-validation.md) for graph ownership, overlap,
 lookup verification and qualification commands.
+
+## Prefix reuse
+
+The embedding API can opt in with `sq_session_prefix_cache(session, 1)`. It
+allocates four host-RAM local/recurrent checkpoints and a bounded global-KV
+side-request shield, with no additional device arena. At the tested 8K FP8/MTP
+configuration this uses about 984 MiB of host RAM. Defaults allocate none of it.
+Use `sq_decode_options.system_prefix_tokens` for an optional shared-prefix
+checkpoint boundary, and `sq_session_prefix_info` for completed-request reuse,
+restore, shield and host-memory counts. Reset or disable between separate trust
+scopes; this is a session cache, not a multi-tenant storage layer.
+
+The CLI accepts `--prefix-cache 1 --system-prefix 128`, but each invocation is
+one request: the cache does not persist across processes. Repeated embedding
+calls and the [prefix oracle/recovery tests](docs/prefix-validation.md) exercise
+actual reuse. Cancellation, errors, explicit reset and direct logits mutation
+invalidate cached history. See the contract for memory costs and limitations.
 
 ## Provenance and scope
 

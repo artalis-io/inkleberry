@@ -40,6 +40,28 @@ static void counted_free(void *context, void *p) {
     }
 }
 
+typedef struct {
+    size_t calls, fail_at, live;
+} cache_allocator;
+
+static void *cache_allocate(void *context, size_t bytes) {
+    cache_allocator *a = context;
+    if (++a->calls == a->fail_at)
+        return NULL;
+    void *p = malloc(bytes);
+    if (p)
+        a->live++;
+    return p;
+}
+
+static void cache_release(void *context, void *p) {
+    cache_allocator *a = context;
+    if (p) {
+        a->live--;
+        free(p);
+    }
+}
+
 static size_t forward_calls;
 static const void *mock_count_pointer, *mock_accepted_pointer;
 static int32_t mock_accepted_count = 1;
@@ -174,8 +196,33 @@ static int callback_busy(void *ctx, int32_t token) {
     (void)token;
     sq_session *s = ctx, *copy_s = s;
     sq_decode_info info = SQ_DECODE_INFO_INIT;
+    sq_prefix_info prefix = SQ_PREFIX_INFO_INIT;
+    if (sq_session_prefix_cache(s, 1) != SQ_BUSY || sq_session_prefix_info(s, &prefix) != SQ_BUSY)
+        return 0;
     return sq_session_decode_info(s, &info) == SQ_BUSY && sq_session_reset(s) == SQ_BUSY &&
            sq_session_destroy(&copy_s) == SQ_BUSY && copy_s == s;
+}
+
+static sq_session *late_cancel_session;
+static size_t late_cancel_sync;
+
+static int late_prefix_sync(void *context, void *stream) {
+    mock *m = context;
+    int rc = sync_stream(context, stream);
+    if (late_cancel_session && m->calls[SYNC] == late_cancel_sync) {
+        (void)sq_session_cancel(late_cancel_session);
+        late_cancel_session = NULL;
+    }
+    return rc;
+}
+
+static int arm_final_snapshot_cancel(void *context, int32_t token) {
+    (void)token;
+    sq_session *session = context;
+    mock *m = session->weights->backend.context;
+    late_cancel_session = session;
+    late_cancel_sync = m->calls[SYNC] + 1;
+    return 0;
 }
 
 typedef struct {
@@ -453,6 +500,75 @@ int main(void) {
     CHECK(sq_weights_destroy(&w) == SQ_OK && !m.live);
     mock_count_pointer = mock_accepted_pointer = NULL;
     mock_accepted_count = 1;
+    reset(&m);
+    w = image_with_mtp(&m, 1);
+    CHECK(w);
+    c.context_tokens = 2048;
+    cache_allocator a = {0};
+    sq_options cache_options = SQ_OPTIONS_INIT;
+    cache_options.context = &a;
+    cache_options.allocate = cache_allocate;
+    cache_options.release = cache_release;
+    CHECK(sq_session_create(w, &c, &cache_options, &s) == SQ_OK && a.live == 2);
+    CHECK(sq_session_prefix_cache(s, 2) == SQ_INVALID_ARGUMENT);
+    for (unsigned i = 1; i <= 6; i++) {
+        a.fail_at = a.calls + i;
+        CHECK(sq_session_prefix_cache(s, 1) == SQ_OUT_OF_MEMORY && a.live == 2 &&
+              !s->prefix.enabled && !s->prefix.tokens);
+        a.fail_at = 0;
+        CHECK(sq_session_prefix_cache(s, 1) == SQ_OK && a.live == 8);
+        size_t calls = a.calls;
+        CHECK(sq_session_prefix_cache(s, 1) == SQ_OK && a.calls == calls);
+        CHECK(sq_session_prefix_cache(s, 0) == SQ_OK && a.live == 2);
+    }
+    CHECK(sq_session_prefix_cache(s, 1) == SQ_OK);
+    sq_prefix_info pi = SQ_PREFIX_INFO_INIT;
+    CHECK(sq_session_prefix_info(s, &pi) == SQ_OK && pi.host_bytes > 0);
+    pi.struct_size = 0;
+    CHECK(sq_session_prefix_info(s, &pi) == SQ_INVALID_ARGUMENT);
+    pi = (sq_prefix_info)SQ_PREFIX_INFO_INIT;
+    size_t cache_calls = a.calls;
+    memcpy(s->prefix.tokens, tokens, 4 * 4);
+    s->prefix.length = 4;
+    s->prefix.live = 2;
+    CHECK(sq_session_generate(s, tokens, 4, 8, out, 8, callback_busy, s, &stats) == SQ_OK);
+    CHECK(sq_session_prefix_info(s, &pi) == SQ_OK && pi.reused_tokens == 2 &&
+          !pi.checkpoint_restores && a.calls == cache_calls);
+    s->prefix.length = 1024;
+    s->prefix.live = -1;
+    for (unsigned i = 0; i < 1024; i++)
+        s->prefix.tokens[i] = 5;
+    CHECK(sq_session_generate(s, tokens, 4, 8, out, 8, NULL, NULL, &stats) == SQ_OK);
+    CHECK(sq_session_prefix_info(s, &pi) == SQ_OK && pi.shielded_tokens == 28 &&
+          s->prefix.length == 1024 && s->prefix.live == -1);
+    CHECK(sq_session_generate(s, tokens, 4, 8, out, 8, cancelled_cb, s, &stats) == SQ_CANCELLED &&
+          s->prefix.length == 0);
+    CHECK(sq_session_prefix_cache(s, 0) == SQ_OK && sq_session_prefix_cache(s, 1) == SQ_OK);
+    int32_t prompt[129];
+    for (unsigned i = 0; i < 129; i++)
+        prompt[i] = 1;
+    w->backend.sync = late_prefix_sync;
+    CHECK(sq_session_generate(s, prompt, 129, 8, out, 8, arm_final_snapshot_cancel, s, &stats) ==
+              SQ_CANCELLED &&
+          !late_cancel_session && !s->prefix.length && s->prefix.live == -1);
+    for (unsigned i = 0; i < 4; i++)
+        CHECK(!s->prefix.checkpoints[i].valid);
+    w->backend.sync = sync_stream;
+
+    for (unsigned i = 0; i < 256; i++)
+        s->prefix.tokens[i] = 1;
+    s->prefix.length = 256;
+    s->prefix.live = -1;
+    s->prefix.checkpoints[0].position = 128;
+    s->prefix.checkpoints[0].valid = true;
+    s->prefix.use_mtp = false;
+    m.fail_op = COPY;
+    m.fail_nth = m.calls[COPY] + 1;
+    CHECK(sq_session_generate(s, prompt, 129, 8, out, 8, NULL, NULL, &stats) == SQ_GPU_ERROR &&
+          s->poisoned && !s->prefix.length);
+    m.fail_op = -1;
+    CHECK(sq_session_destroy(&s) == SQ_OK && a.live == 0 && !pinned_live && !events_live);
+    CHECK(sq_weights_destroy(&w) == SQ_OK && !m.live);
     puts("AR session simulation: bounds, retention, faults, poisoning, cleanup retry, callback "
          "BUSY and cross-thread cancellation passed");
     return 0;

@@ -17,7 +17,9 @@ is unchanged. Initialize `sq_decode_info` with `SQ_DECODE_INFO_INIT` and query
 `sq_session_decode_info` after return for lookup steps, verification-width counts
 and successful draft launches. It returns BUSY during an active operation.
 
-Each request remains independent: there is no prefix cache or HTTP service.
+This adaptive slice starts requests independently. The subsequent
+[prefix-cache slice](prefix-validation.md) adds explicit session opt-in; HTTP
+serving remains separate.
 The selector chooses verification widths 2, 4 or 8 using the original confidence
 kernel. A threshold change rebuilds only the conditional graph. Fixed graphs,
 draft graph and lookup graph are separate, session-owned resources.
@@ -128,7 +130,7 @@ ASan/UBSan, ThreadSanitizer, 3,000 fuzz iterations per parser and installed C/C+
 consumers passed; macOS ARM64 ordinary host checks passed.
 
 See [the qualification manifest](../benchmarks/adaptive-2026-11-25.json) for
-executed results, toolchain/model identities and limitations. Prefix restoration,
+executed results, toolchain/model identities and limitations. The subsequent prefix slice has its own qualification.
 HTTP serving, million-token independent retrieval and full performance/energy
 characterization remain separate release gates. No production service or global
 GPU configuration is changed by these tests.

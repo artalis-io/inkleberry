@@ -7,6 +7,7 @@
 #include "sq_engine.h"
 #include "cuda_abi.h"
 #include "lookup.h"
+#include "prefix.h"
 
 typedef struct {
     void *attn_norm;
@@ -68,6 +69,8 @@ struct sq_session {
     bool draft_in_flight;
     sq_lookup lookup;
     sq_decode_info decode_info;
+    sq_prefix prefix;
+    sq_prefix_info prefix_info;
     bool use_mtp, verifying;
     int32_t ds_cap[3];
     void *ds_k[3], *ds_v[3], *ds_ks[3], *ds_vs[3];
@@ -130,6 +133,14 @@ void sq_spec_draft(sq_session *, uint32_t, float *);
 void sq_spec_target(sq_session *, uint32_t);
 void sq_spec_verify(sq_session *, uint32_t);
 void sq_adaptive_step(sq_session *, const sq_decode_options *, bool);
+sq_status sq_prefix_allocate(sq_session *);
+void sq_prefix_free(sq_session *);
+void sq_prefix_invalidate(sq_session *);
+uint32_t sq_prefix_begin(sq_session *, const int32_t *, uint32_t, uint32_t, bool);
+void sq_prefix_save(sq_session *, unsigned, uint32_t);
+void sq_prefix_prompt(sq_session *, const int32_t *, uint32_t, bool);
+void sq_prefix_feed(sq_session *, int32_t);
+void sq_prefix_finish(sq_session *, bool);
 void sq_adaptive_drain(sq_session *);
 void sq_spec_step(sq_session *, uint32_t);
 void sq_spec_commit(sq_session *, const float *, int32_t, const int32_t *);

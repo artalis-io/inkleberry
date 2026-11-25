@@ -346,4 +346,6 @@ owned and retained. No serving or broad performance qualification is implied.
 
 The adaptive/lookup slice adds conditional 2/4/8 verification, overlapped next-draft
 execution and verified prompt lookup. See [adaptive validation](adaptive-validation.md).
-Prefix-cache and serving/release gates remain outstanding.
+The opt-in [prefix-cache slice](prefix-validation.md) adds the four-checkpoint
+and short-side-request shield path. Serving and broader release gates remain
+outstanding.

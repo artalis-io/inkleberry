@@ -4,6 +4,10 @@
 int main(void) {
     sq_session *session = NULL;
     sq_decode_options options = SQ_DECODE_OPTIONS_INIT;
+    sq_prefix_info info = SQ_PREFIX_INFO_INIT;
+    if (sq_session_prefix_cache(NULL, 1) != SQ_INVALID_ARGUMENT ||
+        sq_session_prefix_info(NULL, &info) != SQ_INVALID_ARGUMENT)
+        return 1;
     sq_decode_stats stats;
     if (sq_session_generate_ex(NULL, NULL, 0, 0, &options, NULL, 0, NULL, NULL, &stats) !=
         SQ_INVALID_ARGUMENT)
