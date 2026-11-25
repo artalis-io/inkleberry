@@ -27,6 +27,12 @@ def write(path, header, payload):
     with path.open('wb') as f:
         f.write(struct.pack('<Q',len(data)));f.write(data)
         f.truncate(8+len(data)+payload)
+        # Numeric auxiliaries for the private GPU-lifecycle simulation only.
+        for name,entry in header.items():
+            if name.endswith(('_weight_amax','_weight_outer_scale_denominator')):
+                start,end=entry['data_offsets']
+                f.seek(8+len(data)+start)
+                f.write(struct.pack('<f',1.0)*((end-start)//4))
     # Fail if the platform materializes holes rather than creating sparse files.
     if path.stat().st_blocks*512>2*1024*1024:
         raise SystemExit('Filesystem did not create a sparse fixture; refusing bulk fixture storage')
@@ -51,6 +57,16 @@ with tempfile.TemporaryDirectory(prefix='sq-schema-') as folder:
             value=json.loads(subprocess.check_output(args,text=True))
             if value['bound_tensors']!=expected or value['mtp']!=mtp or value['device_upload']:
                 raise SystemExit('CLI binding contract mismatch')
+    if len(sys.argv)>3:
+        run([sys.argv[3],*map(str,paths)])
+        # Corrupt only synthetic auxiliary scalars; original data is never used.
+        for field,value in [('model.llm.layers.0.mlp.experts.w13_weight_outer_scale_denominator',0.0),
+                            ('model.llm.layers.0.mlp.experts.w13_weight_amax',float('nan'))]:
+            data=json.dumps(headers[0],separators=(',',':')).encode()
+            offset=headers[0][field]['data_offsets'][0]
+            with paths[0].open('r+b') as f:f.seek(8+len(data)+offset);f.write(struct.pack('<f',value))
+            run([sys.argv[3],*map(str,paths),'--invalid-numerics'])
+            write(paths[0],headers[0],sizes[0])
     # Same-byte-count permutations must reach, and fail, model-role validation.
     cases=[]
     def change(name,source,mutate):

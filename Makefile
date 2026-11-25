@@ -6,6 +6,7 @@ AR ?= ar
 SAN_CC ?= clang
 SAN_CXX ?= clang++
 CFLAGS ?= -O2
+LDLIBS += -lm
 WARNFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Werror
 CPPFLAGS += -Iinclude -Isrc/c -D_FILE_OFFSET_BITS=64
 PREFIX ?= /usr/local
@@ -13,8 +14,8 @@ CUDA_ROOT ?= /usr/local/cuda
 NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
-CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -lstdc++ -lm -lpthread
-HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c
+CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
+HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c
 OBJ = $(HOST:src/c/%.c=.build/%.o)
 PIC = $(HOST:src/c/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
@@ -43,42 +44,46 @@ FORCE:
 libsq.a: $(OBJ)
 	$(AR) rcs $@ $^
 $(SHARED): $(PIC)
-	$(CC) $(SHARED_FLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(SHARED_FLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 squid-c: cli/main.c libsq.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/unit: test/unit.c libsq.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/concurrency: test/concurrency.c libsq.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 generated-check:
 	python3 tools/verify_upstream.py
 	python3 tools/generate_cuda_abi.py --check
 .build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
 	python3 $< $@
 .build/tokenizer-test: test/tokenizer.c libsq.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 .build/inkling-test: test/inkling.c libsq.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) -o $@
-check: all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
+.build/weights-test: test/weights_runtime.c libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+check: .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
 	.build/unit
+	python3 test/weights_plan.py ./squid-c
 	.build/inkling-test
-	python3 test/inkling_cases.py .build/inkling-test ./squid-c
+	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
 	.build/tokenizer-test .build/tokenizer-fixture.json
 	python3 test/tokenizer_cases.py .build/tokenizer-test ./squid-c
 	.build/concurrency
 	python3 test/safetensors_cases.py ./squid-c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c test/cuda_abi_c.c -o .build/cuda_abi_c.o
 	$(CXX) -std=c++11 -Wall -Wextra -Werror -Iinclude -x c++ -c test/installed_consumer.c -o .build/cpp-consumer.o
-	$(CC) .build/cpp-consumer.o libsq.a $(LDFLAGS) -o .build/cpp-consumer
+	$(CC) .build/cpp-consumer.o libsq.a $(LDFLAGS) $(LDLIBS) -o .build/cpp-consumer
 	.build/cpp-consumer
 sanitize:
 	$(MAKE) clean
 	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json
+	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test squid-c
 	.build/concurrency
 	.build/tokenizer-test .build/tokenizer-fixture.json
+	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
 fuzz-smoke: | .build
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
@@ -93,16 +98,16 @@ lint: generated-check
 	python3 tools/lint.py
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib/pkgconfig $(DESTDIR)$(PREFIX)/bin
-	cp include/sq.h $(DESTDIR)$(PREFIX)/include/
+	cp include/sq.h include/sq_weights.h include/sq_gpu.h $(DESTDIR)$(PREFIX)/include/
 	cp libsq.a $(SHARED) $(DESTDIR)$(PREFIX)/lib/
 	cp squid-c $(DESTDIR)$(PREFIX)/bin/
 	sed 's|@PREFIX@|$(PREFIX)|g' sq.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/squid-c.pc
 install-check: DESTDIR = $(CURDIR)/.build/stage
 install-check: PREFIX = /usr/local
 install-check: install
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include test/installed_consumer.c .build/stage/usr/local/lib/libsq.a $(LDFLAGS) -o .build/installed-static
+	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include test/installed_consumer.c .build/stage/usr/local/lib/libsq.a $(LDFLAGS) $(LDLIBS) -o .build/installed-static
 	.build/installed-static
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include test/installed_consumer.c -L.build/stage/usr/local/lib -lsq -Wl,-rpath,'$(CURDIR)/.build/stage/usr/local/lib' $(LDFLAGS) -o .build/installed-shared
+	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include test/installed_consumer.c -L.build/stage/usr/local/lib -lsq -Wl,-rpath,'$(CURDIR)/.build/stage/usr/local/lib' $(LDFLAGS) $(LDLIBS) -o .build/installed-shared
 	.build/installed-shared
 .build/%.cuda.o: cuda/%.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
@@ -121,5 +126,43 @@ cuda-abi-check: generated-check .build/abi-probe
 cuda-check: cuda-abi-check .build/cuda-smoke
 	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/cuda-smoke
 clean:
-	rm -rf .build squid-c libsq.a libsq.so libsq.dylib
+	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a squid-c-weights
 -include $(wildcard .build/*.d)
+
+# GPU backend is opt-in; the host library still builds without CUDA.
+.PHONY: gpu
+gpu: generated-check libsq-gpu.a
+.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+libsq-gpu.a: .build/gpu_cuda.o .build/checked-weights.cuda.o $(CUDA_OBJECTS)
+	$(AR) rcs $@ $^
+.build/gpu-weight-compare.o: test/gpu_weights_compare.c include/sq_gpu.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.build/gpu-weight-main.o: test/gpu_weights_compare.c include/sq_gpu.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DSQ_STANDALONE_WEIGHTS -c $< -o $@
+squid-c-weights: .build/gpu-context.o .build/gpu-weight-main.o libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+ZIG ?= zig
+.PHONY: gpu-weight-oracle
+gpu-weight-oracle: generated-check .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a
+	$(ZIG) build-exe -O ReleaseFast --dep weights -Mroot=test/oracle/weights.zig -Mweights=src/weights.zig .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/gpu-weight-oracle
+
+.build/gpu-context.o: test/gpu_context.cu include/sq_gpu.h .build/config
+	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
+.build/packing.o: test/packing.cu src/c/checked_cuda.h .build/config
+	$(NVCC) $(CUDAFLAGS) -Isrc/c -c $< -o $@
+.build/packing: .build/packing.o libsq-gpu.a
+	$(CXX) $^ $(CUDA_LIBS) -o $@
+.PHONY: gpu-packing-check install-gpu
+gpu-packing-check: generated-check .build/packing
+	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/packing
+install-gpu: install gpu
+	cp libsq-gpu.a $(DESTDIR)$(PREFIX)/lib/
+
+.PHONY: gpu-install-check
+gpu-install-check: DESTDIR = $(CURDIR)/.build/gpu-stage
+gpu-install-check: PREFIX = /usr/local
+gpu-install-check: install-gpu
+	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/gpu-stage/usr/local/include -c test/installed_gpu_consumer.c -o .build/installed-gpu.o
+	$(CXX) .build/installed-gpu.o .build/gpu-stage/usr/local/lib/libsq-gpu.a .build/gpu-stage/usr/local/lib/libsq.a $(CUDA_LIBS) -o .build/installed-gpu
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/installed-gpu

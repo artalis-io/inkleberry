@@ -279,3 +279,14 @@ sq_status sq_inkling_checkpoint_data(const sq_inkling_checkpoint *c, size_t inde
     }
     return sq_error(SQ_FORMAT, "invalid binding");
 }
+
+sq_status sq_inkling_lookup(const sq_inkling_checkpoint *c, uint32_t source, const char *name,
+                            const void **out, size_t *bytes) {
+    if (out)
+        *out = NULL;
+    if (bytes)
+        *bytes = 0;
+    if (!c || source > 1 || !name || !out || !bytes)
+        return sq_error(SQ_INVALID_ARGUMENT, "invalid weight source");
+    return sq_safetensors_named_data(c->files[source], name, out, bytes);
+}

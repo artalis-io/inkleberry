@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "sq.h"
+#include "sq_weights.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,35 @@
 int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "--version")) {
         printf("squid-c %s (checkpoint/tokenizer tools; generation not ported)\n", sq_version());
+        return 0;
+    }
+    if ((argc == 3 || argc == 4) && !strcmp(argv[1], "weight-plan")) {
+        sq_weight_config config = SQ_WEIGHT_CONFIG_INIT;
+        if (!strcmp(argv[2], "exact"))
+            config.mode = SQ_WEIGHT_EXACT;
+        else if (!strcmp(argv[2], "fp8"))
+            config.mode = SQ_WEIGHT_FP8;
+        else if (strcmp(argv[2], "nvfp4"))
+            return 2;
+        if (argc == 4) {
+            if (!strcmp(argv[3], "ar"))
+                config.with_mtp = 0;
+            else if (!strcmp(argv[3], "mtp-bf16"))
+                config.mtp_bf16 = 1;
+            else if (strcmp(argv[3], "mtp"))
+                return 2;
+        }
+        sq_weight_plan plan;
+        sq_status status = sq_weights_plan(&config, NULL, &plan);
+        if (status != SQ_OK) {
+            fprintf(stderr, "squid-c: %s\n", sq_last_error());
+            return 1;
+        }
+        printf("{\"arena_bytes\":%llu,\"staging_bytes\":%llu,\"amax_bytes\":%llu,\"fold_temporary_"
+               "bytes\":%llu,\"peak_device_bytes\":%llu,\"allocations\":%zu,\"views\":%zu}\n",
+               (unsigned long long)plan.arena_bytes, (unsigned long long)plan.staging_bytes,
+               (unsigned long long)plan.amax_bytes, (unsigned long long)plan.fold_temporary_bytes,
+               (unsigned long long)plan.peak_device_bytes, plan.allocations, plan.views);
         return 0;
     }
     if ((argc == 3 || argc == 4) && !strcmp(argv[1], "validate-model")) {
@@ -60,7 +90,8 @@ int main(int argc, char **argv) {
     }
     if (argc != 3 || strcmp(argv[1], "inspect")) {
         fputs("usage: squid-c inspect FILE.safetensors | tokenize TOKENIZER.json TEXT | "
-              "validate-model MAIN.safetensors [MTP.safetensors] | --version\nC generation is not "
+              "validate-model MAIN.safetensors [MTP.safetensors] | "
+              "weight-plan exact|fp8|nvfp4 [ar|mtp|mtp-bf16] | --version\nC generation is not "
               "implemented yet.\n",
               stderr);
         return 2;
