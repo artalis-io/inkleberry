@@ -337,7 +337,8 @@ Selected for kickoff: squid-c / sq_, the evaluated upstream revision, and librar
 The stacked C AR slice implements the P2 forward/prefill/greedy-decode path,
 including scoped cuBLAS, graphs, three KV formats, logits and cooperative
 cancellation. See [AR validation](ar-validation.md) for the exact tested matrix,
-limits and reproducible commands. Stochastic sampling and the larger P3/P4/P5
+limits and reproducible commands. The subsequent sampling/fixed-width DSpark slice is documented in
+[speculation validation](speculation-validation.md); the larger P3/P4/P5
 release gates remain separate; the implemented typed API uses an explicit GPU
 weight-image handle rather than presenting an unfinished all-in-one model API.
 One live C session is enforced while immutable weight images remain separately

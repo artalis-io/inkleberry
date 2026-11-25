@@ -25,6 +25,24 @@ typedef struct {
     int32_t last_token;
 } sq_generate_stats;
 
+typedef struct {
+    size_t struct_size;
+    uint32_t api_version;
+    float temperature, top_p;
+    int32_t top_k;
+    uint64_t seed;
+    uint32_t draft_tokens, reserved;
+} sq_decode_options;
+
+/* clang-format off */
+#define SQ_DECODE_OPTIONS_INIT {sizeof(sq_decode_options),SQ_API_VERSION,0.0f,0.95f,0,0,0,0}
+/* clang-format on */
+
+typedef struct {
+    sq_generate_stats generation;
+    uint32_t speculative_steps, total_drafts, accepted_drafts;
+} sq_decode_stats;
+
 typedef int (*sq_token_callback)(void *context, int32_t token);
 /* One live session per process initially. create retains the image; image
  * destruction returns BUSY until session destruction succeeds. create publishes
@@ -39,6 +57,17 @@ SQ_API sq_status sq_session_create(sq_gpu_weights *, const sq_session_config *, 
  * Callbacks must preserve the CUDA device/current context before returning. */
 SQ_API sq_status sq_session_generate(sq_session *, const int32_t *, size_t, size_t, int32_t *,
                                      size_t, sq_token_callback, void *, sq_generate_stats *);
+/* Extended generation: finite temperature >=0, 0<top_p<=1, top_k=0..200058,
+ * deterministic uint64 seed (including zero), fixed draft width 0..7.
+ * Temperature <1e-4 or top_k=1 selects greedy; zero drafts selects AR.
+ * Positive draft width requires an image loaded with MTP; never falls back
+ * silently. Adaptive width, prompt lookup and prefix caching are not enabled.
+ * Keep output/stats storage separate from input/options storage.
+ * Callback/cancellation/ownership contracts match sq_session_generate. */
+SQ_API sq_status sq_session_generate_ex(sq_session *, const int32_t *, size_t, size_t,
+                                        const sq_decode_options *, int32_t *, size_t,
+                                        sq_token_callback, void *, sq_decode_stats *);
+
 /* Teacher-forced tokens in batches <=8. Output is the last token's full
  * post-softcap FP32 vocabulary (200058 values). reset=1 begins an independent
  * sequence; reset=0 continues it. No sampling or generation occurs. */

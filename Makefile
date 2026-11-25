@@ -15,7 +15,7 @@ NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
-HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c
+HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c src/c/sampling.c
 OBJ = $(HOST:src/c/%.c=.build/%.o)
 PIC = $(HOST:src/c/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
@@ -62,9 +62,10 @@ generated-check:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/weights-test: test/weights_runtime.c test/mock_gpu.h libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-check: .build/engine_forward.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
+check: .build/sampling-test .build/decode-compare.o .build/engine_forward.o .build/engine_spec.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
 	.build/unit
 	.build/engine-test
+	.build/sampling-test
 	python3 test/weights_plan.py ./squid-c
 	.build/inkling-test
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
@@ -81,11 +82,12 @@ sanitize:
 	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test squid-c
+	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test squid-c
 	.build/concurrency
 	.build/tokenizer-test .build/tokenizer-fixture.json
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
 	.build/engine-test
+	.build/sampling-test
 fuzz-smoke: | .build
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
@@ -136,7 +138,7 @@ clean:
 gpu: generated-check libsq-gpu.a
 .build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
+libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@
 	$(AR) rcs $@ $^
 .build/gpu-weight-compare.o: test/gpu_weights_compare.c include/sq_gpu.h .build/config
@@ -193,3 +195,22 @@ ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gp
 
 .build/check-ar-cpp.o: test/installed_gpu_consumer.c include/sq_engine.h .build/config
 	$(CXX) -std=c++11 -Wall -Wextra -Werror -Iinclude -x c++ -c $< -o $@
+.build/decode-compare.o: test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.PHONY: decode-oracle
+decode-oracle: generated-check .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/decode.zig -Mengine=src/engine.zig .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/decode-oracle
+.build/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+.build/sampling-kernels: .build/sampling-kernels.o
+	$(CXX) $^ $(CUDA_LIBS) -o $@
+.PHONY: sampling-kernel-check
+sampling-kernel-check: generated-check .build/sampling-kernels
+	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/sampling-kernels
+
+.build/sampling-test: test/sampling.c libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
+.build/decode-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.build/decode-recovery: .build/decode-recovery.o .build/session-context.o libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * Fixed Inkling AR structures translated from pinned engine.zig/weights.zig. */
+ * Fixed Inkling target/DSpark structures translated from pinned engine.zig/weights.zig. */
 #ifndef SQ_ENGINE_INTERNAL_H
 #define SQ_ENGINE_INTERNAL_H
 #include "weights_internal.h"
@@ -41,6 +41,7 @@ typedef struct {
     float *attn_queries[23], *mlp_queries[24], *output_query;
     float *cross_pass_queries, *cross_pass_kv_queries;
     sq_layer layers[24];
+    CDsparkWeights dspark;
 } sq_ar_model;
 
 typedef struct {
@@ -59,6 +60,13 @@ struct sq_session {
     bool poisoned, ready, retained;
     int32_t position;
     void *arena, *stream, *graph, *blas;
+    void *spec_graph[8];
+    bool use_mtp, verifying;
+    int32_t ds_cap[3];
+    void *ds_k[3], *ds_v[3], *ds_ks[3], *ds_vs[3];
+    float *ds_f_ring, *taps, *ds_mix, *ds_kv, *ds_ws;
+    int32_t *d_anchor, *d_drafts, *d_accepted, *d_num_acc, *d_draft_is_delta;
+    float *d_draft_probs, *d_draft_q_sel;
     size_t capacity, offset, allocations;
     int32_t kv_cap[48];
     void *k_cache[48], *v_cache[48], *k_scale[48], *v_scale[48];
@@ -84,6 +92,7 @@ struct sq_session {
     CLoopCDConfig *d_loopcd_cfg;
     float *loopcd_h1, *loopcd_h2;
     int32_t *p_tokens, *p_pos_vec;
+    float *p_taps;
     float *p_hidden, *p_prelude, *p_partial, *p_blocks, *p_saved, *p_prior_last;
     float *p_attn_in[3];
     void *p_attn_in_h[3];
@@ -108,6 +117,9 @@ struct sq_session {
     char failure[192];
 };
 
+sq_status sq_decode_resolve(const sq_decode_options *, sq_decode_options *);
+void sq_spec_step(sq_session *, uint32_t);
+void sq_spec_commit(sq_session *, const float *, int32_t, const int32_t *);
 sq_status sq_ar_bind(sq_gpu_weights *, sq_ar_model *);
 void sq_ar_schedule(sq_visit[48]);
 void sq_ar_layout(sq_session *, size_t);

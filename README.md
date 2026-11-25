@@ -17,7 +17,7 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - Optional C greedy AR sessions with retained weights, owned KV/recurrent state, recoverable cuBLAS dispatch, graph/eager execution and cancellation/reset.
 - Optional owned CUDA weight upload/packing with exact/FP8/NVFP4, full-vocabulary MTP, bounded readback, recoverable errors and retryable cleanup; full payload parity against the pinned Zig loader.
 
-**C greedy autoregressive inference is implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Stochastic sampling, speculative decoding, prefix caching and serving remain subsequent slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md).
+**C autoregressive and fixed-width speculative generation are implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Temperature/top-p/top-k sampling and fixed-width DSpark speculation are also implemented. Adaptive drafting, prefix caching and serving remain subsequent slices. Model-backed validation is documented below. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md); [sampling/speculation contract](docs/speculation-validation.md).
 
 ## Build and use
 
@@ -93,6 +93,13 @@ explicit limit up to 1,048,576, subject to available memory. This upper bound is
 input validation, not a claim of qualification at every context length.
 The embedding API is [include/sq_engine.h](include/sq_engine.h). No networking or
 Zig dependency is required for the C library/CLI; Zig is used only as a test oracle.
+
+For deterministic stochastic generation and fixed-width DSpark, append
+`--temperature 0.8 --top-p 0.95 --top-k 40 --seed 42 --drafts 7` to the CLI
+command. Positive drafts require the external `mtp.safetensors`; there is no
+silent AR fallback. The typed API is `sq_session_generate_ex`. See the
+[sampling/speculation contract](docs/speculation-validation.md) for verification,
+acceptance counters and the fixed-width scope.
 
 ## Provenance and scope
 
