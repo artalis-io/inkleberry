@@ -24,3 +24,11 @@ work/
 .vscode/
 .idea/
 *.swp
+
+# C port artifacts
+.build/
+/squid-c
+*.dylib
+crash-*
+leak-*
+*.dSYM/

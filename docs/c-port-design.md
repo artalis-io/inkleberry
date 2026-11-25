@@ -24,7 +24,7 @@ The main benefit is a maintainable C library that fits Artalis's tooling and emb
 
 Jev Bush is the single repository [artalis-io/jev-bush](https://github.com/artalis-io/jev-bush/tree/85fd51f8c99b1b8b7ea26d33e02413e681a9271d), inspected locally at `/Users/mark/artalis.io/src/jev-bush`. Its local and remote HEADs matched at review time.
 
-The tested squid source and evidence remain in this evaluation directory. Review-only newer-head files and their hashes are under [the pinned upstream comparison](https://github.com/tensorfish/squid5090/compare/d10c0abb2c8990be81c08ba84c66a8333a691b33...51b85dd17e719a45e93e77a9e49df94c50144b30). No evaluated source, benchmark receipt or running installation was replaced.
+The original evaluation checkout and evidence remain separate from this repository. Review-only newer-head files and their hashes are under [the pinned upstream comparison](https://github.com/tensorfish/squid5090/compare/d10c0abb2c8990be81c08ba84c66a8333a691b33...51b85dd17e719a45e93e77a9e49df94c50144b30). No evaluated source, benchmark receipt or running installation was replaced.
 
 ### Upstream moved: choose the baseline deliberately
 

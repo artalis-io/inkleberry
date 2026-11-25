@@ -1,0 +1,8 @@
+prefix=@PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+Name: squid-c
+Description: C host port of squid5090 (checkpoint inspection foundation)
+Version: 0.1.0
+Libs: -L${libdir} -lsq
+Cflags: -I${includedir}
