@@ -3,6 +3,7 @@
 #include "mock_gpu.h"
 #include "engine_internal.h"
 #include "checked_prefill.h"
+#include <math.h>
 static int zero_fault, graph_fault, blas_fault, launch_fault;
 static int marker;
 
@@ -18,6 +19,8 @@ static void ignored_free(void *c, void *p) {
 }
 
 static size_t forward_calls;
+static const void *mock_count_pointer, *mock_accepted_pointer;
+static int32_t mock_accepted_count = 1;
 
 size_t squid_sizeof_expert_groups(void) {
     return 4096;
@@ -79,7 +82,14 @@ static int session_copy(void *p, void *dst, const void *src, size_t n, int kind,
     int rc = copy(p, dst, src, n, kind, stream);
     if (!rc && kind == 1) {
         memset(dst, 0, n);
-        if (n == 4) {
+        if (src == mock_count_pointer)
+            memcpy(dst, &mock_accepted_count, 4);
+        else if (src == mock_accepted_pointer)
+            for (size_t i = 0; i < n / 4; i++) {
+                int32_t token = 42;
+                memcpy((unsigned char *)dst + i * 4, &token, 4);
+            }
+        else if (n == 4) {
             int32_t token = 42;
             memcpy(dst, &token, 4);
         }
@@ -87,10 +97,10 @@ static int session_copy(void *p, void *dst, const void *src, size_t n, int kind,
     return rc;
 }
 
-static sq_gpu_weights *image(mock *m) {
+static sq_gpu_weights *image_with_mtp(mock *m, uint32_t with_mtp) {
     sq_gpu_weights *w = NULL;
     sq_weight_config c = SQ_WEIGHT_CONFIG_INIT;
-    c.with_mtp = 0;
+    c.with_mtp = with_mtp;
     sq_weight_backend b = backend(m);
     b.copy = session_copy;
     if (sq_weights_create(&c, NULL, &b, &w) != SQ_OK)
@@ -101,6 +111,10 @@ static sq_gpu_weights *image(mock *m) {
     }
     w->ready = true;
     return w;
+}
+
+static sq_gpu_weights *image(mock *m) {
+    return image_with_mtp(m, 0);
 }
 
 static int no_memory(void *p, size_t *out) {
@@ -181,6 +195,14 @@ int main(void) {
         c.kv_format = format;
         CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK && s);
         CHECK(w->session_users == 1 && s->offset == s->capacity && m.live == 2);
+        sq_decode_options unsupported = SQ_DECODE_OPTIONS_INIT;
+        unsupported.draft_tokens = 1;
+        sq_decode_stats unsupported_stats;
+        int32_t unsupported_in = 1, unsupported_out = 0;
+        CHECK(sq_session_generate_ex(s, &unsupported_in, 1, 1, &unsupported, &unsupported_out, 1,
+                                     NULL, NULL, &unsupported_stats) == SQ_UNSUPPORTED &&
+              !s->poisoned);
+
         sq_session *other = NULL;
         CHECK(sq_session_create(w, &c, NULL, &other) == SQ_BUSY && !other);
         CHECK(sq_weights_destroy(&w) == SQ_BUSY && w && w->ready);
@@ -277,7 +299,52 @@ int main(void) {
     CHECK(sq_session_reset(s) == SQ_OK);
     CHECK(sq_session_destroy(&s) == SQ_OK);
     CHECK(sq_weights_destroy(&w) == SQ_OK && !w && !m.live);
+    reset(&m);
+    w = image_with_mtp(&m, 1);
+    CHECK(w);
+    CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK && s->model.dspark.loaded && s->ds_f_ring &&
+          s->p_taps);
+    sq_decode_options options = SQ_DECODE_OPTIONS_INIT;
+    options.temperature = 0.8f;
+    options.seed = UINT64_MAX;
+    options.draft_tokens = 3;
+    sq_decode_stats detail;
+    mock_accepted_count = 2;
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, NULL, NULL, &detail) == SQ_OK &&
+          detail.generation.generated_tokens == 8 && detail.speculative_steps == 4 &&
+          detail.accepted_drafts == 4);
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, cancelled_cb, s, &detail) ==
+              SQ_CANCELLED &&
+          !s->poisoned);
+    options.temperature = NAN;
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, NULL, NULL, &detail) ==
+              SQ_INVALID_ARGUMENT &&
+          !s->poisoned);
+    options.temperature = 0;
+    options.draft_tokens = 7;
+    int32_t long_tokens[128] = {1, 2, 3, 4};
+    CHECK(sq_session_generate_ex(s, long_tokens, 121, 7, &options, out, 8, NULL, NULL, &detail) ==
+              SQ_OK &&
+          detail.speculative_steps == 0 && detail.generation.generated_tokens == 7);
+    mock_accepted_count = 0;
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, NULL, NULL, &detail) ==
+              SQ_GPU_ERROR &&
+          s->poisoned);
+    graph_fault = 700;
+    CHECK(sq_session_destroy(&s) == SQ_GPU_ERROR && s && s->arena);
+    graph_fault = 0;
+    CHECK(sq_session_destroy(&s) == SQ_OK && !s);
+    CHECK(sq_weights_destroy(&w) == SQ_OK && !w && !m.live);
+    mock_count_pointer = mock_accepted_pointer = NULL;
+    mock_accepted_count = 1;
     puts("AR session simulation: bounds, retention, faults, poisoning, cleanup retry, callback "
          "BUSY and cross-thread cancellation passed");
     return 0;
+}
+
+void sq_spec_step(sq_session *s, uint32_t drafts) {
+    mock_count_pointer = s->d_num_acc;
+    mock_accepted_pointer = s->d_accepted;
+    if (s->config.use_graphs)
+        s->spec_graph[drafts] = &marker;
 }

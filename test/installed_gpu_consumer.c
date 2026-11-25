@@ -3,6 +3,11 @@
 
 int main(void) {
     sq_session *session = NULL;
+    sq_decode_options options = SQ_DECODE_OPTIONS_INIT;
+    sq_decode_stats stats;
+    if (sq_session_generate_ex(NULL, NULL, 0, 0, &options, NULL, 0, NULL, NULL, &stats) !=
+        SQ_INVALID_ARGUMENT)
+        return 1;
     if (sq_session_create(NULL, NULL, NULL, &session) != SQ_INVALID_ARGUMENT || session ||
         sq_session_destroy(&session) != SQ_OK)
         return 1;

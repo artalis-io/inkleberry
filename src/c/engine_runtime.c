@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
- * Synchronous greedy AR session. No prefix cache, stochastic sampler or DSpark. */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
+ * Synchronous AR/fixed-width DSpark session. No prefix cache. */
 #include "engine_internal.h"
 #include "checked_prefill.h"
 #include <stdio.h>
@@ -67,6 +68,7 @@ static sq_status leave(sq_session *s, const sq_device_scope *scope) {
 
 static void reset_device(sq_session *s) {
     s->position = 0;
+    s->use_mtp = s->verifying = false;
     if (s->status != SQ_OK)
         return;
     sq_ar_check(s, squid_cuda_memset_async(s->d_pos, 0, 4, s->stream), "reset position");
@@ -79,6 +81,12 @@ static void reset_device(sq_session *s) {
                     "reset attention ring");
         sq_ar_check(s, squid_cuda_memset_async(s->mlp_ring[i], 0, 16 * 2304 * 4, s->stream),
                     "reset MLP ring");
+    }
+    if (s->ds_f_ring) {
+        sq_ar_check(s, squid_cuda_memset_async(s->ds_f_ring, 0, 16 * 2304 * 4, s->stream),
+                    "reset DSpark ring");
+        sq_ar_check(s, squid_cuda_memset_async(s->d_draft_is_delta, 0, 4, s->stream),
+                    "reset draft mode");
     }
     CSampleConfig cfg = {0};
     cfg.top_p = 1;
@@ -263,6 +271,7 @@ sq_status sq_session_logits(sq_session *s, const int32_t *tokens, size_t n, uint
         sq_status restore = end(s, &scope);
         return restore == SQ_OK ? sq_error(SQ_LIMIT, "logits context limit") : restore;
     }
+    s->use_mtp = s->verifying = false;
     if (reset)
         reset_device(s);
     CSampleConfig cfg = {0};
@@ -280,16 +289,62 @@ sq_status sq_session_logits(sq_session *s, const int32_t *tokens, size_t n, uint
 sq_status sq_session_generate(sq_session *s, const int32_t *tokens, size_t n, size_t max_new,
                               int32_t *out, size_t capacity, sq_token_callback callback,
                               void *context, sq_generate_stats *stats) {
-    if (stats)
-        memset(stats, 0, sizeof *stats);
-    if (!s || !max_new || max_new > capacity || !out || !stats || n > s->config.context_tokens ||
+    if (!stats)
+        return sq_error(SQ_INVALID_ARGUMENT, "missing generation stats");
+    sq_decode_stats detail = {0};
+    sq_status rc = sq_session_generate_ex(s, tokens, n, max_new, NULL, out, capacity, callback,
+                                          context, &detail);
+    *stats = detail.generation;
+    return rc;
+}
+
+static bool emit(sq_session *s, int32_t token, int32_t *out, sq_token_callback callback,
+                 void *context, sq_generate_stats *stats) {
+    if (token < 0 || token >= 200058) {
+        sq_ar_check(s, 1, "invalid generated token");
+        return false;
+    }
+    out[stats->generated_tokens++] = token;
+    stats->last_token = token;
+    if (callback && !callback(context, token)) {
+        stats->finish_reason = SQ_FINISH_CALLBACK;
+        return false;
+    }
+    if (token == 200006) {
+        stats->finish_reason = SQ_FINISH_EOS;
+        return false;
+    }
+    return true;
+}
+
+sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n, size_t max_new,
+                                 const sq_decode_options *input, int32_t *out, size_t capacity,
+                                 sq_token_callback callback, void *context,
+                                 sq_decode_stats *detail) {
+    if (detail)
+        memset(detail, 0, sizeof *detail);
+    sq_decode_options options;
+    sq_status rc = sq_decode_resolve(input, &options);
+    if (rc != SQ_OK)
+        return rc;
+    if (!s || !max_new || max_new > capacity || !out || !detail || n > s->config.context_tokens ||
         max_new > s->config.context_tokens - n || !tokens_valid(tokens, n))
-        return sq_error(SQ_INVALID_ARGUMENT, "invalid greedy generation bounds or token IDs");
+        return sq_error(SQ_INVALID_ARGUMENT, "invalid generation bounds or token IDs");
+    if (options.draft_tokens && !s->model.dspark.loaded)
+        return sq_error(SQ_UNSUPPORTED, "DSpark requires MTP weights; load them explicitly");
     sq_device_scope scope;
-    sq_status rc = begin(s, &scope);
+    rc = begin(s, &scope);
     if (rc != SQ_OK)
         return rc;
     reset_device(s);
+    s->use_mtp = options.draft_tokens != 0;
+    CSampleConfig sample = {0};
+    sample.inv_temp = options.temperature >= 1e-4f ? 1.0f / options.temperature : 0;
+    sample.top_p = options.top_p;
+    sample.top_k = options.top_k;
+    sample.seed = options.seed;
+    copy(s, s->d_sample_cfg, &sample, sizeof sample, 0);
+    sq_generate_stats *stats = &detail->generation;
     stats->prompt_tokens = (uint32_t)n;
     stats->last_token = -1;
     int32_t last_batch = 0;
@@ -309,35 +364,53 @@ sq_status sq_session_generate(sq_session *s, const int32_t *tokens, size_t n, si
     if (!cancelled(s))
         copy(s, &token, s->d_next_tokens + (last_batch ? last_batch - 1 : 0), 4, 1);
     sync(s);
-    if (s->status == SQ_OK && !cancelled(s) && s->config.use_graphs && !s->graph) {
+    bool keep =
+        s->status == SQ_OK && !cancelled(s) && emit(s, token, out, callback, context, stats);
+    uint32_t drafts = options.draft_tokens;
+    if (keep && drafts && stats->generated_tokens < max_new) {
+        copy(s, s->d_anchor, &token, 4, 0);
+        copy(s, s->d_pos, &s->position, 4, 0);
+        while (stats->generated_tokens < max_new && s->status == SQ_OK && !cancelled(s) &&
+               (uint32_t)s->position + drafts + 1 <= s->config.context_tokens) {
+            sq_spec_step(s, drafts);
+            int32_t accepted[8] = {0}, count = 0;
+            copy(s, &count, s->d_num_acc, 4, 1);
+            copy(s, accepted, s->d_accepted, (drafts + 1) * 4, 1);
+            sync(s);
+            if (s->status != SQ_OK)
+                break;
+            if (count < 1 || count > (int32_t)drafts + 1) {
+                sq_ar_check(s, 1, "invalid accepted token count");
+                break;
+            }
+            detail->speculative_steps++;
+            detail->total_drafts += drafts;
+            detail->accepted_drafts += (uint32_t)count - 1;
+            s->position += count;
+            for (int32_t i = 0; i < count && stats->generated_tokens < max_new && !cancelled(s);
+                 i++) {
+                token = accepted[i];
+                keep = emit(s, token, out, callback, context, stats);
+                if (!keep)
+                    break;
+            }
+            if (!keep)
+                break;
+        }
+    }
+    if (keep && !drafts && stats->generated_tokens < max_new && s->status == SQ_OK &&
+        !cancelled(s) && s->config.use_graphs && !s->graph) {
         sq_ar_check(s, squid_cuda_graph_begin(s->stream), "begin AR graph");
         if (s->status == SQ_OK) {
             sq_ar_forward(s, 1, true);
             sq_ar_check(s, sq_cuda_launch_status(), "capture target forward");
-            /* Even on a launch error, end capture to restore the stream. */
             sq_ar_check(s, squid_cuda_graph_end_instantiate(s->stream, &s->graph),
                         "instantiate AR graph");
         }
     }
-    for (size_t i = 0; i < max_new && s->status == SQ_OK && !cancelled(s); i++) {
-        if (token < 0 || token >= 200058) {
-            sq_ar_check(s, 1, "invalid generated token");
-            break;
-        }
-        out[i] = token;
-        stats->generated_tokens = (uint32_t)(i + 1);
-        stats->last_token = token;
-        if (callback && !callback(context, token)) {
-            stats->finish_reason = SQ_FINISH_CALLBACK;
-            break;
-        }
-        if (token == 200006) {
-            stats->finish_reason = SQ_FINISH_EOS;
-            break;
-        }
-        if (i + 1 == max_new || cancelled(s))
-            break;
-        if (s->config.use_graphs) {
+    /* Speculation uses eager B=1 at the context boundary, exactly as Zig. */
+    while (keep && stats->generated_tokens < max_new && s->status == SQ_OK && !cancelled(s)) {
+        if (s->config.use_graphs && !drafts) {
             copy(s, s->d_tokens, &token, 4, 0);
             copy(s, s->d_pos, &s->position, 4, 0);
             if (s->status == SQ_OK)
@@ -349,12 +422,23 @@ sq_status sq_session_generate(sq_session *s, const int32_t *tokens, size_t n, si
             run(s, &token, 1, true);
         copy(s, &token, s->d_next_tokens, 4, 1);
         sync(s);
+        if (s->status == SQ_OK && !cancelled(s))
+            keep = emit(s, token, out, callback, context, stats);
     }
     if (cancelled(s)) {
         stats->finish_reason = SQ_FINISH_CANCELLED;
         cancel_result(s);
     }
     return end(s, &scope);
+}
+
+static bool has_graphs(const sq_session *s) {
+    if (s->graph)
+        return true;
+    for (unsigned i = 1; i < 8; i++)
+        if (s->spec_graph[i])
+            return true;
+    return false;
 }
 
 sq_status sq_session_destroy(sq_session **handle) {
@@ -369,30 +453,37 @@ sq_status sq_session_destroy(sq_session **handle) {
     const sq_weight_backend *b = &s->weights->backend;
     s->status = SQ_OK;
     s->failure[0] = 0;
-    if (s->arena || s->stream || s->graph || s->blas) {
+    if (s->arena || s->stream || has_graphs(s) || s->blas) {
         sq_device_scope scope = enter(s);
         if (s->status == SQ_OK) {
             if (s->stream)
                 sync(s);
+            for (unsigned i = 1; i < 8; i++)
+                if (s->spec_graph[i]) {
+                    int e = squid_cuda_graph_destroy(s->spec_graph[i]);
+                    if (!e)
+                        s->spec_graph[i] = NULL;
+                    sq_ar_check(s, e, "destroy DSpark graph");
+                }
             if (s->graph) {
                 int e = squid_cuda_graph_destroy(s->graph);
                 if (!e)
                     s->graph = NULL;
                 sq_ar_check(s, e, "destroy AR graph");
             }
-            if (s->blas && !s->graph) {
+            if (s->blas && !has_graphs(s)) {
                 int e = sq_blas_destroy(s->blas);
                 if (!e)
                     s->blas = NULL;
                 sq_ar_check(s, e, "destroy session cuBLAS");
             }
-            if (s->arena && !s->graph && !s->blas) {
+            if (s->arena && !has_graphs(s) && !s->blas) {
                 int e = b->release(b->context, s->arena);
                 if (!e)
                     s->arena = NULL;
                 sq_ar_check(s, e, "free session arena");
             }
-            if (s->stream && !s->arena && !s->graph && !s->blas) {
+            if (s->stream && !s->arena && !has_graphs(s) && !s->blas) {
                 int e = b->stream_destroy(b->context, s->stream);
                 if (!e)
                     s->stream = NULL;
@@ -402,7 +493,7 @@ sq_status sq_session_destroy(sq_session **handle) {
         (void)leave(s, &scope);
     }
     sq_status rc = result(s);
-    if (s->arena || s->stream || s->graph || s->blas) {
+    if (s->arena || s->stream || has_graphs(s) || s->blas) {
         unlock(s);
         return rc;
     }

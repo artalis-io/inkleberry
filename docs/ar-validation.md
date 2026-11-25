@@ -153,7 +153,8 @@ five-repetition performance study. Only tested context/mode combinations should
 be called qualified. The configured maximum alone establishes no usable-context
 claim.
 
-Remaining work: stochastic sampling, DSpark/speculation, prefix-cache ownership,
-independent long-context retrieval/quality workloads, request/stop-string
-adapters, serving and full performance characterization. Kernel tuning and
-upstream upgrades remain separate changes.
+The subsequent [sampling/fixed-width DSpark slice](speculation-validation.md)
+adds stochastic generation and fixed-width verification. Adaptive drafting,
+prefix-cache ownership, independent long-context retrieval/quality workloads,
+request/stop-string adapters, serving and full performance characterization remain
+separate. Kernel tuning and upstream upgrades remain separately reviewed changes.

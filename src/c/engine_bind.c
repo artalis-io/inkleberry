@@ -189,6 +189,50 @@ sq_status sq_ar_bind(sq_gpu_weights *w, sq_ar_model *m) {
                 }
             }
     }
+    if (w->config.with_mtp) {
+        m->dspark.loaded = 1;
+        m->dspark.draft_vocab_size = 200058;
+        B("dspark.fuse_alpha", m->dspark.fuse_alpha, SQ_WEIGHT_RAW);
+        B("dspark.mask_embed", m->dspark.mask_embed, SQ_WEIGHT_RAW);
+        B("dspark.norm_w", m->dspark.norm_w, SQ_WEIGHT_RAW);
+        B("dspark.markov_dflare_norm", m->dspark.markov_dflare_norm, SQ_WEIGHT_RAW);
+        B("dspark.markov_w1", m->dspark.markov_w1, SQ_WEIGHT_RAW);
+        B("dspark.rnn_w_sp", m->dspark.rnn_w_sp, SQ_WEIGHT_RAW);
+        B("dspark.rnn_w_h", m->dspark.rnn_w_h, SQ_WEIGHT_RAW);
+        B("dspark.rnn_w_f", m->dspark.rnn_w_f, SQ_WEIGHT_RAW);
+        B("dspark.rnn_bias", m->dspark.rnn_bias, SQ_WEIGHT_RAW);
+        B("dspark.hidden_out_w", m->dspark.hidden_out_w, SQ_WEIGHT_RAW);
+        B("dspark.hidden_out_b", m->dspark.hidden_out_b, SQ_WEIGHT_RAW);
+        B("dspark.unembed_draft", m->dspark.unembed_draft, SQ_WEIGHT_LINEAR);
+        B("dspark.fold_w", m->dspark.fold_w, SQ_WEIGHT_LINEAR);
+        B("dspark.fold_b", m->dspark.fold_b, SQ_WEIGHT_RAW);
+        for (unsigned i = 0; i < 3; i++) {
+            m->dspark.layers[i].is_local = i != 1;
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.input_norm", i);
+            B(label, m->dspark.layers[i].input_norm, SQ_WEIGHT_RAW);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.post_norm", i);
+            B(label, m->dspark.layers[i].post_norm, SQ_WEIGHT_RAW);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.dflare_norm", i);
+            B(label, m->dspark.layers[i].dflare_norm, SQ_WEIGHT_RAW);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.q_norm", i);
+            B(label, m->dspark.layers[i].q_norm, SQ_WEIGHT_RAW);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.k_norm", i);
+            B(label, m->dspark.layers[i].k_norm, SQ_WEIGHT_RAW);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.k_norm_ctx", i);
+            B(label, m->dspark.layers[i].k_norm_ctx, SQ_WEIGHT_RAW);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.w_qkv", i);
+            B(label, m->dspark.layers[i].w_qkv, SQ_WEIGHT_LINEAR);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.w_o", i);
+            B(label, m->dspark.layers[i].w_o, SQ_WEIGHT_LINEAR);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.w_gu", i);
+            B(label, m->dspark.layers[i].w_gu, SQ_WEIGHT_LINEAR);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.w_down", i);
+            B(label, m->dspark.layers[i].w_down, SQ_WEIGHT_LINEAR);
+            (void)snprintf(label, sizeof label, "dspark.layers.%u.w_kv_ctx", i);
+            B(label, m->dspark.layers[i].w_kv_ctx, SQ_WEIGHT_LINEAR);
+        }
+    }
+
 #undef B
     return SQ_OK;
 }

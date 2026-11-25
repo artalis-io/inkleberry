@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * AR-only translation of pinned Engine.prefill_chunk_batched. */
+ * Pinned Engine.prefill_chunk_batched with optional DSpark tap commits. */
 #include "engine_internal.h"
 #include "checked_prefill.h"
 #define CHECK(call)                                                                                \
@@ -69,6 +69,12 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
                                                 prelude ? s->p_prelude : NULL, NULL, NULL, 0, 0, n,
                                                 s->p_pos_vec, NULL, NULL, NULL, stream);
         }
+        if (s->use_mtp && (vi == 5 || vi == 23 || vi == 41))
+            squid_launch_prefill_copy_taps(s->p_hidden, s->p_taps,
+                                           vi == 5    ? 0
+                                           : vi == 23 ? 1
+                                                      : 2,
+                                           n, stream);
         pending = false;
         const void *norm[3] = {NULL, NULL, NULL};
         float *out[3] = {NULL, NULL, NULL};
@@ -189,6 +195,11 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
     squid_launch_fused_depth_norm(s->p_hidden, NULL, s->p_blocks, blocks, w->output_query,
                                   w->final_norm, NULL, NULL, s->p_mlp_normed, NULL, NULL, NULL,
                                   NULL, NULL, 1, n, stream);
+    if (s->use_mtp) {
+        squid_launch_prefill_copy_taps(s->p_mlp_normed, s->p_taps, 3, n, stream);
+        for (int32_t i = 0; i < n / 8; i++)
+            sq_spec_commit(s, s->p_taps + (size_t)i * 4 * 8 * 2304, 8, s->p_pos_vec + i);
+    }
     CHECK(sq_cuda_launch_status());
     CHECK(backend->sync(backend->context, stream));
     s->position += n;

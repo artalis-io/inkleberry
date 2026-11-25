@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * Two-pass AR workspace layout. B<=8 matches original target-forward geometry;
- * unused speculative and large cuBLAS-prefill workspaces are not allocated. */
+ * Two-pass target and optional fixed-width DSpark workspace layout. B<=8
+ * matches target-forward geometry; adaptive/prefix buffers are not allocated. */
 #include "engine_internal.h"
 
 static void *take(sq_session *s, size_t count, size_t width) {
@@ -39,6 +39,32 @@ void sq_ar_layout(sq_session *s, size_t groups) {
     }
 #define F(name, n) s->name = take(s, (n), 4)
 #define H(name, n) s->name = take(s, (n), 2)
+    if (s->weights->config.with_mtp) {
+        for (unsigned i = 0; i < 3; i++) {
+            size_t cap = i != 1                              ? 1032
+                         : s->config.context_tokens > 524288 ? 65536
+                                                             : s->config.context_tokens;
+            unsigned format = i != 1 ? 0 : s->config.kv_format;
+            s->ds_cap[i] = (int32_t)cap;
+            size_t width = format == 0 ? 2048 : format == 1 ? 1024 : 512;
+            s->ds_k[i] = take(s, cap, width);
+            s->ds_v[i] = take(s, cap, width);
+            s->ds_ks[i] = format ? take(s, cap, format == 1 ? 16 : 32) : NULL;
+            s->ds_vs[i] = format ? take(s, cap, format == 1 ? 16 : 32) : NULL;
+        }
+        F(ds_f_ring, 16 * 2304);
+        F(taps, 4 * 8 * 2304);
+        F(ds_mix, 3 * 8 * 2304);
+        F(ds_kv, 8 * 2 * 1024);
+        F(ds_ws, 2000000);
+        F(d_anchor, 1);
+        F(d_drafts, 7);
+        F(d_accepted, 8);
+        F(d_num_acc, 1);
+        F(d_draft_is_delta, 1);
+        F(d_draft_probs, 7 * 200058);
+        F(d_draft_q_sel, 7);
+    }
     F(split_buf, 2050000);
     F(d_pos, 1);
     F(d_tokens, 8);
@@ -82,6 +108,9 @@ void sq_ar_layout(sq_session *s, size_t groups) {
 
     enum { P = 2048 };
 
+    if (s->weights->config.with_mtp) {
+        F(p_taps, 4 * P * 2304);
+    }
     F(p_tokens, P);
     F(p_pos_vec, P / 8);
     F(p_hidden, P * 2304);

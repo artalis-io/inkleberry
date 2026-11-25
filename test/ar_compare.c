@@ -10,6 +10,8 @@
 #include <string.h>
 extern int sq_ar_test_context(sq_session *);
 static sq_gpu_weights *weights;
+static int test_mtp;
+static uint32_t test_context_extra = 64;
 static double cancel_seconds;
 static sq_session *session;
 static int32_t *tokens;
@@ -48,17 +50,19 @@ int sq_ar_test_start(const char *directory, uint32_t mode, uint32_t kv, uint32_t
         tokens[i] = encoded[i % n];
     sq_inkling_checkpoint *cp = NULL;
     (void)snprintf(path, sizeof path, "%s/model-00001-of-00001.safetensors", directory);
-    rc = sq_inkling_checkpoint_open(path, NULL, NULL, &cp);
+    char mtp_path[1200];
+    (void)snprintf(mtp_path, sizeof mtp_path, "%s/mtp.safetensors", directory);
+    rc = sq_inkling_checkpoint_open(path, test_mtp ? mtp_path : NULL, NULL, &cp);
     sq_weight_config wc = SQ_WEIGHT_CONFIG_INIT;
     wc.mode = mode;
-    wc.with_mtp = 0;
+    wc.with_mtp = (uint32_t)test_mtp;
     if (rc == SQ_OK)
         rc = sq_gpu_weights_create(&wc, NULL, &weights);
     if (rc == SQ_OK)
         rc = sq_gpu_weights_load(weights, cp);
     sq_inkling_checkpoint_close(cp);
     sq_session_config config = SQ_SESSION_CONFIG_INIT;
-    config.context_tokens = count + 64 < 64 ? 64 : count + 64;
+    config.context_tokens = count + test_context_extra < 64 ? 64 : count + test_context_extra;
     config.kv_format = kv;
     config.use_graphs = graphs;
     if (rc == SQ_OK)

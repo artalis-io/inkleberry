@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * AR-only translation of pinned Engine.record_target_forward. Same launch order;
- * DSpark commit/verification, ablation and LoopCD are explicitly disabled. */
+ * Target-forward translation of pinned Engine.record_target_forward. Optional
+ * DSpark commit/verification; ablation and LoopCD remain disabled. */
 #include "engine_internal.h"
 
 void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
@@ -29,6 +29,10 @@ void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
                 blocks = 1;
                 prior = true;
             }
+        }
+        if (s->use_mtp && (vi == 5 || vi == 23 || vi == 41)) {
+            unsigned slot = vi == 5 ? 0 : vi == 23 ? 1 : 2;
+            pre_tap = s->taps + (size_t)slot * (size_t)batch * 2304;
         }
         bool use_prior = v.loop && prior, distinct = v.global || use_prior;
         float *partial = l % 6 == 0 ? s->partial : NULL;
@@ -167,11 +171,16 @@ void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
     }
     squid_launch_mega_mlp_post_next_depth_norm(
         s->moe_down, 0, w->layers[s->schedule[47].layer].mlp_sconv_w, s->mlp_ring[47], s->residual,
-        s->hidden, NULL, NULL, NULL, s->blocks, blocks, w->output_query, w->final_norm, NULL, NULL,
-        s->mlp_normed, NULL, NULL, NULL, NULL, NULL, 1, batch, s->d_pos, NULL, NULL, NULL, NULL,
-        NULL, NULL, stream);
+        s->hidden, NULL, s->use_mtp ? s->taps + 3 * (size_t)batch * 2304 : NULL, NULL, s->blocks,
+        blocks, w->output_query, w->final_norm, NULL, NULL, s->mlp_normed, NULL, NULL, NULL, NULL,
+        NULL, 1, batch, s->d_pos, NULL, NULL, NULL, NULL, NULL, NULL, stream);
+    sq_spec_commit(s, s->taps, batch, s->d_pos);
     if (lm)
-        squid_launch_lm_head_argmax(&w->unembed, s->mlp_normed, s->d_next_tokens, s->lm_logits,
-                                    s->lm_blk_val, s->lm_blk_idx, s->d_sample_cfg, s->d_pos, NULL,
-                                    NULL, NULL, NULL, NULL, 0, batch, stream);
+        squid_launch_lm_head_argmax(
+            &w->unembed, s->mlp_normed, s->d_next_tokens, s->lm_logits, s->lm_blk_val,
+            s->lm_blk_idx, s->d_sample_cfg, s->d_pos, s->verifying ? s->d_drafts : NULL,
+            s->verifying ? s->d_draft_probs : NULL, s->verifying ? s->d_draft_q_sel : NULL,
+            s->verifying ? s->d_draft_is_delta : NULL,
+            s->verifying ? w->dspark.inv_draft_vocab_ids : NULL, w->dspark.draft_vocab_size, batch,
+            stream);
 }
