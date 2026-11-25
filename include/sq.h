@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 Artalis
  * C host port of tensorfish/squid5090; see LICENSE and NOTICE.
- * Input parsing/tokenization and checkpoint binding; inference not ported. */
+ * Host input API; optional CUDA AR execution is declared in sq_engine.h. */
 #ifndef SQ_H
 #define SQ_H
 #include <stddef.h>
@@ -38,7 +38,8 @@ enum {
     SQ_LIMIT,
     SQ_BUSY,
     SQ_GPU_ERROR,
-    SQ_UNSUPPORTED
+    SQ_UNSUPPORTED,
+    SQ_CANCELLED
 };
 
 typedef uint32_t sq_dtype;

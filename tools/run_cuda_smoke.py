@@ -22,7 +22,10 @@ def main():
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=uuid, LD_LIBRARY_PATH=sys.argv[1])
     print('Idle GPU preflight:', query, flush=True)
     # A race with external schedulers remains; use a reserved GPU for release tests.
-    subprocess.run(sys.argv[2:], env=env, check=True, timeout=180)
+    timeout = int(os.environ.get('SQ_TEST_TIMEOUT_SECONDS', '180'))
+    if timeout < 1 or timeout > 3600:
+        raise SystemExit('SQ_TEST_TIMEOUT_SECONDS must be 1..3600')
+    subprocess.run(sys.argv[2:], env=env, check=True, timeout=timeout)
 
 if __name__ == '__main__':
     main()

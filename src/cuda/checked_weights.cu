@@ -100,3 +100,7 @@ extern "C" int sq_cuda_fold(const void *u, const void *h, const void *b, void *f
         static_cast<__nv_bfloat16 *>(fw), vocab, 2304, 256);
     return (int)cudaGetLastError();
 }
+
+extern "C" int sq_cuda_launch_status(void) {
+    return (int)cudaGetLastError();
+}

@@ -37,3 +37,5 @@ leak-*
 ._*
 
 /squid-c-weights
+
+/squid-c-generate

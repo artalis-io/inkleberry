@@ -14,9 +14,10 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - Generated declarations for all 76 retained CUDA functions. A two-translation-unit probe compares the actual C and CUDA C++ record layouts and checks all function prototypes.
 - A C-hosted CUDA kernel smoke test with eager execution and graph replay; no Zig host required for that test.
 - Host CI, malformed-input tests, allocator fault injection, sanitizer/fuzzer targets, source provenance checks, formatting and installed-library consumers.
+- Optional C greedy AR sessions with retained weights, owned KV/recurrent state, recoverable cuBLAS dispatch, graph/eager execution and cancellation/reset.
 - Optional owned CUDA weight upload/packing with exact/FP8/NVFP4, full-vocabulary MTP, bounded readback, recoverable errors and retryable cleanup; full payload parity against the pinned Zig loader.
 
-**C model inference is not implemented yet.** Forward/prefill/decode, KV-cache/session resources, sampling/speculation and serving are subsequent port slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md).
+**C greedy autoregressive inference is implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Stochastic sampling, speculative decoding, prefix caching and serving remain subsequent slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md).
 
 ## Build and use
 
@@ -74,7 +75,24 @@ SQ_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID \
   make -j8 CUDA_ROOT=/usr/local/cuda-13.5 cuda-check
 ```
 
-The GPU runner refuses a missing UUID, active compute processes or more than 256 MiB of used memory on the selected device. This is a point-in-time guard, not a scheduler reservation; coordinate exclusive access for release qualification. It never terminates other workloads. A full model/session lifecycle and the upstream cuBLAS ownership issue remain to be ported before generation can pass release gates.
+The GPU runner refuses a missing UUID, active compute processes or more than 256 MiB of used memory on the selected device. This is a point-in-time guard, not a scheduler reservation; coordinate exclusive access for release qualification. It never terminates other workloads. The C AR path owns its cuBLAS handle and uses checked prefill dispatch; it never calls upstream's global cuBLAS initializer. One live C session per process is supported initially. See the AR validation contract for remaining release gates.
+
+## C autoregressive generation
+
+```sh
+make -j8 CUDA_ROOT=/usr/local/cuda-13.5 squid-c-generate
+SQ_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID \
+  python3 tools/run_cuda_smoke.py /usr/local/cuda-13.5/lib64 \
+  ./squid-c-generate /external/model-directory 'What is 2 + 2?' 128 nvfp4 fp8 graph
+```
+
+The CLI uses the C tokenizer and single-user template with `SQ_THINK_NONE`, and
+streams raw decoded token bytes. It supports `exact|fp8|nvfp4`, `bf16|fp8|q4` KV
+and `eager|graph`. Its context limit is 8,192 tokens; the typed API accepts an
+explicit limit up to 1,048,576, subject to available memory. This upper bound is
+input validation, not a claim of qualification at every context length.
+The embedding API is [include/sq_engine.h](include/sq_engine.h). No networking or
+Zig dependency is required for the C library/CLI; Zig is used only as a test oracle.
 
 ## Provenance and scope
 
