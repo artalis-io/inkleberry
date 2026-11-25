@@ -1,0 +1,9 @@
+prefix=@PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: Squid inference provider
+Description: Versioned C inference ABI (CUDA provider)
+Version: 0.1.0
+Libs: -L${libdir} -lsq_backend
+Cflags: -I${includedir}

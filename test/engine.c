@@ -238,6 +238,16 @@ static void *generate_thread(void *p) {
     return NULL;
 }
 
+static bool request_cancelled(void *context) {
+    return atomic_load_explicit((atomic_bool *)context, memory_order_acquire);
+}
+
+static int request_cancel_token(void *context, int32_t token) {
+    (void)token;
+    atomic_store_explicit((atomic_bool *)context, true, memory_order_release);
+    return 1;
+}
+
 int main(void) {
     CHECK(!strcmp(sq_status_string(SQ_CANCELLED), "cancelled"));
     sq_session_config c = SQ_SESSION_CONFIG_INIT;
@@ -292,6 +302,20 @@ int main(void) {
         CHECK(sq_weights_destroy(&w) == SQ_BUSY && w && w->ready);
         int32_t tokens[40] = {1, 2, 3, 4}, out[8];
         sq_generate_stats stats;
+        atomic_bool request_cancel;
+        atomic_init(&request_cancel, true);
+        sq_run_control control = {request_cancelled, &request_cancel};
+        sq_decode_stats controlled_stats;
+        size_t before_controlled = forward_calls;
+        CHECK(sq_session_generate_controlled(s, tokens, 4, 8, NULL, NULL, NULL, &controlled_stats,
+                                             &control) == SQ_CANCELLED &&
+              forward_calls == before_controlled && !s->request_control);
+        atomic_store(&request_cancel, false);
+        CHECK(sq_session_generate_controlled(s, tokens, 4, 8, NULL, request_cancel_token,
+                                             &request_cancel, &controlled_stats,
+                                             &control) == SQ_CANCELLED &&
+              controlled_stats.generation.generated_tokens == 1 && !s->request_control &&
+              s->position == 0 && !s->poisoned);
         CHECK(sq_session_generate(s, tokens, 4, 8, out, 8, callback_busy, s, &stats) == SQ_OK &&
               stats.generated_tokens == 8);
         CHECK(sq_session_generate(s, tokens, 40, 8, out, 8, stopped, NULL, &stats) == SQ_OK &&
@@ -346,6 +370,20 @@ int main(void) {
         blas_fault = graph_fault = 0;
         CHECK(sq_session_destroy(&s) == SQ_OK && !s && m.live == 1);
     }
+    /* A pre-cancelled request cannot hide a failed device acquisition. */
+    CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK);
+    atomic_bool pre_cancel;
+    atomic_init(&pre_cancel, true);
+    sq_run_control pre_control = {request_cancelled, &pre_cancel};
+    sq_decode_stats pre_stats;
+    int32_t pre_tokens[2] = {1, 2};
+    m.fail_op = ENTER;
+    m.fail_nth = m.calls[ENTER] + 1;
+    CHECK(sq_session_generate_controlled(s, pre_tokens, 2, 8, NULL, NULL, NULL, &pre_stats,
+                                         &pre_control) == SQ_GPU_ERROR &&
+          s->poisoned && !s->request_control);
+    m.fail_op = -1;
+    CHECK(sq_session_destroy(&s) == SQ_OK);
     /* MTP-only acquisition and retained cleanup failures. */
     /* GPU execution errors poison; validation failures do not. */
     CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK);

@@ -13,7 +13,7 @@ const char *sq_status_string(sq_status status) {
     static const char *const names[] = {
         "ok",          "invalid argument", "I/O error",      "invalid format", "out of memory",
         "not found",   "buffer too small", "limit exceeded", "busy",           "GPU error",
-        "unsupported", "cancelled"};
+        "unsupported", "cancelled",        "ABI mismatch",   "invalid state",  "not ready"};
     return status < sizeof names / sizeof names[0] ? names[status] : "unknown status";
 }
 

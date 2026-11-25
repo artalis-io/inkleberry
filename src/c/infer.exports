@@ -1,0 +1,4 @@
+SQ_INFER_1.0 {
+    global: sq_infer_get_api;
+    local: *;
+};
