@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * Synchronous AR/fixed-width DSpark session. No prefix cache. */
+ * Synchronous AR/fixed/adaptive DSpark session. No prefix cache. */
 #include "engine_internal.h"
 #include "checked_prefill.h"
 #include <stdio.h>
@@ -151,6 +151,19 @@ sq_status sq_session_create(sq_gpu_weights *w, const sq_session_config *input,
         s->poisoned = true;
         return rc;
     }
+    if (w->config.with_mtp) {
+        size_t bytes = sq_adaptive_bytes();
+        if (!bytes || bytes > 4096) {
+            s->poisoned = true;
+            return sq_error(SQ_UNSUPPORTED, "unsupported adaptive state size");
+        }
+        s->adaptive_state = allocator.allocate(allocator.context, bytes);
+        if (!s->adaptive_state) {
+            s->poisoned = true;
+            return sq_error(SQ_OUT_OF_MEMORY, "allocate adaptive graph bookkeeping");
+        }
+        sq_adaptive_init(s->adaptive_state);
+    }
     size_t groups = squid_sizeof_expert_groups();
     if (!groups || groups > 1048576) {
         s->poisoned = true;
@@ -175,6 +188,18 @@ sq_status sq_session_create(sq_gpu_weights *w, const sq_session_config *input,
         sq_ar_check(s, b->stream_create(b->context, &s->stream), "create session stream");
     if (s->status == SQ_OK)
         sq_ar_check(s, b->allocate(b->context, &s->arena, s->capacity), "allocate session arena");
+    if (s->status == SQ_OK && w->config.with_mtp) {
+        sq_ar_check(s, squid_cuda_malloc_host_pinned(&s->pinned, 17 * 4, 0),
+                    "allocate adaptive pinned outputs");
+        if (s->pinned) {
+            s->h_accepted = s->pinned;
+            s->h_count = (int32_t *)s->pinned + 8;
+            s->h_width = (int32_t *)s->pinned + 9;
+        }
+        if (s->status == SQ_OK)
+            sq_ar_check(s, squid_cuda_event_create(&s->done_event, 1),
+                        "create adaptive completion event");
+    }
     if (s->status == SQ_OK) {
         sq_ar_layout(s, groups);
         if (s->offset != s->capacity)
@@ -248,6 +273,8 @@ sq_status sq_session_reset(sq_session *s) {
     if (rc != SQ_OK)
         return rc;
     reset_device(s);
+    sq_lookup_reset(&s->lookup);
+    s->decode_info = (sq_decode_info)SQ_DECODE_INFO_INIT;
     return end(s, &scope);
 }
 
@@ -330,6 +357,8 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     if (!s || !max_new || max_new > capacity || !out || !detail || n > s->config.context_tokens ||
         max_new > s->config.context_tokens - n || !tokens_valid(tokens, n))
         return sq_error(SQ_INVALID_ARGUMENT, "invalid generation bounds or token IDs");
+    if (options.adaptive && !s->config.use_graphs)
+        return sq_error(SQ_UNSUPPORTED, "adaptive decoding requires CUDA graphs");
     if (options.draft_tokens && !s->model.dspark.loaded)
         return sq_error(SQ_UNSUPPORTED, "DSpark requires MTP weights; load them explicitly");
     sq_device_scope scope;
@@ -337,6 +366,7 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     if (rc != SQ_OK)
         return rc;
     reset_device(s);
+    s->decode_info = (sq_decode_info)SQ_DECODE_INFO_INIT;
     s->use_mtp = options.draft_tokens != 0;
     CSampleConfig sample = {0};
     sample.inv_temp = options.temperature >= 1e-4f ? 1.0f / options.temperature : 0;
@@ -370,26 +400,58 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     if (keep && drafts && stats->generated_tokens < max_new) {
         copy(s, s->d_anchor, &token, 4, 0);
         copy(s, s->d_pos, &s->position, 4, 0);
+        if (options.prompt_lookup) {
+            sq_lookup_reset(&s->lookup);
+            size_t start = n > 8192 ? n - 8192 : 0;
+            for (size_t i = start; i < n; i++)
+                sq_lookup_push(&s->lookup, tokens[i]);
+            sq_lookup_push(&s->lookup, token);
+        }
         while (stats->generated_tokens < max_new && s->status == SQ_OK && !cancelled(s) &&
                (uint32_t)s->position + drafts + 1 <= s->config.context_tokens) {
-            sq_spec_step(s, drafts);
-            int32_t accepted[8] = {0}, count = 0;
-            copy(s, &count, s->d_num_acc, 4, 1);
-            copy(s, accepted, s->d_accepted, (drafts + 1) * 4, 1);
-            sync(s);
+            int32_t accepted[8] = {0}, count = 0, width = (int32_t)drafts + 1;
+            bool lookup = false;
+            if (options.adaptive) {
+                lookup =
+                    options.prompt_lookup && sq_lookup_match(&s->lookup, (int32_t *)s->pinned + 10);
+                sq_adaptive_step(s, &options, lookup);
+                if (s->status == SQ_OK) {
+                    count = *s->h_count;
+                    width = lookup ? 8 : *s->h_width;
+                    memcpy(accepted, s->h_accepted, sizeof accepted);
+                }
+            } else {
+                sq_spec_step(s, drafts);
+                copy(s, &count, s->d_num_acc, 4, 1);
+                copy(s, accepted, s->d_accepted, (drafts + 1) * 4, 1);
+                sync(s);
+            }
             if (s->status != SQ_OK)
                 break;
-            if (count < 1 || count > (int32_t)drafts + 1) {
+            if ((options.adaptive && width != 2 && width != 4 && width != 8) || count < 1 ||
+                count > width) {
                 sq_ar_check(s, 1, "invalid accepted token count");
                 break;
             }
             detail->speculative_steps++;
-            detail->total_drafts += drafts;
+            detail->total_drafts += (uint32_t)width - 1;
+            if (options.adaptive) {
+                if (width == 2)
+                    s->decode_info.width2++;
+                else if (width == 4)
+                    s->decode_info.width4++;
+                else
+                    s->decode_info.width8++;
+                if (lookup)
+                    s->decode_info.lookup_steps++;
+            }
             detail->accepted_drafts += (uint32_t)count - 1;
             s->position += count;
             for (int32_t i = 0; i < count && stats->generated_tokens < max_new && !cancelled(s);
                  i++) {
                 token = accepted[i];
+                if (options.prompt_lookup)
+                    sq_lookup_push(&s->lookup, token);
                 keep = emit(s, token, out, callback, context, stats);
                 if (!keep)
                     break;
@@ -398,6 +460,7 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
                 break;
         }
     }
+    sq_adaptive_drain(s);
     if (keep && !drafts && stats->generated_tokens < max_new && s->status == SQ_OK &&
         !cancelled(s) && s->config.use_graphs && !s->graph) {
         sq_ar_check(s, squid_cuda_graph_begin(s->stream), "begin AR graph");
@@ -433,12 +496,25 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
 }
 
 static bool has_graphs(const sq_session *s) {
-    if (s->graph)
+    if (s->graph || s->draft_graph || s->lookup_graph ||
+        (s->adaptive_state && sq_adaptive_live(s->adaptive_state)))
         return true;
     for (unsigned i = 1; i < 8; i++)
         if (s->spec_graph[i])
             return true;
     return false;
+}
+
+sq_status sq_session_decode_info(sq_session *s, sq_decode_info *out) {
+    if (!s || !out || out->struct_size < sizeof *out || out->api_version != SQ_API_VERSION)
+        return sq_error(SQ_INVALID_ARGUMENT, "initialize decode info size/version");
+    if (!lock(s))
+        return sq_error(SQ_BUSY, "session operation already active");
+    *out = s->decode_info;
+    out->struct_size = sizeof *out;
+    out->api_version = SQ_API_VERSION;
+    unlock(s);
+    return sq_error(SQ_OK, "");
 }
 
 sq_status sq_session_destroy(sq_session **handle) {
@@ -450,14 +526,35 @@ sq_status sq_session_destroy(sq_session **handle) {
     if (!lock(s))
         return sq_error(SQ_BUSY, "session operation already active");
     s->ready = false;
+    if (s->adaptive_state && !sq_adaptive_live(s->adaptive_state)) {
+        s->allocator.release(s->allocator.context, s->adaptive_state);
+        s->adaptive_state = NULL;
+    }
     const sq_weight_backend *b = &s->weights->backend;
     s->status = SQ_OK;
     s->failure[0] = 0;
-    if (s->arena || s->stream || has_graphs(s) || s->blas) {
+    if (s->arena || s->stream || has_graphs(s) || s->blas || s->adaptive_state || s->pinned ||
+        s->done_event) {
         sq_device_scope scope = enter(s);
         if (s->status == SQ_OK) {
             if (s->stream)
                 sync(s);
+            if (s->adaptive_state) {
+                int e = sq_adaptive_cleanup(s->adaptive_state);
+                if (!e) {
+                    s->allocator.release(s->allocator.context, s->adaptive_state);
+                    s->adaptive_state = NULL;
+                }
+                sq_ar_check(s, e, "destroy conditional graph state");
+            }
+            void **extra[2] = {&s->draft_graph, &s->lookup_graph};
+            for (unsigned i = 0; i < 2; i++)
+                if (*extra[i]) {
+                    int e = squid_cuda_graph_destroy(*extra[i]);
+                    if (!e)
+                        *extra[i] = NULL;
+                    sq_ar_check(s, e, "destroy adaptive component graph");
+                }
             for (unsigned i = 1; i < 8; i++)
                 if (s->spec_graph[i]) {
                     int e = squid_cuda_graph_destroy(s->spec_graph[i]);
@@ -483,7 +580,20 @@ sq_status sq_session_destroy(sq_session **handle) {
                     s->arena = NULL;
                 sq_ar_check(s, e, "free session arena");
             }
-            if (s->stream && !s->arena && !has_graphs(s) && !s->blas) {
+            if (s->pinned && !has_graphs(s)) {
+                int e = squid_cuda_free_host(s->pinned);
+                if (!e)
+                    s->pinned = NULL;
+                sq_ar_check(s, e, "free adaptive pinned outputs");
+            }
+            if (s->done_event && !has_graphs(s)) {
+                int e = squid_cuda_event_destroy(s->done_event);
+                if (!e)
+                    s->done_event = NULL;
+                sq_ar_check(s, e, "destroy adaptive completion event");
+            }
+            if (s->stream && !s->arena && !has_graphs(s) && !s->blas && !s->pinned &&
+                !s->done_event) {
                 int e = b->stream_destroy(b->context, s->stream);
                 if (!e)
                     s->stream = NULL;
@@ -493,7 +603,8 @@ sq_status sq_session_destroy(sq_session **handle) {
         (void)leave(s, &scope);
     }
     sq_status rc = result(s);
-    if (s->arena || s->stream || has_graphs(s) || s->blas) {
+    if (s->arena || s->stream || has_graphs(s) || s->blas || s->adaptive_state || s->pinned ||
+        s->done_event) {
         unlock(s);
         return rc;
     }

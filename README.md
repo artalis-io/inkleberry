@@ -17,7 +17,7 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - Optional C greedy AR sessions with retained weights, owned KV/recurrent state, recoverable cuBLAS dispatch, graph/eager execution and cancellation/reset.
 - Optional owned CUDA weight upload/packing with exact/FP8/NVFP4, full-vocabulary MTP, bounded readback, recoverable errors and retryable cleanup; full payload parity against the pinned Zig loader.
 
-**C autoregressive and fixed-width speculative generation are implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Temperature/top-p/top-k sampling and fixed-width DSpark speculation are also implemented. Adaptive drafting, prefix caching and serving remain subsequent slices. Model-backed validation is documented below. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md); [sampling/speculation contract](docs/speculation-validation.md).
+**C autoregressive, fixed-width and adaptive speculative generation are implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Temperature/top-p/top-k sampling and fixed-width DSpark speculation are also implemented. Adaptive 2/4/8-token verification and verified prompt lookup are implemented. Prefix caching and serving remain subsequent slices. Model-backed validation is documented below. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md); [sampling/speculation contract](docs/speculation-validation.md); [adaptive/lookup contract](docs/adaptive-validation.md).
 
 ## Build and use
 
@@ -99,7 +99,11 @@ For deterministic stochastic generation and fixed-width DSpark, append
 command. Positive drafts require the external `mtp.safetensors`; there is no
 silent AR fallback. The typed API is `sq_session_generate_ex`. See the
 [sampling/speculation contract](docs/speculation-validation.md) for verification,
-acceptance counters and the fixed-width scope.
+acceptance counters and the fixed-width scope. For adaptive verification append
+`--adaptive-threshold 0.8 --prompt-lookup 1` alongside `--drafts 7` and `graph`.
+Both options are explicit; existing commands keep their previous behavior. See
+[adaptive validation](docs/adaptive-validation.md) for graph ownership, overlap,
+lookup verification and qualification commands.
 
 ## Provenance and scope
 

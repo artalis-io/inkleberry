@@ -64,6 +64,8 @@ void sq_ar_layout(sq_session *s, size_t groups) {
         F(d_draft_is_delta, 1);
         F(d_draft_probs, 7 * 200058);
         F(d_draft_q_sel, 7);
+        F(d_conf, 7);
+        F(d_width, 1);
     }
     F(split_buf, 2050000);
     F(d_pos, 1);

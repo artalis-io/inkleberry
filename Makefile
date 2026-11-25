@@ -15,7 +15,7 @@ NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
-HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c src/c/sampling.c
+HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c src/c/sampling.c src/c/lookup.c
 OBJ = $(HOST:src/c/%.c=.build/%.o)
 PIC = $(HOST:src/c/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
@@ -62,10 +62,11 @@ generated-check:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/weights-test: test/weights_runtime.c test/mock_gpu.h libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-check: .build/sampling-test .build/decode-compare.o .build/engine_forward.o .build/engine_spec.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
+check: .build/adaptive-compare.o .build/adaptive-recovery.o .build/lookup-test .build/sampling-test .build/decode-compare.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
 	.build/unit
 	.build/engine-test
 	.build/sampling-test
+	.build/lookup-test
 	python3 test/weights_plan.py ./squid-c
 	.build/inkling-test
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
@@ -82,12 +83,13 @@ sanitize:
 	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test squid-c
+	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test .build/lookup-test squid-c
 	.build/concurrency
 	.build/tokenizer-test .build/tokenizer-fixture.json
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
 	.build/engine-test
 	.build/sampling-test
+	.build/lookup-test
 fuzz-smoke: | .build
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
@@ -138,7 +140,7 @@ clean:
 gpu: generated-check libsq-gpu.a
 .build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
+libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@
 	$(AR) rcs $@ $^
 .build/gpu-weight-compare.o: test/gpu_weights_compare.c include/sq_gpu.h .build/config
@@ -187,8 +189,8 @@ ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gp
 .build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/c/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 
-.build/engine-test: test/engine.c test/mock_gpu.h .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o libsq.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) test/engine.c .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+.build/engine-test: test/engine.c test/mock_gpu.h .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o .build/engine_adaptive.o libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) test/engine.c .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o .build/engine_adaptive.o libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 
 .build/session-context.o: test/session_context.cu include/sq_engine.h .build/config
 	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
@@ -213,4 +215,21 @@ sampling-kernel-check: generated-check .build/sampling-kernels
 .build/decode-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/decode-recovery: .build/decode-recovery.o .build/session-context.o libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+.build/adaptive-compare.o: test/adaptive_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.PHONY: adaptive-oracle
+adaptive-oracle: generated-check .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/adaptive.zig -Mengine=src/engine.zig .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/adaptive-oracle
+
+.build/lookup-test: test/lookup.c libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
+.build/adaptive-graph.o: test/adaptive_graph.cu src/c/checked_cuda.h .build/config
+	$(NVCC) $(CUDAFLAGS) -Isrc/c -c $< -o $@
+.build/adaptive-graph: .build/adaptive-graph.o libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) -o $@
+
+.build/adaptive-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DSQ_TEST_ADAPTIVE=1 -c $< -o $@
+.build/adaptive-recovery: .build/adaptive-recovery.o .build/session-context.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@

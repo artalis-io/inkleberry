@@ -33,7 +33,8 @@ int main(int argc, char **argv) {
     if (argc < 3) {
         fputs("usage: squid-c-generate MODEL_DIR PROMPT [MAX_NEW] [exact|fp8|nvfp4] [bf16|fp8|q4] "
               "[eager|graph] "
-              "[--temperature T] [--top-p P] [--top-k K] [--seed U64] [--drafts 0..7]\n",
+              "[--temperature T] [--top-p P] [--top-k K] [--seed U64] [--drafts 0..7] "
+              "[--adaptive-threshold T] [--prompt-lookup 0|1]\n",
               stderr);
         return 2;
     }
@@ -77,7 +78,8 @@ int main(int argc, char **argv) {
             return 2;
         const char *name = argv[index++], *value = argv[index++];
         uint64_t x;
-        if (!strcmp(name, "--temperature") || !strcmp(name, "--top-p")) {
+        if (!strcmp(name, "--temperature") || !strcmp(name, "--top-p") ||
+            !strcmp(name, "--adaptive-threshold")) {
             char *end = NULL;
             errno = 0;
             float f = strtof(value, &end);
@@ -90,7 +92,11 @@ int main(int argc, char **argv) {
             } else {
                 if (f <= 0 || f > 1)
                     return 2;
-                options.top_p = f;
+                if (!strcmp(name, "--adaptive-threshold")) {
+                    options.adaptive = 1;
+                    options.spec_threshold = f;
+                } else
+                    options.top_p = f;
             }
         } else {
             if (!unsigned_value(value, &x))
@@ -101,7 +107,11 @@ int main(int argc, char **argv) {
                 options.top_k = (int32_t)x;
             } else if (!strcmp(name, "--seed"))
                 options.seed = x;
-            else if (!strcmp(name, "--drafts")) {
+            else if (!strcmp(name, "--prompt-lookup")) {
+                if (x > 1)
+                    return 2;
+                options.prompt_lookup = (uint32_t)x;
+            } else if (!strcmp(name, "--drafts")) {
                 if (x > 7)
                     return 2;
                 options.draft_tokens = (uint32_t)x;
@@ -109,6 +119,9 @@ int main(int argc, char **argv) {
                 return 2;
         }
     }
+    if ((options.adaptive && (options.draft_tokens != 7 || !sc.use_graphs)) ||
+        (options.prompt_lookup && !options.adaptive))
+        return 2;
     wc.with_mtp = options.draft_tokens != 0;
     if (strlen(argv[1]) > 1000 || strlen(argv[2]) > 1048576)
         return 2;
@@ -171,6 +184,13 @@ int main(int argc, char **argv) {
     if (rc == SQ_OK && options.draft_tokens)
         fprintf(stderr, "spec_steps=%u drafts=%u accepted=%u\n", stats.speculative_steps,
                 stats.total_drafts, stats.accepted_drafts);
+    if (rc == SQ_OK && options.adaptive) {
+        sq_decode_info info = SQ_DECODE_INFO_INIT;
+        rc = sq_session_decode_info(s, &info);
+        if (rc == SQ_OK)
+            fprintf(stderr, "lookup=%u widths2/4/8=%u/%u/%u drafts_launched=%u\n",
+                    info.lookup_steps, info.width2, info.width4, info.width8, info.draft_launches);
+    }
 cleanup:
     if (rc != SQ_OK)
         fprintf(stderr, "C decode: %s (%s)\n", sq_status_string(rc), sq_last_error());
