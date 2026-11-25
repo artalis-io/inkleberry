@@ -39,6 +39,7 @@ struct sq_tokenizer_scratch {
 
 uint64_t sq_token_hash(const void *data, size_t size);
 uint64_t sq_pair_hash(uint64_t key);
+int32_t sq_special_lookup(const sq_tokenizer *t, const void *bytes, size_t size);
 int32_t sq_vocab_lookup(const sq_tokenizer *t, const void *bytes, size_t size);
 bool sq_utf8_next(const unsigned char *text, size_t bytes, size_t *pos, uint32_t *cp);
 #endif

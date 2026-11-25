@@ -349,3 +349,7 @@ execution and verified prompt lookup. See [adaptive validation](adaptive-validat
 The opt-in [prefix-cache slice](prefix-validation.md) adds the four-checkpoint
 and short-side-request shield path. Serving and broader release gates remain
 outstanding.
+
+The [text conversation/stream slice](conversation-streaming.md) adds safe multi-turn
+encoding and a shared Unicode/stop filter. HTTP remains separate and will use the
+latest Keel release, pinned after its adapter/API review.

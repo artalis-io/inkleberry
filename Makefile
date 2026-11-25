@@ -15,7 +15,7 @@ NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
-HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c src/c/sampling.c src/c/lookup.c
+HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c src/c/sampling.c src/c/lookup.c src/c/chat.c src/c/stream.c
 OBJ = $(HOST:src/c/%.c=.build/%.o)
 PIC = $(HOST:src/c/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
@@ -62,7 +62,9 @@ generated-check:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/weights-test: test/weights_runtime.c test/mock_gpu.h libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-check: .build/prefix-recovery.o .build/prefix-compare.o .build/adaptive-compare.o .build/adaptive-recovery.o .build/lookup-test .build/sampling-test .build/decode-compare.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
+check: .build/chat-native.o .build/chat-test .build/stream-driver .build/chat-fixture.json .build/prefix-recovery.o .build/prefix-compare.o .build/adaptive-compare.o .build/adaptive-recovery.o .build/lookup-test .build/sampling-test .build/decode-compare.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
+	.build/chat-test .build/chat-fixture.json
+	python3 test/stream_cases.py .build/stream-driver
 	.build/unit
 	.build/engine-test
 	.build/sampling-test
@@ -83,14 +85,17 @@ sanitize:
 	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test .build/lookup-test squid-c
+	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test .build/lookup-test .build/chat-test .build/chat-fixture.json squid-c
 	.build/concurrency
 	.build/tokenizer-test .build/tokenizer-fixture.json
 	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
 	.build/engine-test
 	.build/sampling-test
 	.build/lookup-test
+	.build/chat-test .build/chat-fixture.json
 fuzz-smoke: | .build
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_stream.c -o .build/fuzz-stream
+	.build/fuzz-stream -runs=3000 -max_len=32768
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
 	.build/fuzz-safetensors -runs=3000 -max_len=262144 .build/fuzz-corpus
@@ -104,7 +109,7 @@ lint: generated-check
 	python3 tools/lint.py
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib/pkgconfig $(DESTDIR)$(PREFIX)/bin
-	cp include/sq.h include/sq_weights.h include/sq_gpu.h include/sq_engine.h $(DESTDIR)$(PREFIX)/include/
+	cp include/sq.h include/sq_chat.h include/sq_weights.h include/sq_gpu.h include/sq_engine.h $(DESTDIR)$(PREFIX)/include/
 	cp libsq.a $(SHARED) $(DESTDIR)$(PREFIX)/lib/
 	cp squid-c $(DESTDIR)$(PREFIX)/bin/
 	sed 's|@PREFIX@|$(PREFIX)|g' sq.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/squid-c.pc
@@ -242,4 +247,19 @@ prefix-oracle: generated-check .build/session-context.o .build/prefix-compare.o 
 .build/prefix-recovery.o: test/prefix_recovery.c test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/prefix-recovery: .build/prefix-recovery.o .build/session-context.o libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+
+.build/chat-fixture.json: test/chat_fixtures.py test/tokenizer_fixtures.py | .build
+	python3 test/chat_fixtures.py $@
+.build/chat-test: test/chat.c include/sq_chat.h libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
+.build/stream-driver: test/stream_driver.c include/sq_chat.h libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
+.PHONY: chat-oracle
+chat-oracle: generated-check
+	python3 tools/prepare_chat_oracle.py
+	$(ZIG) build-exe -O ReleaseFast --dep server -Mroot=test/oracle/chat.zig -Mserver=.build/chat-oracle-src/server.zig -lc -femit-bin=.build/chat-oracle
+.build/chat-native.o: test/chat_native.c test/decode_compare.c test/ar_compare.c include/sq_chat.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.build/chat-native: .build/chat-native.o .build/session-context.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
