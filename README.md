@@ -2,20 +2,64 @@
 
 A C11 host port of [tensorfish/squid5090](https://github.com/tensorfish/squid5090), retaining its Blackwell CUDA kernels and Apache-2.0 attribution.
 
-The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit C API ownership, checked errors, fault injection, installed-consumer tests and separate model-backed validation practices. It is GPU-first; Jev's CPU inference implementation is a different model and algorithm.
+The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit ownership, checked errors, allocation fault injection, installed-consumer tests and separate model-backed validation practices. It is GPU-first; Jev's CPU model implementation is separate.
 
-## Status
+## Implemented
 
-Implementation has started from the evaluated upstream revision `d10c0abb2c8990be81c08ba84c66a8333a691b33`. [Design and acceptance gates](docs/c-port-design.md).
+- C11 static/shared library with a versioned options structure, injected allocator, opaque checkpoint ownership, typed statuses and thread-local diagnostics.
+- Read-only safetensors mapping and bounded memory parsing; checked dtype/shape/offset arithmetic, UTF-8, duplicate tensor/field rejection, complete non-overlapping payload coverage and immutable concurrent lookup.
+- `squid-c inspect`: real checkpoint metadata inspection, including the official Inkling main and MTP files.
+- Generated declarations for all 76 retained CUDA functions. A two-translation-unit probe compares the actual C and CUDA C++ record layouts and checks all function prototypes.
+- A C-hosted CUDA kernel smoke test with eager execution and graph replay; no Zig host required for that test.
+- Host CI, malformed-input tests, allocator fault injection, sanitizer/fuzzer targets, source provenance checks, formatting and installed-library consumers.
 
-The C inference loop is not implemented yet. The initial foundation slice is developed separately; it must pass host and real CUDA ABI/kernel checks before expansion. No C generation performance or model parity is claimed at this stage.
+**C model inference is not implemented yet.** Tokenizer/chat templates, model binding, owned GPU model/session resources, forward/prefill/decode, sampling/speculation and serving are subsequent port slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md).
 
-The `artalis` default branch is the C project line. `main` preserves the newer upstream snapshot inherited when the GitHub fork was created. Kernel upgrades are separate from the language port.
+## Build and use
 
-## Scope
+Host-only tools need a C11 compiler, a C++ compiler for the header consumer test, Make and Python 3. There are no third-party host-library dependencies. Linux AMD64 and macOS ARM64 host tests are exercised; CUDA execution targets Linux AMD64 / Blackwell `sm_120a`.
 
-C host and public API, retained CUDA C++20 compiled with NVCC, Linux AMD64 / Blackwell `sm_120a` first. Official Inkling-2-Mini safetensors; no GGUF or CPU generation backend is promised. The original Zig sources and `build.zig` remain the pinned reference during transition.
+```sh
+make -j8
+./squid-c --version
+./squid-c inspect /external/path/model.safetensors
+make check install-check
+make lint                 # requires clang-format 18
+make sanitize             # Clang ASan + UBSan; includes failure paths
+make fuzz-smoke           # Clang libFuzzer + ASan + UBSan, 3,000 iterations
+make thread-sanitize      # dedicated immutable-lookup / TLS stress test
+```
+
+`make install-check` stages inside `.build/stage`, never in a system prefix. To install explicitly: `make install DESTDIR=/staging/path PREFIX=/usr/local`. The public API is [include/sq.h](include/sq.h). It is an initial development API; no stable ABI is promised yet. Files supplied to the reader must remain immutable for the lifetime of the mapping. The bounded reader supports U8, BF16, F32 and F8_E4M3, 2,048 tensors, rank 8, 255-byte UTF-8 names and a 16 MiB header; it is not a universal safetensors implementation or a model-shape validator.
+
+For an external real-checkpoint descriptor comparison (no payload copying):
+
+```sh
+python3 tools/check_checkpoint.py ./libsq.so /external/path/model.safetensors /external/path/mtp.safetensors
+```
+
+On macOS use `libsq.dylib`. Use a normal, non-sanitized shared library under ordinary Python. `SAN_CC` and `SAN_CXX` select sanitizer compilers. On core-1 the installed Clang selects an incomplete GCC 14 tree; its libFuzzer link needs `SAN_CC='clang --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13'`. No global toolchain changes are needed.
+
+## CUDA checks
+
+CUDA toolkit 13.5 and a Blackwell GPU are used for the retained kernels. The build retains upstream's C++20, `sm_120a` and fast-math flags. CPU-only CI does not qualify the GPU path. These commands compile locally, download nothing, and do not alter GPU configuration:
+
+```sh
+make -j8 CUDA_ROOT=/usr/local/cuda-13.5 cuda-abi-check
+SQ_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID \
+  make -j8 CUDA_ROOT=/usr/local/cuda-13.5 cuda-check
+```
+
+The GPU runner refuses a missing UUID, active compute processes or more than 256 MiB of used memory on the selected device. This is a point-in-time guard, not a scheduler reservation; coordinate exclusive access for release qualification. It never terminates other workloads. A full model/session lifecycle and the upstream cuBLAS ownership issue remain to be ported before generation can pass release gates.
+
+## Provenance and scope
+
+The evaluated source is pinned at `d10c0abb2c8990be81c08ba84c66a8333a691b33` in [UPSTREAM.json](UPSTREAM.json). `make generated-check` verifies every pinned CUDA/Zig/build/license input and the generated ABI. Original kernels and Zig host remain unchanged as the reference.
+
+The `artalis` default branch is the C project line. `main` preserves the newer upstream snapshot inherited when the fork was created; kernel upgrades are reviewed separately from the language port. The architectural reference is Jev Bush revision `85fd51f8c99b1b8b7ea26d33e02413e681a9271d` (0BSD). We adopt its C engineering conventions without importing its CPU inference algorithms or accelerator design.
+
+Scope: C host/public API, retained CUDA C++20/NVCC, official Inkling-2-Mini safetensors. No GGUF or CPU generation backend is promised. Start with the C library and CLI; serving follows correctness and lifecycle qualification.
 
 ## License
 
-Apache-2.0: retain [LICENSE](LICENSE), [NOTICE](NOTICE) and modification attribution. Model materials and NVIDIA SDK/runtime terms are separate. No weights or credentials are included. The original upstream README and NOTICE are archived under `docs/upstream/`.
+Apache-2.0: retain [LICENSE](LICENSE), [NOTICE](NOTICE) and modification attribution. Model materials and NVIDIA SDK/runtime terms are separate. No weights or credentials are included. The original README and NOTICE are archived under `docs/upstream/`.

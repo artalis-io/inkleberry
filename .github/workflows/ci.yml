@@ -1,0 +1,40 @@
+name: C host foundation
+on:
+  push:
+    branches: [artalis, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [artalis]
+permissions:
+  contents: read
+jobs:
+  host:
+    name: Host (${{ matrix.os }}, ${{ matrix.cc }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, cc: gcc, cxx: g++}
+          - {os: ubuntu-24.04, cc: clang, cxx: clang++}
+          - {os: macos-14, cc: clang, cxx: clang++}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: make -j2 CC=${{ matrix.cc }} CXX=${{ matrix.cxx }} check install-check
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: make sanitize CXX=clang++
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+      - run: make fuzz-smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: sudo apt-get update && sudo apt-get install -y clang-format-18
+      - run: make lint
+# CPU CI is not an inference or GPU qualification gate. Real GPU checks must
+# run explicitly on a reserved device; never dispatch untrusted PRs to core-1.
