@@ -6,6 +6,8 @@
 #include <math.h>
 static int zero_fault, graph_fault, blas_fault, launch_fault;
 static int marker;
+static int pinned_fault, event_fault, pinned_free_fault, event_free_fault;
+static size_t pinned_live, events_live;
 
 static void *oom(void *c, size_t n) {
     (void)c;
@@ -16,6 +18,26 @@ static void *oom(void *c, size_t n) {
 static void ignored_free(void *c, void *p) {
     (void)c;
     (void)p;
+}
+
+static size_t allocation_calls, allocation_live;
+
+static void *second_oom(void *context, size_t bytes) {
+    (void)context;
+    if (++allocation_calls == 2)
+        return NULL;
+    void *p = malloc(bytes);
+    if (p)
+        allocation_live++;
+    return p;
+}
+
+static void counted_free(void *context, void *p) {
+    (void)context;
+    if (p) {
+        allocation_live--;
+        free(p);
+    }
 }
 
 static size_t forward_calls;
@@ -135,10 +157,25 @@ static int cancelled_cb(void *ctx, int32_t token) {
     return 1;
 }
 
+static unsigned drain_callback_count;
+
+static int fail_drain(void *ctx, int32_t token) {
+    (void)token;
+    mock *m = ctx;
+    if (++drain_callback_count == 2) {
+        m->fail_op = SYNC;
+        m->fail_nth = m->calls[SYNC] + 1;
+        return 0;
+    }
+    return 1;
+}
+
 static int callback_busy(void *ctx, int32_t token) {
     (void)token;
     sq_session *s = ctx, *copy_s = s;
-    return sq_session_reset(s) == SQ_BUSY && sq_session_destroy(&copy_s) == SQ_BUSY && copy_s == s;
+    sq_decode_info info = SQ_DECODE_INFO_INIT;
+    return sq_session_decode_info(s, &info) == SQ_BUSY && sq_session_reset(s) == SQ_BUSY &&
+           sq_session_destroy(&copy_s) == SQ_BUSY && copy_s == s;
 }
 
 typedef struct {
@@ -262,6 +299,7 @@ int main(void) {
         blas_fault = graph_fault = 0;
         CHECK(sq_session_destroy(&s) == SQ_OK && !s && m.live == 1);
     }
+    /* MTP-only acquisition and retained cleanup failures. */
     /* GPU execution errors poison; validation failures do not. */
     CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK);
     launch_fault = 700;
@@ -316,6 +354,41 @@ int main(void) {
     CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, cancelled_cb, s, &detail) ==
               SQ_CANCELLED &&
           !s->poisoned);
+    options.adaptive = 1;
+    options.draft_tokens = 7;
+    sq_decode_info info = SQ_DECODE_INFO_INIT;
+    CHECK(sq_session_decode_info(s, &info) == SQ_OK);
+    info.struct_size = 0;
+    CHECK(sq_session_decode_info(s, &info) == SQ_INVALID_ARGUMENT);
+    info = (sq_decode_info)SQ_DECODE_INFO_INIT;
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, NULL, NULL, &detail) == SQ_OK &&
+          !s->draft_in_flight && !s->poisoned);
+    CHECK(sq_session_decode_info(s, &info) == SQ_OK && info.width2 > 0);
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, cancelled_cb, s, &detail) ==
+              SQ_CANCELLED &&
+          !s->draft_in_flight && !s->poisoned);
+    c.use_graphs = 0;
+    s->config.use_graphs = 0;
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, NULL, NULL, &detail) ==
+              SQ_UNSUPPORTED &&
+          !s->poisoned);
+    c.use_graphs = s->config.use_graphs = 1;
+    /* Real scheduler drain preserves the first error and retains uncertain work. */
+    s->draft_in_flight = true;
+    s->status = SQ_OK;
+    m.fail_op = SYNC;
+    m.fail_nth = m.calls[SYNC] + 1;
+    sq_adaptive_drain(s);
+    CHECK(s->status == SQ_GPU_ERROR && s->draft_in_flight);
+    s->status = SQ_OUT_OF_MEMORY;
+    m.fail_nth = m.calls[SYNC] + 1;
+    sq_adaptive_drain(s);
+    CHECK(s->status == SQ_OUT_OF_MEMORY && s->draft_in_flight);
+    m.fail_op = -1;
+    sq_adaptive_drain(s);
+    CHECK(s->status == SQ_OUT_OF_MEMORY && !s->draft_in_flight);
+    s->status = SQ_OK;
+    options.adaptive = 0;
     options.temperature = NAN;
     CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, NULL, NULL, &detail) ==
               SQ_INVALID_ARGUMENT &&
@@ -335,6 +408,49 @@ int main(void) {
     graph_fault = 0;
     CHECK(sq_session_destroy(&s) == SQ_OK && !s);
     CHECK(sq_weights_destroy(&w) == SQ_OK && !w && !m.live);
+    reset(&m);
+    w = image_with_mtp(&m, 1);
+    CHECK(w);
+    sq_options fail_host = SQ_OPTIONS_INIT;
+    fail_host.allocate = second_oom;
+    fail_host.release = counted_free;
+    CHECK(sq_session_create(w, &c, &fail_host, &s) == SQ_OUT_OF_MEMORY && s && !s->adaptive_state &&
+          !s->stream);
+    CHECK(sq_session_destroy(&s) == SQ_OK && !allocation_live && !w->session_users);
+    for (int failure = 0; failure < 2; failure++) {
+        pinned_fault = failure == 0;
+        event_fault = failure == 1;
+        CHECK(sq_session_create(w, &c, NULL, &s) != SQ_OK && s);
+        pinned_fault = event_fault = 0;
+        CHECK(sq_session_destroy(&s) == SQ_OK && !pinned_live && !events_live);
+    }
+    for (int failure = 0; failure < 3; failure++) {
+        CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK);
+        if (failure == 0) {
+            *(int *)s->adaptive_state = 1;
+            graph_fault = 700;
+        } else if (failure == 1)
+            pinned_free_fault = 700;
+        else
+            event_free_fault = 700;
+        CHECK(sq_session_destroy(&s) == SQ_GPU_ERROR && s && s->stream);
+        if (failure == 0)
+            CHECK(s->arena && s->pinned && s->done_event && s->adaptive_state);
+        graph_fault = pinned_free_fault = event_free_fault = 0;
+        CHECK(sq_session_destroy(&s) == SQ_OK && !s && !pinned_live && !events_live);
+    }
+    CHECK(sq_session_create(w, &c, NULL, &s) == SQ_OK);
+    options.adaptive = 1;
+    mock_accepted_count = 1;
+    CHECK(sq_session_generate_ex(s, tokens, 4, 8, &options, out, 8, fail_drain, &m, &detail) ==
+              SQ_GPU_ERROR &&
+          s->poisoned && s->draft_in_flight && detail.generation.generated_tokens == 2 &&
+          strstr(sq_last_error(), "drain"));
+    m.fail_op = -1;
+    CHECK(sq_session_decode_info(s, &info) == SQ_OK && info.width2 == 1);
+    CHECK(sq_session_reset(s) == SQ_GPU_ERROR);
+    CHECK(sq_session_destroy(&s) == SQ_OK && !pinned_live && !events_live);
+    CHECK(sq_weights_destroy(&w) == SQ_OK && !m.live);
     mock_count_pointer = mock_accepted_pointer = NULL;
     mock_accepted_count = 1;
     puts("AR session simulation: bounds, retention, faults, poisoning, cleanup retry, callback "
@@ -347,4 +463,145 @@ void sq_spec_step(sq_session *s, uint32_t drafts) {
     mock_accepted_pointer = s->d_accepted;
     if (s->config.use_graphs)
         s->spec_graph[drafts] = &marker;
+}
+
+size_t sq_adaptive_bytes(void) {
+    return 32;
+}
+
+void sq_adaptive_init(void *p) {
+    memset(p, 0, 32);
+}
+
+int sq_adaptive_live(const void *p) {
+    return *(const int *)p;
+}
+
+int sq_adaptive_cleanup(void *p) {
+    if (graph_fault)
+        return graph_fault;
+    memset(p, 0, 32);
+    return 0;
+}
+
+static int32_t *adaptive_accepted, *adaptive_count, *adaptive_width;
+
+int sq_adaptive_prepare(void *state, const int32_t *anchor, const int32_t *drafts,
+                        const float *confidence, float threshold, int32_t *tokens, int32_t *width,
+                        const int32_t *accepted, int32_t *host_accepted, const int32_t *count,
+                        int32_t *host_count, int32_t *host_width, void *stream) {
+    (void)anchor;
+    (void)drafts;
+    (void)confidence;
+    (void)threshold;
+    (void)tokens;
+    (void)width;
+    (void)accepted;
+    (void)count;
+    (void)stream;
+    *(int *)state = 1;
+    adaptive_accepted = host_accepted;
+    adaptive_count = host_count;
+    adaptive_width = host_width;
+    return graph_fault;
+}
+
+int sq_adaptive_branch_begin(void *state, int branch, void *stream) {
+    (void)state;
+    (void)branch;
+    (void)stream;
+    return graph_fault;
+}
+
+int sq_adaptive_branch_end(void *state) {
+    (void)state;
+    return graph_fault;
+}
+
+int sq_adaptive_instantiate(void *state) {
+    (void)state;
+    return graph_fault;
+}
+
+int sq_adaptive_launch(void *state, void *stream) {
+    (void)state;
+    (void)stream;
+    *adaptive_count = 1;
+    *adaptive_width = 2;
+    adaptive_accepted[0] = 42;
+    return graph_fault;
+}
+
+void sq_spec_draft(sq_session *s, uint32_t n, float *confidence) {
+    (void)s;
+    (void)n;
+    (void)confidence;
+}
+
+void sq_spec_verify(sq_session *s, uint32_t n) {
+    (void)s;
+    (void)n;
+}
+
+void sq_spec_target(sq_session *s, uint32_t n) {
+    (void)s;
+    (void)n;
+}
+
+int32_t squid_cuda_memcpy_d2h_async(void *dst, const void *src, size_t n, void *stream) {
+    (void)dst;
+    (void)src;
+    (void)n;
+    (void)stream;
+    return graph_fault;
+}
+
+int32_t squid_cuda_event_record(void *event, void *stream) {
+    (void)event;
+    (void)stream;
+    return graph_fault;
+}
+
+int32_t squid_cuda_event_sync(void *event) {
+    (void)event;
+    return graph_fault;
+}
+
+int32_t squid_cuda_malloc_host_pinned(void **out, size_t n, uint8_t mapped) {
+    (void)mapped;
+    if (pinned_fault) {
+        *out = NULL;
+        return 2;
+    }
+    *out = calloc(1, n);
+    if (*out)
+        pinned_live++;
+    return *out ? 0 : 2;
+}
+
+int32_t squid_cuda_free_host(void *p) {
+    if (pinned_free_fault)
+        return pinned_free_fault;
+    free(p);
+    pinned_live--;
+    return 0;
+}
+
+int32_t squid_cuda_event_create(void **out, uint8_t disable) {
+    (void)disable;
+    if (event_fault) {
+        *out = NULL;
+        return 2;
+    }
+    *out = &marker;
+    events_live++;
+    return 0;
+}
+
+int32_t squid_cuda_event_destroy(void *p) {
+    (void)p;
+    if (event_free_fault)
+        return event_free_fault;
+    events_live--;
+    return 0;
 }

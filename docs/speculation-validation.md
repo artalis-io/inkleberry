@@ -25,7 +25,9 @@ Zero draft tokens selects AR. Positive values explicitly select a **fixed**
 DSpark width; the verification batch is draft_tokens+1. MTP weights must already
 have been loaded in the image. Missing MTP returns `SQ_UNSUPPORTED`; there is no
 silent fallback. Draft width, precision and KV format are explicit in the test
-manifest. Adaptive width and prompt lookup are not exposed by this API.
+manifest. That initial slice did not expose adaptive width or prompt lookup. The subsequent
+[adaptive slice](adaptive-validation.md) appends explicit options while accepting
+the original options prefix; fixed-width behavior remains unchanged.
 
 The extended statistics include ordinary generation counts/finish reason plus
 speculative steps, proposed drafts and accepted drafts. These last counts cover

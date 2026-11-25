@@ -6,6 +6,7 @@
 #include "weights_internal.h"
 #include "sq_engine.h"
 #include "cuda_abi.h"
+#include "lookup.h"
 
 typedef struct {
     void *attn_norm;
@@ -61,12 +62,19 @@ struct sq_session {
     int32_t position;
     void *arena, *stream, *graph, *blas;
     void *spec_graph[8];
+    void *adaptive_state, *draft_graph, *lookup_graph, *done_event, *pinned;
+    int32_t *h_accepted, *h_count, *h_width;
+    float adaptive_threshold;
+    bool draft_in_flight;
+    sq_lookup lookup;
+    sq_decode_info decode_info;
     bool use_mtp, verifying;
     int32_t ds_cap[3];
     void *ds_k[3], *ds_v[3], *ds_ks[3], *ds_vs[3];
     float *ds_f_ring, *taps, *ds_mix, *ds_kv, *ds_ws;
     int32_t *d_anchor, *d_drafts, *d_accepted, *d_num_acc, *d_draft_is_delta;
-    float *d_draft_probs, *d_draft_q_sel;
+    float *d_draft_probs, *d_draft_q_sel, *d_conf;
+    int32_t *d_width;
     size_t capacity, offset, allocations;
     int32_t kv_cap[48];
     void *k_cache[48], *v_cache[48], *k_scale[48], *v_scale[48];
@@ -118,6 +126,11 @@ struct sq_session {
 };
 
 sq_status sq_decode_resolve(const sq_decode_options *, sq_decode_options *);
+void sq_spec_draft(sq_session *, uint32_t, float *);
+void sq_spec_target(sq_session *, uint32_t);
+void sq_spec_verify(sq_session *, uint32_t);
+void sq_adaptive_step(sq_session *, const sq_decode_options *, bool);
+void sq_adaptive_drain(sq_session *);
 void sq_spec_step(sq_session *, uint32_t);
 void sq_spec_commit(sq_session *, const float *, int32_t, const int32_t *);
 sq_status sq_ar_bind(sq_gpu_weights *, sq_ar_model *);

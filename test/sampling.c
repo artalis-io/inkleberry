@@ -2,6 +2,8 @@
 #include "engine_internal.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #define REQUIRE(x)                                                                                 \
     do {                                                                                           \
         if (!(x)) {                                                                                \
@@ -49,6 +51,49 @@ int main(void) {
             bad.api_version = 0;
         REQUIRE(sq_decode_resolve(&bad, &out) == SQ_INVALID_ARGUMENT);
     }
+    options = (sq_decode_options)SQ_DECODE_OPTIONS_INIT;
+    options.adaptive = 1;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
+    options.draft_tokens = 7;
+    options.prompt_lookup = 1;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_OK && out.adaptive &&
+            out.spec_threshold == 0.8f);
+    options.spec_threshold = NAN;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
+    options.spec_threshold = 1.01f;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
+    for (unsigned i = 0; i < 7; i++) {
+        sq_decode_options bad = SQ_DECODE_OPTIONS_INIT;
+        bad.draft_tokens = 7;
+        if (i == 0)
+            bad.adaptive = 2;
+        if (i == 1)
+            bad.prompt_lookup = 2;
+        if (i == 2)
+            bad.prompt_lookup = 1;
+        if (i == 3)
+            bad.adaptive_reserved = 1;
+        if (i == 4)
+            bad.spec_threshold = 0;
+        if (i == 5)
+            bad.spec_threshold = -1;
+        if (i == 6)
+            bad.spec_threshold = INFINITY;
+        REQUIRE(sq_decode_resolve(&bad, &out) == SQ_INVALID_ARGUMENT);
+    }
+    options = (sq_decode_options)SQ_DECODE_OPTIONS_INIT;
+    size_t legacy = offsetof(sq_decode_options, adaptive);
+    options.struct_size = legacy;
+    options.adaptive = 99;
+    options.spec_threshold = NAN;
+    unsigned char *old = malloc(legacy);
+    REQUIRE(old);
+    memcpy(old, &options, legacy);
+    REQUIRE(sq_decode_resolve((const sq_decode_options *)(const void *)old, &out) == SQ_OK &&
+            !out.adaptive && out.spec_threshold == 0.8f);
+    free(old);
+    options.struct_size = legacy + 4;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
     puts("sampling option boundaries, NaN/Inf rejection and full-width seed preservation passed");
     return 0;
 }

@@ -104,3 +104,155 @@ extern "C" int sq_cuda_fold(const void *u, const void *h, const void *b, void *f
 extern "C" int sq_cuda_launch_status(void) {
     return (int)cudaGetLastError();
 }
+
+/* Caller-allocated graph state: retain every acquired handle on failure.
+ * Reuse the original selector kernel; no C++ heap allocation or deletion. */
+#include <new>
+
+struct sq_adaptive_owner {
+    cudaGraph_t root = nullptr, extra = nullptr, active_graph = nullptr;
+    cudaGraphExec_t exec = nullptr;
+    cudaGraphConditionalHandle condition{};
+    cudaGraph_t bodies[3] = {nullptr, nullptr, nullptr};
+    cudaStream_t capture_stream = nullptr;
+    bool capturing = false;
+};
+
+extern "C" size_t sq_adaptive_bytes(void) {
+    return sizeof(sq_adaptive_owner);
+}
+
+extern "C" void sq_adaptive_init(void *p) {
+    new (p) sq_adaptive_owner();
+}
+
+static int sq_end_adaptive_capture(sq_adaptive_owner *a, int original) {
+    cudaGraph_t ended = nullptr;
+    cudaError_t status = cudaStreamEndCapture(a->capture_stream, &ended);
+    if (status == cudaSuccess)
+        a->capturing = false;
+    else {
+        cudaStreamCaptureStatus capture;
+        if (cudaStreamIsCapturing(a->capture_stream, &capture) == cudaSuccess &&
+            capture == cudaStreamCaptureStatusNone)
+            a->capturing = false;
+    }
+    if (ended && ended != a->root && ended != a->active_graph)
+        a->extra = ended;
+    return original ? original : (int)status;
+}
+
+extern "C" int sq_adaptive_prepare(void *state, const int32_t *anchor, const int32_t *drafts,
+                                   const float *confidence, float threshold, int32_t *tokens,
+                                   int32_t *width, const int32_t *accepted, int32_t *host_accepted,
+                                   const int32_t *count, int32_t *host_count, int32_t *host_width,
+                                   void *raw_stream) {
+    auto *a = static_cast<sq_adaptive_owner *>(state);
+    if (a->root || a->exec || a->extra || a->capturing)
+        return (int)cudaErrorInvalidResourceHandle;
+    cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
+    TRY(cudaGraphCreate(&a->root, 0));
+    TRY(cudaGraphConditionalHandleCreate(&a->condition, a->root, 0, 0));
+    TRY(cudaStreamBeginCaptureToGraph(stream, a->root, nullptr, nullptr, 0,
+                                      cudaStreamCaptureModeThreadLocal));
+    a->capturing = true;
+    a->capture_stream = stream;
+    a->active_graph = a->root;
+#define CAPTURE_TRY(call)                                                                          \
+    do {                                                                                           \
+        cudaError_t e = (call);                                                                    \
+        if (e != cudaSuccess)                                                                      \
+            return sq_end_adaptive_capture(a, (int)e);                                             \
+    } while (0)
+    z_adaptive_select_width_kernel<<<1, 1, 0, stream>>>(anchor, drafts, confidence, threshold,
+                                                        tokens, width, a->condition);
+    CAPTURE_TRY(cudaGetLastError());
+    cudaStreamCaptureStatus status;
+    cudaGraph_t graph = nullptr;
+    const cudaGraphNode_t *deps = nullptr;
+    const cudaGraphEdgeData *edges = nullptr;
+    size_t n = 0;
+    CAPTURE_TRY(cudaStreamGetCaptureInfo(stream, &status, nullptr, &graph, &deps, &edges, &n));
+    cudaGraphNodeParams params{};
+    params.type = cudaGraphNodeTypeConditional;
+    params.conditional.handle = a->condition;
+    params.conditional.type = cudaGraphCondTypeSwitch;
+    params.conditional.size = 3;
+    cudaGraphNode_t node = nullptr;
+    CAPTURE_TRY(cudaGraphAddNode(&node, graph, deps, edges, n, &params));
+    for (int i = 0; i < 3; i++)
+        a->bodies[i] = params.conditional.phGraph_out[i];
+    CAPTURE_TRY(cudaStreamUpdateCaptureDependencies(stream, &node, nullptr, 1,
+                                                    cudaStreamSetCaptureDependencies));
+    CAPTURE_TRY(cudaMemcpyAsync(host_accepted, accepted, 8 * sizeof(int32_t),
+                                cudaMemcpyDeviceToHost, stream));
+    CAPTURE_TRY(
+        cudaMemcpyAsync(host_count, count, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+    CAPTURE_TRY(
+        cudaMemcpyAsync(host_width, width, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+#undef CAPTURE_TRY
+    return sq_end_adaptive_capture(a, 0);
+}
+
+extern "C" int sq_adaptive_branch_begin(void *state, int branch, void *raw_stream) {
+    auto *a = static_cast<sq_adaptive_owner *>(state);
+    if (branch < 0 || branch > 2 || a->capturing || !a->root || !a->bodies[branch])
+        return (int)cudaErrorInvalidValue;
+    a->capture_stream = static_cast<cudaStream_t>(raw_stream);
+    a->active_graph = a->bodies[branch];
+    TRY(cudaStreamBeginCaptureToGraph(a->capture_stream, a->active_graph, nullptr, nullptr, 0,
+                                      cudaStreamCaptureModeThreadLocal));
+    a->capturing = true;
+    return 0;
+}
+
+extern "C" int sq_adaptive_branch_end(void *state) {
+    auto *a = static_cast<sq_adaptive_owner *>(state);
+    return a->capturing ? sq_end_adaptive_capture(a, 0) : (int)cudaErrorInvalidResourceHandle;
+}
+
+extern "C" int sq_adaptive_instantiate(void *state) {
+    auto *a = static_cast<sq_adaptive_owner *>(state);
+    if (a->capturing || a->exec || !a->root)
+        return (int)cudaErrorInvalidResourceHandle;
+    return (int)cudaGraphInstantiate(&a->exec, a->root, 0);
+}
+
+extern "C" int sq_adaptive_launch(void *state, void *stream) {
+    auto *a = static_cast<sq_adaptive_owner *>(state);
+    if (!a->exec)
+        return (int)cudaErrorInvalidResourceHandle;
+    return (int)cudaGraphLaunch(a->exec, static_cast<cudaStream_t>(stream));
+}
+
+extern "C" int sq_adaptive_cleanup(void *state) {
+    auto *a = static_cast<sq_adaptive_owner *>(state);
+    int first = 0;
+    if (a->capturing) {
+        first = sq_end_adaptive_capture(a, 0);
+        if (a->capturing)
+            return first ? first : (int)cudaErrorStreamCaptureInvalidated;
+    }
+#define RELEASE_HANDLE(field, call)                                                                \
+    do {                                                                                           \
+        if (a->field) {                                                                            \
+            cudaError_t e = (call);                                                                \
+            if (e == cudaSuccess)                                                                  \
+                a->field = nullptr;                                                                \
+            else if (!first)                                                                       \
+                first = (int)e;                                                                    \
+        }                                                                                          \
+    } while (0)
+    RELEASE_HANDLE(exec, cudaGraphExecDestroy(a->exec));
+    if (!a->exec) {
+        RELEASE_HANDLE(extra, cudaGraphDestroy(a->extra));
+        RELEASE_HANDLE(root, cudaGraphDestroy(a->root));
+    }
+#undef RELEASE_HANDLE
+    return first;
+}
+
+extern "C" int sq_adaptive_live(const void *state) {
+    const auto *a = static_cast<const sq_adaptive_owner *>(state);
+    return a->root || a->exec || a->extra || a->capturing;
+}
