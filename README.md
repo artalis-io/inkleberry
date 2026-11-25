@@ -145,3 +145,7 @@ Scope: C host/public API, retained CUDA C++20/NVCC, official Inkling-2-Mini safe
 ## License
 
 Apache-2.0: retain [LICENSE](LICENSE), [NOTICE](NOTICE) and modification attribution. Model materials and NVIDIA SDK/runtime terms are separate. No weights or credentials are included. The original README and NOTICE are archived under `docs/upstream/`.
+
+The proposed [inference ABI and reusable serving boundary](docs/inference-abi-design.md)
+separates model execution from protocol adapters for open-source and proprietary
+harnesses. This is a design draft, not an implemented serving API.
