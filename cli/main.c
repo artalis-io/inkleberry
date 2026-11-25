@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
         sq_tokenizer *t = NULL;
         sq_tokenizer_scratch *scratch = NULL;
         int32_t *ids = NULL;
+        const char *failure = NULL;
         size_t n = 0;
         sq_status status = sq_tokenizer_open(argv[2], NULL, &t);
         if (status == SQ_OK)
@@ -37,8 +38,10 @@ int main(int argc, char **argv) {
                 status = SQ_OK;
         }
         if (status == SQ_OK && n) {
-            if (n > SIZE_MAX / sizeof *ids || !(ids = malloc(n * sizeof *ids)))
+            if (n > SIZE_MAX / sizeof *ids || !(ids = malloc(n * sizeof *ids))) {
                 status = SQ_OUT_OF_MEMORY;
+                failure = "cannot allocate token output";
+            }
         }
         if (status == SQ_OK)
             status = sq_tokenizer_encode(t, argv[3], strlen(argv[3]), 1, scratch, ids, n, &n);
@@ -48,7 +51,8 @@ int main(int argc, char **argv) {
                 printf("%s%d", i ? "," : "", (int)ids[i]);
             puts("]");
         } else
-            fprintf(stderr, "squid-c: %s: %s\n", sq_status_string(status), sq_last_error());
+            fprintf(stderr, "squid-c: %s: %s\n", sq_status_string(status),
+                    failure ? failure : sq_last_error());
         free(ids);
         sq_tokenizer_scratch_destroy(scratch);
         sq_tokenizer_close(t);
