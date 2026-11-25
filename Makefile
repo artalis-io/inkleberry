@@ -14,7 +14,7 @@ NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -lstdc++ -lm -lpthread
-HOST = src/c/foundation.c src/c/safetensors.c
+HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c
 OBJ = $(HOST:src/c/%.c=.build/%.o)
 PIC = $(HOST:src/c/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
@@ -53,8 +53,18 @@ squid-c: cli/main.c libsq.a .build/config
 generated-check:
 	python3 tools/verify_upstream.py
 	python3 tools/generate_cuda_abi.py --check
-check: all generated-check .build/unit .build/concurrency
+.build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
+	python3 $< $@
+.build/tokenizer-test: test/tokenizer.c libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) -o $@
+.build/inkling-test: test/inkling.c libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) -o $@
+check: all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
 	.build/unit
+	.build/inkling-test
+	python3 test/inkling_cases.py .build/inkling-test ./squid-c
+	.build/tokenizer-test .build/tokenizer-fixture.json
+	python3 test/tokenizer_cases.py .build/tokenizer-test ./squid-c
 	.build/concurrency
 	python3 test/safetensors_cases.py ./squid-c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c test/cuda_abi_c.c -o .build/cuda_abi_c.o
@@ -66,12 +76,16 @@ sanitize:
 	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency
+	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json
 	.build/concurrency
+	.build/tokenizer-test .build/tokenizer-fixture.json
 fuzz-smoke: | .build
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
 	.build/fuzz-safetensors -runs=3000 -max_len=262144 .build/fuzz-corpus
+	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_tokenizer.c -o .build/fuzz-tokenizer
+	.build/fuzz-tokenizer -runs=3000 -max_len=32768 .build/tokenizer-corpus
 format:
 	tools/format.sh
 lint: generated-check

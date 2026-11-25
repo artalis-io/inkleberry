@@ -11,7 +11,8 @@ const char *sq_version(void) {
 
 const char *sq_status_string(sq_status status) {
     static const char *const names[] = {
-        "ok", "invalid argument", "I/O error", "invalid format", "out of memory", "not found"};
+        "ok",        "invalid argument", "I/O error",     "invalid format", "out of memory",
+        "not found", "buffer too small", "limit exceeded"};
     return status < sizeof names / sizeof names[0] ? names[status] : "unknown status";
 }
 

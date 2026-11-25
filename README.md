@@ -9,11 +9,13 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - C11 static/shared library with a versioned options structure, injected allocator, opaque checkpoint ownership, typed statuses and thread-local diagnostics.
 - Read-only safetensors mapping and bounded memory parsing; checked dtype/shape/offset arithmetic, UTF-8, duplicate tensor/field rejection, complete non-overlapping payload coverage and immutable concurrent lookup.
 - `squid-c inspect`: real checkpoint metadata inspection, including the official Inkling main and MTP files.
+- C byte-level BPE encoding, counted raw-byte decoding, special tokens, reusable scratch and the pinned single-user prompt template. No allocation during encode/decode/render.
+- Architecture-specific readonly checkpoint binding: exact role/dtype/rank/shape validation for 822 main text tensors and 54 optional MTP tensors. Vision tensors are not bound. An explicitly requested missing MTP is an error.
 - Generated declarations for all 76 retained CUDA functions. A two-translation-unit probe compares the actual C and CUDA C++ record layouts and checks all function prototypes.
 - A C-hosted CUDA kernel smoke test with eager execution and graph replay; no Zig host required for that test.
 - Host CI, malformed-input tests, allocator fault injection, sanitizer/fuzzer targets, source provenance checks, formatting and installed-library consumers.
 
-**C model inference is not implemented yet.** Tokenizer/chat templates, model binding, owned GPU model/session resources, forward/prefill/decode, sampling/speculation and serving are subsequent port slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md).
+**C model inference is not implemented yet.** Owned GPU model/session resources, weight upload/packing, forward/prefill/decode, sampling/speculation and serving are subsequent port slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md).
 
 ## Build and use
 
@@ -23,10 +25,12 @@ Host-only tools need a C11 compiler, a C++ compiler for the header consumer test
 make -j8
 ./squid-c --version
 ./squid-c inspect /external/path/model.safetensors
+./squid-c tokenize /external/path/tokenizer.json 'Hello, world!'
+./squid-c validate-model /external/path/model-00001-of-00001.safetensors /external/path/mtp.safetensors
 make check install-check
 make lint                 # requires clang-format 18
 make sanitize             # Clang ASan + UBSan; includes failure paths
-make fuzz-smoke           # Clang libFuzzer + ASan + UBSan, 3,000 iterations
+make fuzz-smoke           # Clang libFuzzer + ASan + UBSan, 3,000 iterations per parser
 make thread-sanitize      # dedicated immutable-lookup / TLS stress test
 ```
 
@@ -39,6 +43,24 @@ python3 tools/check_checkpoint.py ./libsq.so /external/path/model.safetensors /e
 ```
 
 On macOS use `libsq.dylib`. Use a normal, non-sanitized shared library under ordinary Python. `SAN_CC` and `SAN_CXX` select sanitizer compilers. On core-1 the installed Clang selects an incomplete GCC 14 tree; its libFuzzer link needs `SAN_CC='clang --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13'`. No global toolchain changes are needed.
+
+## Tokenizer and binding contracts
+
+The tokenizer accepts the pinned Inkling ByteLevel/BPE JSON profile, not arbitrary Hugging Face normalizers, regexes or added-token whitespace rules. Unsupported profiles and malformed vocabulary/merges fail closed. Limits: 64 MiB JSON, 204,800 token IDs, 600,000 merges and 8 MiB of token bytes. `ignore_merges` retains the pinned Zig merge-graph behavior. Unicode categories and long-input chunk boundaries intentionally match Zig; representative reference parity is tested, not exhaustive Unicode equivalence.
+
+Tokenizers own their tables and permit concurrent immutable use with a distinct scratch handle per active call. Scratch owns about 8.25 MiB of working arrays. Invalid UTF-8 returns an error. Text inputs are counted and may contain NUL; decoded individual tokens can contain partial UTF-8 bytes. Buffer sizing returns the full required count with `SQ_BUFFER_TOO_SMALL`, including for a NULL/zero-capacity query; encoding never silently truncates. Rendering uses six typed thinking-effort presets, matching Zig's named levels; arbitrary numeric effort and general multi-turn/tool rendering are not ported yet.
+
+A checkpoint binding owns readonly mappings, with views borrowed until close. It validates architecture layout and excludes vision, but does not scan every payload for non-finite values, validate model `config.json`, authenticate the weight contents, upload or quantize weights, or establish GPU packing parity. Auxiliary ablation/pruned-draft-vocabulary loading remains later work. A caller's files must stay immutable while mapped. Omit the MTP argument for AR-only validation; supplying a missing/incompatible MTP never silently falls back.
+
+Real input parity tools need external files and a normal non-sanitized shared library:
+
+```sh
+python3 tools/check_inkling.py ./libsq.so /external/path/model-directory
+python3 tools/check_tokenizer.py ./libsq.so /external/path/model-directory \
+  --zig-oracle /external/path/pinned-squid5090 --reference
+```
+
+`--reference` requires an independently installed Python `tokenizers` package in the invoking environment. It never downloads a model; omit it to run the standard-library-only C/Zig comparison. Default `make check` uses synthetic byte-complete tokenizer fixtures and sparse, metadata-only model files, not provider weights or a GPU.
 
 ## CUDA checks
 

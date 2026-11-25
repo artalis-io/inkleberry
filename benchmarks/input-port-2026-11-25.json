@@ -1,0 +1,185 @@
+{
+  "tokenizer": {
+    "vocabulary_entries_matched": 200058,
+    "tokenizer_cases": [
+      {
+        "case": 0,
+        "bytes": 0,
+        "tokens": 0,
+        "roundtrip": true,
+        "ids_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 1,
+        "bytes": 13,
+        "tokens": 4,
+        "roundtrip": true,
+        "ids_sha256": "e0858452c01a194282ff137b335dd0a511201cc0cdefc787b7c62124f89b0564",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 2,
+        "bytes": 52,
+        "tokens": 22,
+        "roundtrip": true,
+        "ids_sha256": "7f40c30281fd279d849b2e77a9d4fd04a975d6982d0ae6998f3250f31ede59d7",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 3,
+        "bytes": 50,
+        "tokens": 8,
+        "roundtrip": true,
+        "ids_sha256": "b6166877a6790ee7426d3185250a24dad0775376da4f0cd6f736d589df383063",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 4,
+        "bytes": 35,
+        "tokens": 10,
+        "roundtrip": true,
+        "ids_sha256": "8aa8a8a6f31047476fabfdc89fff03cc70b64c4c1c9a95b36cb6e5569cfd55b0",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 5,
+        "bytes": 32,
+        "tokens": 15,
+        "roundtrip": true,
+        "ids_sha256": "854eb80f374c48c28b1c85b4ba2cc0713667ea6844b36ec366e8588b13a3c59b",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 6,
+        "bytes": 20,
+        "tokens": 7,
+        "roundtrip": true,
+        "ids_sha256": "09c5c0ce5abba934333a777d4703ae67bc42250c8ba0e24bd4eb565e393f7324",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 7,
+        "bytes": 34,
+        "tokens": 18,
+        "roundtrip": true,
+        "ids_sha256": "953ac395022d9fe574a1ea8ae4df7656b00371b8e3945039be961f6c1da5f02d",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 8,
+        "bytes": 13,
+        "tokens": 8,
+        "roundtrip": true,
+        "ids_sha256": "3187db88109acd67a0d1273c22244aa170de92c0ecab2cc992692374f339831b",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 9,
+        "bytes": 52,
+        "tokens": 4,
+        "roundtrip": true,
+        "ids_sha256": "b98eca8b9768626d7b4cbb39b63f6ccabd2e0f668d55a3e1df8f6fdfcbdcfa1c",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 10,
+        "bytes": 70000,
+        "tokens": 35000,
+        "roundtrip": true,
+        "ids_sha256": "5799cdbe357c53ba32509c8cb3103b379795477d310ae37c8270d96b3652ea58",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 11,
+        "bytes": 1215000,
+        "tokens": 360000,
+        "roundtrip": true,
+        "ids_sha256": "98f71d3563553ba1221b31d1c628c3b5eb0c776b5b499cb1a9ad382dcb4b6358",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 12,
+        "bytes": 1260000,
+        "tokens": 360001,
+        "roundtrip": true,
+        "ids_sha256": "9e565ae6f03d5b4605bb2e4db7d69e3985a9ca9680bf4b53a840e448d48fa908",
+        "zig": true,
+        "provider": true
+      },
+      {
+        "case": 13,
+        "bytes": 4,
+        "tokens": 4,
+        "roundtrip": true,
+        "ids_sha256": "814af3eb60b65360f3f429f3d835f0a3ca2de96b79cac8e4beaf5cf6bcffc62d",
+        "zig": true,
+        "provider": true
+      }
+    ],
+    "template_efforts_matched": 6,
+    "template_zig": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "binding": {
+    "main_bound": 822,
+    "mtp_bound": 54,
+    "vision_unbound": 422,
+    "all_metadata_matched": true,
+    "payloads_copied": false,
+    "gpu_used": false
+  },
+  "tokenizer_json_bytes": 26178678,
+  "tokenizer_json_sha256": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+  "zig_binary_sha256": "0ae27355e5d7f07f78d6fa29aab0665dfa280576e8545f66c718624c00451180",
+  "zig_tokenizer_source_sha256": "5cd361cc6e098a5d448598f0a0c7d585711d769032a42b3732be3fadb812986e",
+  "kind": "C input port validation; not GPU generation qualification",
+  "upstream_revision": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "source_sha256": {
+    "src/c/cuda_abi.h": "6c306a51f3cf35c89eff8f31fd961cd18da36ec8e815183c085a20ae2c7178fe",
+    "src/c/foundation.c": "7fc0ea0ac9518dfeed491890bf28dfc5a75627d1736e863c7a230263b784802d",
+    "src/c/inkling.c": "4d49c2abff3f540d1ad522863d5de7d60863f66b2f0998a613c352bbf3a3bfc2",
+    "src/c/inkling.h": "e7489c4ea1d913477681525417c1e6a5c9b55f778d3a6438d14345559eef4ee2",
+    "src/c/internal.h": "6bb60a091f48f0096508abdd11bd99ab30da5dd6ee86cf8d8341a567389dca73",
+    "src/c/json.c": "6aa1da1f822f9b5b0792c1815c394f4e90495f598895548b58fe9793acf1f0d8",
+    "src/c/json.h": "52efa326fafc248d35194a8d06011b3dcebce6229ae5b5348e60615181b67ed3",
+    "src/c/safetensors.c": "a87efc197372cedc22961905213a6b8b911b029ac676bcdf0cb43f17e753abab",
+    "src/c/tokenizer.c": "43cf8e7893e82a87188651c6c1799c4f466b4eef5b24ef37e131b9066de78c54",
+    "src/c/tokenizer.h": "ebb7fd7824ade72d518665ae0cd0861833f3df848ecd6e04ffc395535707c9e2",
+    "src/c/tokenizer_load.c": "b938b861f065bdd8020a86769f65650bc25106725a048dea651bf5f9130f4b41",
+    "src/c/tokenizer_profile.h": "9a8fff817d0ca1c352de1b98fa50ae4e3a01867a0d2aac1ebf3d7f9b2fd5aa08",
+    "include/sq.h": "be1e8496af9ecd305a752955e08fb72867bb618bbd95c302b0032450c8983653"
+  },
+  "local_and_core_checks": {
+    "format_cases": 46,
+    "filesystem_cases": 3,
+    "tokenizer_rejection_cases": 35,
+    "binding_same_size_drift_cases": 10,
+    "asan_ubsan": "passed",
+    "thread_sanitizer": "passed",
+    "fuzz_runs_per_parser": 3000
+  },
+  "remaining": [
+    "GPU upload/packing parity",
+    "C forward/decode",
+    "full model quality/serving lifecycle gates"
+  ]
+}

@@ -32,3 +32,6 @@ work/
 crash-*
 leak-*
 *.dSYM/
+
+# macOS metadata must not become C sources on Linux transfers
+._*

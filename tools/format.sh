@@ -9,4 +9,4 @@ if [ "${1:-}" = --check ]; then
 else
     set -- -i
 fi
-"$fmt" "$@" include/sq.h src/c/internal.h src/c/foundation.c src/c/safetensors.c cli/main.c test/unit.c test/concurrency.c test/installed_consumer.c test/cuda_smoke.c fuzz/fuzz_safetensors.c
+"$fmt" "$@" include/sq.h src/c/internal.h src/c/json.h src/c/json.c src/c/tokenizer.h src/c/tokenizer_profile.h src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.h src/c/inkling.c src/c/foundation.c src/c/safetensors.c cli/main.c test/unit.c test/tokenizer.c test/inkling.c test/concurrency.c test/installed_consumer.c test/cuda_smoke.c fuzz/fuzz_safetensors.c fuzz/fuzz_tokenizer.c
