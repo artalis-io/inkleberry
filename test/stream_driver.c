@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "sq_chat.h"
+#include "tokenizer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,12 @@ static unsigned char result[100000];
 static size_t used;
 
 static int collect(void *p, uint32_t channel, const char *data, size_t n) {
+    size_t at = 0;
+    uint32_t cp;
+    while (at < n)
+        if (!sq_utf8_next((const unsigned char *)data, n, &at, &cp))
+            abort();
+
     (void)p;
     (void)channel;
     if (n > sizeof result - used)

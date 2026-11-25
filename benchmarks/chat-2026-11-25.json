@@ -1131,7 +1131,8 @@
     "fixtures": 90,
     "reference": "Python UTF-8 errors=replace plus earliest full stop index",
     "chunk_sizes": "unique of 1,2,3,7,input length",
-    "passed": true
+    "passed": true,
+    "every_callback_is_complete_utf8_asserted": true
   },
   "native": {
     "passed": true,
@@ -1188,10 +1189,11 @@
     "src/c/tokenizer_load.c": "78daa81a6a6837c608df391a1e8d15cb3bc8e78d86879db286ce246deb2f2f2a",
     "tools/prepare_chat_oracle.py": "24600a891f86fd0c5cb44e0fcf76cf4fc17bdd9de9dd3eabdba2e7c60ac002d2",
     "tools/validate_chat.py": "86f4388d2b7b8fe9da16c5e968f8f581315a4660f1672d6c45290a9156f914ed",
-    "test/chat.c": "e19d8c01665741b166530bbfa5dad26876197c9fdd0c45010e2ac5d2e7f27aee",
+    "test/chat.c": "44f74a1efa19fc73ec2499483be33f3e34cbf8da8d3018857bca141cbf57d6f1",
     "test/chat_native.c": "c069fbe85d54ae8184b450667d578e4f5195114b0df1242532b48c843c069e0c",
     "test/stream_cases.py": "9848f4ed5d3b2856db40ca015d19fa0f268dac80a2b7bffefeb6b1b77ba481ed",
-    "fuzz/fuzz_stream.c": "4b315592616dc3ab45fee1b013ec213dc8f47adc91a060c358b9765b815cc48c"
+    "fuzz/fuzz_stream.c": "908dfc8e626383a175d4691f5c2fd1dc7372e3432326f88d066b868a0a461f14",
+    "test/stream_driver.c": "eb4e91d1093e3f76539f87951e0d88cd284bf834597c6bf9af90a6454bee5a92"
   },
   "limitations": [
     "Text-only typed interface; tools, multimodal and content-part JSON arrays are unsupported.",
