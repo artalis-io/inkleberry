@@ -71,7 +71,7 @@ check: .build/chat-native.o .build/chat-test .build/stream-driver .build/chat-fi
 	.build/lookup-test
 	python3 test/weights_plan.py ./squid-c
 	.build/inkling-test
-	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
+	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test .build/infer-test .build/chat-fixture.json
 	.build/tokenizer-test .build/tokenizer-fixture.json
 	python3 test/tokenizer_cases.py .build/tokenizer-test ./squid-c
 	.build/concurrency
@@ -82,18 +82,21 @@ check: .build/chat-native.o .build/chat-test .build/stream-driver .build/chat-fi
 	.build/cpp-consumer
 sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
+	$(MAKE) CC='$(SAN_CC)' CXX='$(SAN_CXX)' CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC=$(SAN_CC) CXX=$(SAN_CXX) CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test .build/lookup-test .build/chat-test .build/chat-fixture.json squid-c
+	$(MAKE) CC='$(SAN_CC)' CXX='$(SAN_CXX)' CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/infer-test .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test .build/lookup-test .build/chat-test .build/chat-fixture.json squid-c
+	.build/infer-test .build/chat-fixture.json
 	.build/concurrency
 	.build/tokenizer-test .build/tokenizer-fixture.json
-	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test
+	python3 test/inkling_cases.py .build/inkling-test ./squid-c .build/weights-test .build/infer-test .build/chat-fixture.json
 	.build/engine-test
 	.build/sampling-test
 	.build/lookup-test
 	.build/chat-test .build/chat-fixture.json
 fuzz-smoke: | .build
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) $(INFER) test/infer_mock.c fuzz/fuzz_infer.c -pthread -o .build/fuzz-infer
+	.build/fuzz-infer -runs=3000 -max_len=4096
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_stream.c -o .build/fuzz-stream
 	.build/fuzz-stream -runs=3000 -max_len=32768
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
@@ -107,10 +110,10 @@ format:
 lint: generated-check
 	tools/format.sh --check
 	python3 tools/lint.py
-install: all
+install: all infer
 	mkdir -p $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib/pkgconfig $(DESTDIR)$(PREFIX)/bin
-	cp include/sq.h include/sq_chat.h include/sq_weights.h include/sq_gpu.h include/sq_engine.h $(DESTDIR)$(PREFIX)/include/
-	cp libsq.a $(SHARED) $(DESTDIR)$(PREFIX)/lib/
+	cp include/sq_infer.h include/sq_infer_squid.h include/sq.h include/sq_chat.h include/sq_weights.h include/sq_gpu.h include/sq_engine.h $(DESTDIR)$(PREFIX)/include/
+	cp libsq-infer.a libsq.a $(SHARED) $(DESTDIR)$(PREFIX)/lib/
 	cp squid-c $(DESTDIR)$(PREFIX)/bin/
 	sed 's|@PREFIX@|$(PREFIX)|g' sq.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/squid-c.pc
 install-check: DESTDIR = $(CURDIR)/.build/stage
@@ -137,7 +140,7 @@ cuda-abi-check: generated-check .build/abi-probe
 cuda-check: cuda-abi-check .build/cuda-smoke
 	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/cuda-smoke
 clean:
-	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a squid-c-weights squid-c-generate
+	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a libsq-infer.a libsq_backend.so.1 squid-c-weights squid-c-generate
 -include $(wildcard .build/*.d)
 
 # GPU backend is opt-in; the host library still builds without CUDA.
@@ -263,3 +266,61 @@ chat-oracle: generated-check
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/chat-native: .build/chat-native.o .build/session-context.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+
+# Serving ABI: separate from libsq's CPU-only parser/tokenizer contract.
+INFER = src/c/infer.c src/c/infer_model.c src/c/infer_session.c src/c/infer_request.c
+INFER_OBJ = $(INFER:src/c/%.c=.build/%.o)
+.PHONY: infer infer-check infer-shared
+infer: libsq-infer.a
+libsq-infer.a: $(INFER_OBJ)
+	$(AR) rcs $@ $^
+.build/infer-test: test/infer.c test/infer_mock.c libsq-infer.a libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) test/infer.c test/infer_mock.c libsq-infer.a libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+infer-check: .build/infer-test .build/chat-fixture.json
+	.build/infer-test .build/chat-fixture.json
+check: infer-check
+BACKEND_C = $(INFER) src/c/engine_bind.c src/c/engine_layout.c src/c/engine_forward.c src/c/engine_spec.c src/c/engine_adaptive.c src/c/engine_prefix.c src/c/engine_prefill.c src/c/engine_runtime.c src/c/gpu_cuda.c
+BACKEND_OBJ = $(BACKEND_C:src/c/%.c=.build/backend-%.o)
+BACKEND_CUDA = $(addprefix .build/backend-,$(addsuffix .cuda.o,kernels_gemv kernels_inkling kernels_dspark)) .build/backend-checked-weights.cuda.o .build/backend-checked-prefill.cuda.o
+.build/backend-%.o: src/c/%.c .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -fvisibility=hidden -DSQ_SHARED -MMD -MP -c $< -o $@
+.build/backend-%.cuda.o: cuda/%.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
+.build/backend-checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
+.build/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/c/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
+libsq_backend.so.1: $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) src/c/infer.exports
+	$(CXX) -shared -Wl,-soname,libsq_backend.so.1 -Wl,--version-script=src/c/infer.exports -Wl,-z,defs $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) $(CUDA_LIBS) $(LDFLAGS) -o $@
+infer-shared: generated-check libsq_backend.so.1
+.build/infer-native.o: test/infer_native.c include/sq_infer.h .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.build/infer-native: .build/infer-native.o libsq-infer.a libsq-gpu.a libsq.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+
+.build/infer-consumer: test/infer_consumer.c .build/stage/usr/local/include/sq_infer.h libsq-infer.a libsq.a .build/config
+	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include -Iinclude -Isrc/c test/infer_consumer.c test/infer_mock.c .build/stage/usr/local/lib/libsq-infer.a .build/stage/usr/local/lib/libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+.build/stage/usr/local/include/sq_infer.h: install
+.build/infer-mock.pic.o: test/infer_mock.c .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -MMD -MP -c $< -o $@
+.build/infer-mock.so: $(INFER:src/c/%.c=.build/%.pic.o) $(PIC) .build/infer-mock.pic.o
+	$(CC) $(SHARED_FLAGS) $^ -pthread $(LDFLAGS) $(LDLIBS) -o $@
+.PHONY: infer-consumer-check
+infer-consumer-check: .build/infer-consumer .build/infer-mock.so
+	.build/infer-consumer
+	$(CXX) -std=c++11 -Wall -Wextra -Werror -I.build/stage/usr/local/include -x c++ -c test/infer_consumer.c -o .build/infer-consumer-cpp.o
+	$(CC) .build/infer-consumer-cpp.o .build/infer-mock.pic.o libsq-infer.a libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o .build/infer-consumer-cpp
+	.build/infer-consumer-cpp
+	python3 test/infer_ffi.py ./.build/infer-mock.so
+install-check: infer-consumer-check
+.build/infer-native-shared: .build/infer-native.o libsq_backend.so.1
+	$(CC) $^ -Wl,-rpath,'$(CURDIR)' -pthread $(LDFLAGS) -o $@
+.PHONY: install-infer-backend
+install-infer-backend: install-gpu infer-shared
+	cp libsq_backend.so.1 $(DESTDIR)$(PREFIX)/lib/
+	ln -sf libsq_backend.so.1 $(DESTDIR)$(PREFIX)/lib/libsq_backend.so
+	sed 's|@PREFIX@|$(PREFIX)|g' squid-infer.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/squid-infer.pc
+.PHONY: infer-provider-check
+infer-provider-check: infer-shared
+	python3 test/infer_exports.py ./libsq_backend.so.1
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' python3 test/infer_ffi.py ./libsq_backend.so.1

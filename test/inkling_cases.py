@@ -51,6 +51,11 @@ with tempfile.TemporaryDirectory(prefix='sq-schema-') as folder:
     paths=[Path(folder)/'main',Path(folder)/'mtp']
     for i in range(2):write(paths[i],headers[i],sizes[i])
     run([binary,*map(str,paths)])
+    if len(sys.argv)>5:
+        (Path(folder)/'model-00001-of-00001.safetensors').symlink_to('main')
+        (Path(folder)/'mtp.safetensors').symlink_to('mtp')
+        (Path(folder)/'tokenizer.json').write_bytes(Path(sys.argv[5]).read_bytes())
+        run([sys.argv[4],'--load-fixture',folder])
     if len(sys.argv)>2:
         for mtp,expected in [(True,876),(False,822)]:
             args=[sys.argv[2],'validate-model',str(paths[0])]+([str(paths[1])] if mtp else [])

@@ -1,0 +1,208 @@
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
+ * Public-ABI consumer. Run only through tools/run_cuda_smoke.py idle UUID guard. */
+#include "sq_infer.h"
+#include "sq_infer_squid.h"
+#include <pthread.h>
+#include <sched.h>
+#include <stdatomic.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+#define REQUIRE(x)                                                                                 \
+    do {                                                                                           \
+        if (!(x)) {                                                                                \
+            fprintf(stderr, "infer-native:%d: %s\n", __LINE__, #x);                                \
+            failed = 1;                                                                            \
+            goto done;                                                                             \
+        }                                                                                          \
+    } while (0)
+
+typedef struct {
+    char text[4096];
+    size_t bytes, events;
+    atomic_bool arrived, resume;
+    int block;
+} output;
+
+static uint32_t collect(void *ctx, const sq_infer_event_v1 *event) {
+    output *o = ctx;
+    if (event->kind == SQ_EVENT_CONTENT) {
+        if (event->text.bytes > sizeof o->text - 1 - o->bytes)
+            return SQ_CALLBACK_CANCEL;
+        memcpy(o->text + o->bytes, event->text.data, (size_t)event->text.bytes);
+        o->bytes += (size_t)event->text.bytes;
+        o->text[o->bytes] = 0;
+    }
+    o->events++;
+    if (o->block) {
+        atomic_store(&o->arrived, true);
+        while (!atomic_load(&o->resume))
+            sched_yield();
+    }
+    return SQ_CALLBACK_CONTINUE;
+}
+
+typedef struct {
+    const sq_infer_api_v1 *api;
+    sq_infer_request *request;
+    output *out;
+    sq_status status;
+} task;
+
+static void *run(void *ctx) {
+    task *t = ctx;
+    t->status = t->api->request_run(t->request, collect, t->out, NULL);
+    return NULL;
+}
+
+static void output_init(output *o) {
+    memset(o, 0, sizeof *o);
+    atomic_init(&o->arrived, false);
+    atomic_init(&o->resume, false);
+}
+
+int main(int argc, char **argv) {
+    if (argc != 2)
+        return 2;
+    int failed = 0;
+    const void *table = NULL;
+    const sq_infer_api_v1 *api = NULL;
+    sq_infer_model *model = NULL;
+    sq_infer_session *session = NULL;
+    sq_infer_request *requests[6] = {0};
+    pthread_t thread;
+    int thread_live = 0;
+    output outputs[6];
+    for (size_t i = 0; i < 6; i++)
+        output_init(&outputs[i]);
+    sq_infer_model_config_v1 mc;
+    sq_infer_session_config_v1 sc;
+    sq_infer_request_config_v1 rc;
+    sq_infer_source_v1 source;
+    sq_infer_input_v1 input;
+    sq_infer_result_v1 result;
+    sq_infer_memory_plan_v1 plan;
+    SQ_INFER_INIT(mc);
+    SQ_INFER_INIT(sc);
+    SQ_INFER_INIT(rc);
+    SQ_INFER_INIT(source);
+    SQ_INFER_INIT(input);
+    SQ_INFER_INIT(result);
+    SQ_INFER_INIT(plan);
+    REQUIRE(sq_infer_get_api(1, 0, &table) == SQ_OK);
+    api = table;
+    REQUIRE(api->defaults(SQ_DEFAULT_MODEL, &mc, NULL) == SQ_OK);
+    REQUIRE(api->defaults(SQ_DEFAULT_SESSION, &sc, NULL) == SQ_OK);
+    REQUIRE(api->defaults(SQ_DEFAULT_REQUEST, &rc, NULL) == SQ_OK);
+    mc.weight_profile = (sq_infer_bytes){"nvfp4-mtp", 9};
+    source.directory = (sq_infer_bytes){argv[1], strlen(argv[1])};
+    source.format_id = (sq_infer_bytes){"inkling-safetensors", sizeof("inkling-safetensors") - 1};
+    REQUIRE(api->model_create(&mc, &model, NULL) == SQ_OK);
+    REQUIRE(api->model_plan(model, &source, &plan, NULL) == SQ_OK &&
+            plan.peak_owned_device_bytes > 0);
+    printf("weight_peak_bytes=%llu\n", (unsigned long long)plan.peak_owned_device_bytes);
+    REQUIRE(api->model_load(model, &source, NULL) == SQ_OK);
+    REQUIRE(api->session_create(model, &sc, &session, NULL) == SQ_OK);
+    REQUIRE(api->session_plan(session, &plan, NULL) == SQ_OK && plan.owned_device_bytes > 0);
+    printf("session_arena_bytes=%llu\n", (unsigned long long)plan.owned_device_bytes);
+    REQUIRE(api->session_prepare(session, NULL) == SQ_OK);
+    char system[8192] = "";
+    for (unsigned i = 0; i < 64; i++)
+        strcat(system, "You are a concise mathematical assistant. Return the numeric answer. ");
+    sq_infer_message_v1 messages[4];
+    for (size_t i = 0; i < 4; i++)
+        SQ_INFER_INIT(messages[i]);
+    const char *texts[] = {system, "What is 2 + 2?", "4.", "What is that number plus 3?"};
+    const uint32_t roles[] = {SQ_ROLE_SYSTEM, SQ_ROLE_USER, SQ_ROLE_ASSISTANT, SQ_ROLE_USER};
+    for (size_t i = 0; i < 4; i++) {
+        messages[i].role = roles[i];
+        messages[i].content_present = 1;
+        messages[i].content = (sq_infer_bytes){texts[i], strlen(texts[i])};
+    }
+    input.kind = SQ_INPUT_CHAT;
+    input.messages = (sq_infer_array){messages, 4, sizeof messages[0], 0};
+    sq_infer_squid_request_v1 tuning;
+    SQ_INFER_INIT(tuning);
+    tuning.draft_tokens = 7;
+    tuning.adaptive = 1;
+    tuning.prompt_lookup = 1;
+    tuning.spec_threshold = 0.8f;
+    sq_infer_extension_v1 extension;
+    SQ_INFER_INIT(extension);
+    extension.id = SQ_INFER_EXT_SQUID_REQUEST;
+    extension.version = 1;
+    extension.payload = &tuning;
+    extension.payload_bytes = sizeof tuning;
+    rc.extensions = (sq_infer_array){&extension, 1, sizeof extension, 0};
+    rc.max_output_tokens = 128;
+    rc.max_event_bytes = 4;
+    rc.cache_scope = (sq_infer_bytes){"native-a", 8};
+    for (size_t i = 0; i < 4; i++)
+        REQUIRE(api->request_create(session, &input, &rc, &requests[i], NULL) == SQ_OK);
+    rc.cache_scope = (sq_infer_bytes){"native-b", 8};
+    REQUIRE(api->request_create(session, &input, &rc, &requests[4], NULL) == SQ_OK);
+    sq_infer_bytes stop = {"7", 1};
+    rc.stops = (sq_infer_array){&stop, 1, sizeof stop, 0};
+    REQUIRE(api->request_create(session, &input, &rc, &requests[5], NULL) == SQ_OK);
+    /* All request-owned inputs are prepared; overwrite the borrowed text/options. */
+    memset(system, 0, sizeof system);
+    tuning.draft_tokens = 99;
+    REQUIRE(api->request_run(requests[0], collect, &outputs[0], NULL) == SQ_OK);
+    REQUIRE(strstr(outputs[0].text, "7") != NULL);
+    REQUIRE(api->request_result(requests[0], &result, NULL) == SQ_OK && result.input_tokens > 128);
+    printf("answer=%s prompt=%llu output=%llu run_ns=%llu\n", outputs[0].text,
+           (unsigned long long)result.input_tokens, (unsigned long long)result.generated_tokens,
+           (unsigned long long)result.run_ns);
+    REQUIRE(api->request_run(requests[1], collect, &outputs[1], NULL) == SQ_OK);
+    REQUIRE(!strcmp(outputs[0].text, outputs[1].text));
+    REQUIRE(api->request_result(requests[1], &result, NULL) == SQ_OK &&
+            result.prefix_reused_tokens > 0);
+    printf("prefix_reused=%llu\n", (unsigned long long)result.prefix_reused_tokens);
+    outputs[2].block = 1;
+    task work = {api, requests[2], &outputs[2], 999};
+    REQUIRE(!pthread_create(&thread, NULL, run, &work));
+    thread_live = 1;
+    while (!atomic_load(&outputs[2].arrived))
+        sched_yield();
+    uint32_t disposition;
+    REQUIRE(api->request_cancel(requests[0], &disposition, NULL) == SQ_OK &&
+            disposition == SQ_CANCEL_TOO_LATE);
+    REQUIRE(api->request_run(requests[3], collect, &outputs[3], NULL) == SQ_BUSY);
+    REQUIRE(api->request_cancel(requests[2], &disposition, NULL) == SQ_OK &&
+            disposition == SQ_CANCEL_ACCEPTED);
+    atomic_store(&outputs[2].resume, true);
+    REQUIRE(!pthread_join(thread, NULL));
+    thread_live = 0;
+    REQUIRE(work.status == SQ_CANCELLED);
+    REQUIRE(api->request_result(requests[2], &result, NULL) == SQ_OK &&
+            result.finish_reason == SQ_FINISH_CANCELLED_V1);
+    REQUIRE(api->request_run(requests[3], collect, &outputs[3], NULL) == SQ_OK);
+    REQUIRE(!strcmp(outputs[0].text, outputs[3].text));
+    REQUIRE(api->request_result(requests[3], &result, NULL) == SQ_OK &&
+            result.prefix_reused_tokens == 0);
+    REQUIRE(api->request_run(requests[4], collect, &outputs[4], NULL) == SQ_OK);
+    REQUIRE(!strcmp(outputs[0].text, outputs[4].text));
+    REQUIRE(api->request_result(requests[4], &result, NULL) == SQ_OK &&
+            result.prefix_reused_tokens == 0);
+    REQUIRE(api->request_run(requests[5], collect, &outputs[5], NULL) == SQ_OK);
+    REQUIRE(api->request_result(requests[5], &result, NULL) == SQ_OK &&
+            result.finish_reason == SQ_FINISH_STOP_STRING_V1 && !outputs[5].bytes);
+    puts("native ABI: copied chat, adaptive/lookup, answer parity, cache reuse, independent "
+         "streams, BUSY, stale cancel, active cancel, cache invalidation, scope isolation, stop "
+         "filtering and replay passed");
+done:
+    if (thread_live) {
+        atomic_store(&outputs[2].resume, true);
+        (void)pthread_join(thread, NULL);
+    }
+    if (api) {
+        for (size_t i = 0; i < 6; i++)
+            if (api->request_close(&requests[i], NULL) != SQ_OK)
+                failed = 1;
+        if (api->session_close(&session, NULL) != SQ_OK)
+            failed = 1;
+        if (api->model_close(&model, NULL) != SQ_OK)
+            failed = 1;
+    }
+    return failed;
+}

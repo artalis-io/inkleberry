@@ -5,6 +5,7 @@
 #define SQ_ENGINE_INTERNAL_H
 #include "weights_internal.h"
 #include "sq_engine.h"
+#include "engine_control.h"
 #include "cuda_abi.h"
 #include "lookup.h"
 #include "prefix.h"
@@ -59,6 +60,7 @@ struct sq_session {
     sq_visit schedule[48];
     atomic_flag busy;
     atomic_bool cancelled;
+    const sq_run_control *request_control;
     bool poisoned, ready, retained;
     int32_t position;
     void *arena, *stream, *graph, *blas;

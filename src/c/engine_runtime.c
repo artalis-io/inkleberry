@@ -243,7 +243,8 @@ static bool tokens_valid(const int32_t *tokens, size_t n) {
 }
 
 static bool cancelled(sq_session *s) {
-    return atomic_load_explicit(&s->cancelled, memory_order_acquire);
+    return atomic_load_explicit(&s->cancelled, memory_order_acquire) ||
+           (s->request_control && s->request_control->cancelled(s->request_control->context));
 }
 
 static void run(sq_session *s, const int32_t *tokens, int32_t n, bool lm) {
@@ -338,7 +339,9 @@ static bool emit(sq_session *s, int32_t token, int32_t *out, sq_token_callback c
         sq_ar_check(s, 1, "invalid generated token");
         return false;
     }
-    out[stats->generated_tokens++] = token;
+    if (out)
+        out[stats->generated_tokens] = token;
+    stats->generated_tokens++;
     stats->last_token = token;
     if (callback && !callback(context, token)) {
         stats->finish_reason = SQ_FINISH_CALLBACK;
@@ -351,18 +354,19 @@ static bool emit(sq_session *s, int32_t token, int32_t *out, sq_token_callback c
     return true;
 }
 
-sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n, size_t max_new,
-                                 const sq_decode_options *input, int32_t *out, size_t capacity,
-                                 sq_token_callback callback, void *context,
-                                 sq_decode_stats *detail) {
+static sq_status generate_impl(sq_session *s, const int32_t *tokens, size_t n, size_t max_new,
+                               const sq_decode_options *input, int32_t *out, size_t capacity,
+                               sq_token_callback callback, void *context, sq_decode_stats *detail,
+                               const sq_run_control *control) {
     if (detail)
         memset(detail, 0, sizeof *detail);
     sq_decode_options options;
     sq_status rc = sq_decode_resolve(input, &options);
     if (rc != SQ_OK)
         return rc;
-    if (!s || !max_new || max_new > capacity || !out || !detail || n > s->config.context_tokens ||
-        max_new > s->config.context_tokens - n || !tokens_valid(tokens, n))
+    if (!s || !max_new || (!control && (max_new > capacity || !out)) || !detail ||
+        n > s->config.context_tokens || max_new > s->config.context_tokens - n ||
+        !tokens_valid(tokens, n))
         return sq_error(SQ_INVALID_ARGUMENT, "invalid generation bounds or token IDs");
     if (options.adaptive && !s->config.use_graphs)
         return sq_error(SQ_UNSUPPORTED, "adaptive decoding requires CUDA graphs");
@@ -372,6 +376,16 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     rc = begin(s, &scope);
     if (rc != SQ_OK)
         return rc;
+    s->request_control = control;
+    if (cancelled(s)) {
+        sq_prefix_invalidate(s);
+        if (s->status == SQ_OK) {
+            s->status = SQ_CANCELLED;
+            (void)snprintf(s->failure, sizeof s->failure, "request cancelled before generation");
+        }
+        s->request_control = NULL;
+        return end(s, &scope);
+    }
     uint32_t start_pos =
         sq_prefix_begin(s, tokens, (uint32_t)n, (uint32_t)max_new, options.draft_tokens != 0);
     if (!start_pos)
@@ -545,7 +559,49 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
         stats->finish_reason = SQ_FINISH_CANCELLED;
         cancel_result(s);
     }
+    s->request_control = NULL;
     return end(s, &scope);
+}
+
+sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n, size_t max_new,
+                                 const sq_decode_options *input, int32_t *out, size_t capacity,
+                                 sq_token_callback callback, void *context,
+                                 sq_decode_stats *detail) {
+    return generate_impl(s, tokens, n, max_new, input, out, capacity, callback, context, detail,
+                         NULL);
+}
+
+sq_status sq_session_generate_controlled(sq_session *s, const int32_t *tokens, size_t n,
+                                         size_t max_new, const sq_decode_options *input,
+                                         sq_token_callback callback, void *context,
+                                         sq_decode_stats *detail, const sq_run_control *control) {
+    if (!control || !control->cancelled)
+        return sq_error(SQ_INVALID_ARGUMENT, "missing request cancellation control");
+    return generate_impl(s, tokens, n, max_new, input, NULL, 0, callback, context, detail, control);
+}
+
+sq_status sq_session_owned_plan(sq_gpu_weights *weights, const sq_session_config *config,
+                                const sq_options *options, uint64_t *bytes) {
+    if (!weights || !config || !options || !bytes)
+        return sq_error(SQ_INVALID_ARGUMENT, "missing session plan arguments");
+    *bytes = 0;
+    sq_session *s = options->allocate(options->context, sizeof *s);
+    if (!s)
+        return sq_error(SQ_OUT_OF_MEMORY, "allocate session plan");
+    memset(s, 0, sizeof *s);
+    s->weights = weights;
+    s->config = *config;
+    size_t groups = squid_sizeof_expert_groups();
+    if (!groups || groups > 1048576) {
+        options->release(options->context, s);
+        return sq_error(SQ_UNSUPPORTED, "unsupported expert group size");
+    }
+    sq_ar_layout(s, groups);
+    sq_status rc = s->status;
+    if (rc == SQ_OK)
+        *bytes = s->offset;
+    options->release(options->context, s);
+    return rc;
 }
 
 static bool has_graphs(const sq_session *s) {
