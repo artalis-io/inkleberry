@@ -94,6 +94,21 @@ int main(void) {
     free(old);
     options.struct_size = legacy + 4;
     REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
+    options = (sq_decode_options)SQ_DECODE_OPTIONS_INIT;
+    size_t previous = offsetof(sq_decode_options, system_prefix_tokens);
+    options.struct_size = previous;
+    options.system_prefix_tokens = UINT32_MAX;
+    options.prefix_reserved = 1;
+    old = malloc(previous);
+    REQUIRE(old);
+    memcpy(old, &options, previous);
+    REQUIRE(sq_decode_resolve((const sq_decode_options *)(const void *)old, &out) == SQ_OK &&
+            !out.system_prefix_tokens && !out.prefix_reserved);
+    free(old);
+    options.struct_size = previous + 4;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
+    options.struct_size = sizeof options;
+    REQUIRE(sq_decode_resolve(&options, &out) == SQ_INVALID_ARGUMENT);
     puts("sampling option boundaries, NaN/Inf rejection and full-width seed preservation passed");
     return 0;
 }

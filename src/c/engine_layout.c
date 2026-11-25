@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * Two-pass target and optional fixed-width DSpark workspace layout. B<=8
- * matches target-forward geometry; adaptive/prefix buffers are not allocated. */
+ * Two-pass target and optional DSpark workspace layout. B<=8 matches
+ * target-forward geometry; prefix checkpoints are separately owned host memory. */
 #include "engine_internal.h"
 
 static void *take(sq_session *s, size_t count, size_t width) {

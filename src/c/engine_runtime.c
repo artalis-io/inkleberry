@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
- * Synchronous AR/fixed/adaptive DSpark session. No prefix cache. */
+ * Synchronous AR/fixed/adaptive DSpark session with opt-in prefix reuse. */
 #include "engine_internal.h"
 #include "checked_prefill.h"
 #include <stdio.h>
@@ -61,8 +61,10 @@ static sq_status leave(sq_session *s, const sq_device_scope *scope) {
             s->status = SQ_OK;
         sq_ar_check(s, restore, "restore caller context");
     }
-    if (s->status != SQ_OK && s->status != SQ_CANCELLED)
+    if (s->status != SQ_OK && s->status != SQ_CANCELLED) {
+        sq_prefix_invalidate(s);
         s->poisoned = true;
+    }
     return result(s);
 }
 
@@ -257,7 +259,9 @@ static void run(sq_session *s, const int32_t *tokens, int32_t n, bool lm) {
 }
 
 static void cancel_result(sq_session *s) {
-    /* Retire work before returning; no prefix state is published. */
+    /* Cancellation can arrive during the final snapshot after prefix_finish's
+     * flag read. Invalidate here too, before reset destroys live local state. */
+    sq_prefix_invalidate(s);
     if (s->status == SQ_OK) {
         reset_device(s);
         if (s->status == SQ_OK) {
@@ -272,6 +276,8 @@ sq_status sq_session_reset(sq_session *s) {
     sq_status rc = begin(s, &scope);
     if (rc != SQ_OK)
         return rc;
+    sq_prefix_invalidate(s);
+    s->prefix_info = (sq_prefix_info)SQ_PREFIX_INFO_INIT;
     reset_device(s);
     sq_lookup_reset(&s->lookup);
     s->decode_info = (sq_decode_info)SQ_DECODE_INFO_INIT;
@@ -298,6 +304,7 @@ sq_status sq_session_logits(sq_session *s, const int32_t *tokens, size_t n, uint
         sq_status restore = end(s, &scope);
         return restore == SQ_OK ? sq_error(SQ_LIMIT, "logits context limit") : restore;
     }
+    sq_prefix_invalidate(s);
     s->use_mtp = s->verifying = false;
     if (reset)
         reset_device(s);
@@ -365,7 +372,10 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     rc = begin(s, &scope);
     if (rc != SQ_OK)
         return rc;
-    reset_device(s);
+    uint32_t start_pos =
+        sq_prefix_begin(s, tokens, (uint32_t)n, (uint32_t)max_new, options.draft_tokens != 0);
+    if (!start_pos)
+        reset_device(s);
     s->decode_info = (sq_decode_info)SQ_DECODE_INFO_INIT;
     s->use_mtp = options.draft_tokens != 0;
     CSampleConfig sample = {0};
@@ -377,8 +387,44 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     sq_generate_stats *stats = &detail->generation;
     stats->prompt_tokens = (uint32_t)n;
     stats->last_token = -1;
+    uint32_t targets[2] = {0, 0};
+    unsigned slots[2] = {0, 1};
+    if (s->prefix.enabled && !s->prefix.shield_tokens) {
+        uint32_t hint = options.system_prefix_tokens;
+        if (hint >= 128 && hint > start_pos && hint < n)
+            targets[0] = hint;
+        uint32_t p2k = ((uint32_t)n - 1) / 2048 * 2048;
+        if (p2k >= 2048 && p2k > start_pos && p2k < n && p2k != targets[0])
+            targets[1] = p2k;
+        if (!targets[0] || (targets[1] && targets[1] < targets[0])) {
+            uint32_t t = targets[0];
+            targets[0] = targets[1];
+            targets[1] = t;
+            slots[0] = 1;
+            slots[1] = 0;
+        }
+    }
+    size_t offset = start_pos;
+    for (unsigned target = 0; target < 2 && s->status == SQ_OK && !cancelled(s); target++) {
+        if (!targets[target])
+            continue;
+        while (offset < targets[target] && s->status == SQ_OK && !cancelled(s)) {
+            size_t remain = targets[target] - offset;
+            if (remain >= 32) {
+                int32_t chunk = (int32_t)(remain > 2048 ? 2048 : remain & ~(size_t)7);
+                sq_ar_prefill(s, tokens + offset, chunk);
+                offset += (size_t)chunk;
+            } else {
+                int32_t chunk = (int32_t)(remain > 8 ? 8 : remain);
+                run(s, tokens + offset, chunk, false);
+                offset += (size_t)chunk;
+            }
+        }
+        if (!cancelled(s))
+            sq_prefix_save(s, slots[target], (uint32_t)offset);
+    }
     int32_t last_batch = 0;
-    for (size_t i = 0; i < n && s->status == SQ_OK && !cancelled(s);) {
+    for (size_t i = offset; i < n && s->status == SQ_OK && !cancelled(s);) {
         if (n - i > 32) {
             size_t avail = (n - i - 1) & ~(size_t)7;
             int32_t chunk = (int32_t)(avail > 2048 ? 2048 : avail);
@@ -390,6 +436,8 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
             i += (size_t)last_batch;
         }
     }
+    if (!cancelled(s))
+        sq_prefix_prompt(s, tokens, (uint32_t)n, options.draft_tokens != 0);
     int32_t token = -1;
     if (!cancelled(s))
         copy(s, &token, s->d_next_tokens + (last_batch ? last_batch - 1 : 0), 4, 1);
@@ -446,6 +494,8 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
                     s->decode_info.lookup_steps++;
             }
             detail->accepted_drafts += (uint32_t)count - 1;
+            for (int32_t i = 0; i < count; i++)
+                sq_prefix_feed(s, i == 0 ? token : accepted[i - 1]);
             s->position += count;
             for (int32_t i = 0; i < count && stats->generated_tokens < max_new && !cancelled(s);
                  i++) {
@@ -473,6 +523,7 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
     }
     /* Speculation uses eager B=1 at the context boundary, exactly as Zig. */
     while (keep && stats->generated_tokens < max_new && s->status == SQ_OK && !cancelled(s)) {
+        int32_t fed = token;
         if (s->config.use_graphs && !drafts) {
             copy(s, s->d_tokens, &token, 4, 0);
             copy(s, s->d_pos, &s->position, 4, 0);
@@ -483,11 +534,13 @@ sq_status sq_session_generate_ex(sq_session *s, const int32_t *tokens, size_t n,
                 s->position++;
         } else
             run(s, &token, 1, true);
+        sq_prefix_feed(s, fed);
         copy(s, &token, s->d_next_tokens, 4, 1);
         sync(s);
         if (s->status == SQ_OK && !cancelled(s))
             keep = emit(s, token, out, callback, context, stats);
     }
+    sq_prefix_finish(s, cancelled(s));
     if (cancelled(s)) {
         stats->finish_reason = SQ_FINISH_CANCELLED;
         cancel_result(s);
@@ -503,6 +556,42 @@ static bool has_graphs(const sq_session *s) {
         if (s->spec_graph[i])
             return true;
     return false;
+}
+
+sq_status sq_session_prefix_cache(sq_session *s, uint32_t enabled) {
+    if (!s || enabled > 1)
+        return sq_error(SQ_INVALID_ARGUMENT, "invalid prefix cache configuration");
+    if (!lock(s))
+        return sq_error(SQ_BUSY, "session operation already active");
+    sq_status rc = SQ_OK;
+    if (!s->ready || s->poisoned)
+        rc = sq_error(SQ_GPU_ERROR, "session is not ready");
+    else if (!enabled)
+        sq_prefix_free(s);
+    else {
+        s->status = SQ_OK;
+        s->failure[0] = 0;
+        rc = sq_prefix_allocate(s);
+    }
+    if (rc == SQ_OK) {
+        s->prefix_info = (sq_prefix_info)SQ_PREFIX_INFO_INIT;
+        rc = sq_error(SQ_OK, "");
+    }
+    unlock(s);
+    return rc;
+}
+
+sq_status sq_session_prefix_info(sq_session *s, sq_prefix_info *out) {
+    if (!s || !out || out->struct_size < sizeof *out || out->api_version != SQ_API_VERSION)
+        return sq_error(SQ_INVALID_ARGUMENT, "initialize prefix info size/version");
+    if (!lock(s))
+        return sq_error(SQ_BUSY, "session operation already active");
+    *out = s->prefix_info;
+    out->struct_size = sizeof *out;
+    out->api_version = SQ_API_VERSION;
+    out->host_bytes = s->prefix.host_bytes;
+    unlock(s);
+    return sq_error(SQ_OK, "");
 }
 
 sq_status sq_session_decode_info(sq_session *s, sq_decode_info *out) {
@@ -615,6 +704,7 @@ sq_status sq_session_destroy(sq_session **handle) {
     if (s->retained)
         s->weights->session_users--;
     image_unlock(s->weights);
+    sq_prefix_free(s);
     sq_options allocator = s->allocator;
     *handle = NULL;
     allocator.release(allocator.context, s);

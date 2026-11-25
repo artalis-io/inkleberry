@@ -35,10 +35,11 @@ typedef struct {
     uint32_t adaptive, prompt_lookup;
     float spec_threshold;
     uint32_t adaptive_reserved;
+    uint32_t system_prefix_tokens, prefix_reserved;
 } sq_decode_options;
 
 /* clang-format off */
-#define SQ_DECODE_OPTIONS_INIT {sizeof(sq_decode_options),SQ_API_VERSION,0.0f,0.95f,0,0,0,0,0,0,0.8f,0}
+#define SQ_DECODE_OPTIONS_INIT {sizeof(sq_decode_options),SQ_API_VERSION,0.0f,0.95f,0,0,0,0,0,0,0.8f,0,0,0}
 /* clang-format on */
 
 typedef struct {
@@ -58,6 +59,21 @@ typedef struct {
  * diagnostics, also available after cancellation/error; BUSY while active. */
 SQ_API sq_status sq_session_decode_info(sq_session *, sq_decode_info *);
 
+typedef struct {
+    size_t struct_size;
+    uint32_t api_version, reused_tokens, shielded_tokens, checkpoint_restores;
+    uint64_t host_bytes;
+} sq_prefix_info;
+
+/* clang-format off */
+#define SQ_PREFIX_INFO_INIT {sizeof(sq_prefix_info),SQ_API_VERSION,0,0,0,0}
+/* clang-format on */
+/* Explicit opt-in, session-private host RAM cache; no additional device arena.
+ * Allocation failure leaves the previous configuration intact. Disable, reset,
+ * logits and cancelled/failed execution invalidate reuse. BUSY while active. */
+SQ_API sq_status sq_session_prefix_cache(sq_session *, uint32_t enabled);
+SQ_API sq_status sq_session_prefix_info(sq_session *, sq_prefix_info *);
+
 typedef int (*sq_token_callback)(void *context, int32_t token);
 /* One live session per process initially. create retains the image; image
  * destruction returns BUSY until session destruction succeeds. create publishes
@@ -65,7 +81,8 @@ typedef int (*sq_token_callback)(void *context, int32_t token);
  * Configuration/input errors do not publish a handle or mutate GPU state. */
 SQ_API sq_status sq_session_create(sq_gpu_weights *, const sq_session_config *, const sq_options *,
                                    sq_session **);
-/* Every generate starts an independent request; no prefix caching. Greedy only.
+/* Each generate has an independent RNG/output sequence. Greedy only.
+ * Prefix reuse is disabled by default; explicitly enabled caches are session-private.
  * Callback 0 stops normally. Cancel is the only reentrant operation; cooperative
  * between completed forward chunks, never CUDA kernel preemption. Output/inputs
  * are caller-owned counted spans, borrowed until this synchronous call returns.
@@ -79,7 +96,9 @@ SQ_API sq_status sq_session_generate(sq_session *, const int32_t *, size_t, size
  * silently. Adaptive mode requires seven drafts, graphs and a finite threshold
  * in (0,1]; prompt lookup is optional in adaptive mode. Initialize with
  * SQ_DECODE_OPTIONS_INIT. The legacy options prefix ending at reserved remains
- * accepted with adaptive/lookup disabled. No prefix caching.
+ * accepted with adaptive/lookup disabled; the preceding adaptive-options size
+ * is also accepted. system_prefix_tokens is an advisory checkpoint boundary,
+ * used only with enabled prefix caching (128 <= hint < prompt length).
  * Keep output/stats storage separate from input/options storage.
  * Callback/cancellation/ownership contracts match sq_session_generate. */
 SQ_API sq_status sq_session_generate_ex(sq_session *, const int32_t *, size_t, size_t,

@@ -34,7 +34,8 @@ int main(int argc, char **argv) {
         fputs("usage: squid-c-generate MODEL_DIR PROMPT [MAX_NEW] [exact|fp8|nvfp4] [bf16|fp8|q4] "
               "[eager|graph] "
               "[--temperature T] [--top-p P] [--top-k K] [--seed U64] [--drafts 0..7] "
-              "[--adaptive-threshold T] [--prompt-lookup 0|1]\n",
+              "[--adaptive-threshold T] [--prompt-lookup 0|1] [--prefix-cache 0|1] "
+              "[--system-prefix N]\n",
               stderr);
         return 2;
     }
@@ -43,6 +44,7 @@ int main(int argc, char **argv) {
     wc.with_mtp = 0;
     sq_session_config sc = SQ_SESSION_CONFIG_INIT;
     sq_decode_options options = SQ_DECODE_OPTIONS_INIT;
+    uint32_t prefix_cache = 0;
     int index = 3, position = 0;
     while (index < argc && strncmp(argv[index], "--", 2)) {
         const char *value = argv[index++];
@@ -101,7 +103,15 @@ int main(int argc, char **argv) {
         } else {
             if (!unsigned_value(value, &x))
                 return 2;
-            if (!strcmp(name, "--top-k")) {
+            if (!strcmp(name, "--prefix-cache")) {
+                if (x > 1)
+                    return 2;
+                prefix_cache = (uint32_t)x;
+            } else if (!strcmp(name, "--system-prefix")) {
+                if (x > 1048576)
+                    return 2;
+                options.system_prefix_tokens = (uint32_t)x;
+            } else if (!strcmp(name, "--top-k")) {
                 if (x > 200058)
                     return 2;
                 options.top_k = (int32_t)x;
@@ -176,11 +186,23 @@ int main(int argc, char **argv) {
     rc = sq_session_create(w, &sc, NULL, &s);
     if (rc != SQ_OK)
         goto cleanup;
+    if (prefix_cache) {
+        rc = sq_session_prefix_cache(s, 1);
+        if (rc != SQ_OK)
+            goto cleanup;
+    }
     sq_decode_stats stats;
     rc = sq_session_generate_ex(s, ids, n, max_new, &options, out, max_new, print_token, t, &stats);
     if (rc == SQ_OK)
         fprintf(stderr, "\nprompt=%u generated=%u finish=%u\n", stats.generation.prompt_tokens,
                 stats.generation.generated_tokens, stats.generation.finish_reason);
+    if (rc == SQ_OK && prefix_cache) {
+        sq_prefix_info info = SQ_PREFIX_INFO_INIT;
+        rc = sq_session_prefix_info(s, &info);
+        if (rc == SQ_OK)
+            fprintf(stderr, "cached=%u shielded=%u host_bytes=%llu\n", info.reused_tokens,
+                    info.shielded_tokens, (unsigned long long)info.host_bytes);
+    }
     if (rc == SQ_OK && options.draft_tokens)
         fprintf(stderr, "spec_steps=%u drafts=%u accepted=%u\n", stats.speculative_steps,
                 stats.total_drafts, stats.accepted_drafts);
