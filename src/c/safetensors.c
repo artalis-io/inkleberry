@@ -5,6 +5,7 @@
  * injected allocation and memory-input support; no user-input assertions. */
 #define _POSIX_C_SOURCE 200809L
 #include "internal.h"
+#include "json.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -19,170 +20,6 @@ struct sq_safetensors {
     sq_tensor_info *tensors;
     uint16_t table[4096];
 };
-
-typedef struct {
-    const unsigned char *data;
-    size_t size, pos;
-} json;
-
-static void ws(json *j) {
-    while (j->pos < j->size && (j->data[j->pos] == ' ' || j->data[j->pos] == '\t' ||
-                                j->data[j->pos] == '\r' || j->data[j->pos] == '\n'))
-        j->pos++;
-}
-
-static bool take(json *j, unsigned char c) {
-    ws(j);
-    if (j->pos == j->size || j->data[j->pos] != c)
-        return false;
-    j->pos++;
-    return true;
-}
-
-static bool hex4(json *j, uint32_t *out) {
-    uint32_t value = 0;
-    for (unsigned i = 0; i < 4; i++) {
-        if (j->pos == j->size)
-            return false;
-        unsigned char c = j->data[j->pos++];
-        unsigned v;
-        if (c >= '0' && c <= '9')
-            v = c - '0';
-        else if (c >= 'a' && c <= 'f')
-            v = c - 'a' + 10u;
-        else if (c >= 'A' && c <= 'F')
-            v = c - 'A' + 10u;
-        else
-            return false;
-        value = value * 16 + v;
-    }
-    *out = value;
-    return true;
-}
-
-/* Fully validates UTF-8 and JSON escapes, even when discarding a string.
- * Names/keys use bounded decoded output; no raw escaped-name aliasing. */
-static bool string(json *j, char *out, size_t capacity) {
-    if (!take(j, '"'))
-        return false;
-    size_t used = 0;
-    while (j->pos < j->size) {
-        uint32_t cp = j->data[j->pos++];
-        if (cp == '"') {
-            if (out)
-                out[used] = 0;
-            return true;
-        }
-        if (cp < 0x20)
-            return false;
-        if (cp == '\\') {
-            if (j->pos == j->size)
-                return false;
-            unsigned char c = j->data[j->pos++];
-            if (c == 'u') {
-                if (!hex4(j, &cp))
-                    return false;
-                if (cp >= 0xd800 && cp <= 0xdbff) {
-                    uint32_t low;
-                    if (j->size - j->pos < 2 || j->data[j->pos] != '\\' ||
-                        j->data[j->pos + 1] != 'u')
-                        return false;
-                    j->pos += 2;
-                    if (!hex4(j, &low) || low < 0xdc00 || low > 0xdfff)
-                        return false;
-                    cp = 0x10000 + (cp - 0xd800) * 1024 + low - 0xdc00;
-                } else if (cp >= 0xdc00 && cp <= 0xdfff)
-                    return false;
-            } else if (c == '"' || c == '\\' || c == '/')
-                cp = c;
-            else if (c == 'b')
-                cp = '\b';
-            else if (c == 'f')
-                cp = '\f';
-            else if (c == 'n')
-                cp = '\n';
-            else if (c == 'r')
-                cp = '\r';
-            else if (c == 't')
-                cp = '\t';
-            else
-                return false;
-        } else if (cp >= 0x80) {
-            unsigned remaining;
-            uint32_t minimum;
-            if (cp >= 0xc2 && cp <= 0xdf) {
-                remaining = 1;
-                minimum = 0x80;
-                cp &= 0x1f;
-            } else if (cp >= 0xe0 && cp <= 0xef) {
-                remaining = 2;
-                minimum = 0x800;
-                cp &= 0x0f;
-            } else if (cp >= 0xf0 && cp <= 0xf4) {
-                remaining = 3;
-                minimum = 0x10000;
-                cp &= 7;
-            } else
-                return false;
-            for (unsigned i = 0; i < remaining; i++) {
-                if (j->pos == j->size || (j->data[j->pos] & 0xc0) != 0x80)
-                    return false;
-                cp = cp * 64 + (j->data[j->pos++] & 63u);
-            }
-            if (cp < minimum || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff))
-                return false;
-        }
-        if (cp == 0)
-            return false;
-        unsigned char bytes[4];
-        size_t n;
-        if (cp < 0x80) {
-            bytes[0] = (unsigned char)cp;
-            n = 1;
-        } else if (cp < 0x800) {
-            bytes[0] = (unsigned char)(0xc0 | (cp >> 6));
-            bytes[1] = (unsigned char)(0x80 | (cp & 63));
-            n = 2;
-        } else if (cp < 0x10000) {
-            bytes[0] = (unsigned char)(0xe0 | (cp >> 12));
-            bytes[1] = (unsigned char)(0x80 | ((cp >> 6) & 63));
-            bytes[2] = (unsigned char)(0x80 | (cp & 63));
-            n = 3;
-        } else {
-            bytes[0] = (unsigned char)(0xf0 | (cp >> 18));
-            bytes[1] = (unsigned char)(0x80 | ((cp >> 12) & 63));
-            bytes[2] = (unsigned char)(0x80 | ((cp >> 6) & 63));
-            bytes[3] = (unsigned char)(0x80 | (cp & 63));
-            n = 4;
-        }
-        if (out) {
-            if (!capacity || used >= capacity || n >= capacity - used)
-                return false;
-            memcpy(out + used, bytes, n);
-            used += n;
-        }
-    }
-    return false;
-}
-
-static bool integer(json *j, uint64_t *out) {
-    ws(j);
-    if (j->pos == j->size || j->data[j->pos] < '0' || j->data[j->pos] > '9')
-        return false;
-    bool zero = j->data[j->pos] == '0';
-    uint64_t value = 0;
-    size_t start = j->pos;
-    while (j->pos < j->size && j->data[j->pos] >= '0' && j->data[j->pos] <= '9') {
-        unsigned digit = j->data[j->pos++] - '0';
-        if (value > (UINT64_MAX - digit) / 10)
-            return false;
-        value = value * 10 + digit;
-    }
-    if (zero && j->pos - start != 1)
-        return false;
-    *out = value;
-    return true;
-}
 
 static uint64_t hash_name(const char *name, size_t length) {
     uint64_t hash = UINT64_C(14695981039346656037);
@@ -204,19 +41,19 @@ static size_t lookup(const sq_safetensors *file, const char *name, size_t length
     return SIZE_MAX;
 }
 
-static bool tensor(json *j, sq_tensor_info *info) {
-    if (!take(j, '{'))
+static bool tensor(sq_json *j, sq_tensor_info *info) {
+    if (!sq_json_take(j, '{'))
         return false;
     unsigned fields = 0;
     do {
         char key[32];
-        if (!string(j, key, sizeof key) || !take(j, ':'))
+        if (!sq_json_string(j, key, sizeof key) || !sq_json_take(j, ':'))
             return false;
         unsigned bit;
         if (!strcmp(key, "dtype")) {
             char type[32];
             bit = 1;
-            if (!string(j, type, sizeof type))
+            if (!sq_json_string(j, type, sizeof type))
                 return false;
             if (!strcmp(type, "U8"))
                 info->dtype = SQ_U8;
@@ -230,22 +67,22 @@ static bool tensor(json *j, sq_tensor_info *info) {
                 return false;
         } else if (!strcmp(key, "shape")) {
             bit = 2;
-            if (!take(j, '['))
+            if (!sq_json_take(j, '['))
                 return false;
-            if (!take(j, ']')) {
+            if (!sq_json_take(j, ']')) {
                 do {
-                    if (info->rank == SQ_MAX_RANK || !integer(j, &info->shape[info->rank]))
+                    if (info->rank == SQ_MAX_RANK || !sq_json_u64(j, &info->shape[info->rank]))
                         return false;
                     info->rank++;
-                } while (take(j, ','));
-                if (!take(j, ']'))
+                } while (sq_json_take(j, ','));
+                if (!sq_json_take(j, ']'))
                     return false;
             }
         } else if (!strcmp(key, "data_offsets")) {
             uint64_t end;
             bit = 4;
-            if (!take(j, '[') || !integer(j, &info->offset) || !take(j, ',') || !integer(j, &end) ||
-                !take(j, ']') || end < info->offset)
+            if (!sq_json_take(j, '[') || !sq_json_u64(j, &info->offset) || !sq_json_take(j, ',') ||
+                !sq_json_u64(j, &end) || !sq_json_take(j, ']') || end < info->offset)
                 return false;
             info->bytes = end - info->offset;
         } else
@@ -253,20 +90,20 @@ static bool tensor(json *j, sq_tensor_info *info) {
         if (fields & bit)
             return false;
         fields |= bit;
-    } while (take(j, ','));
-    return take(j, '}') && fields == 7;
+    } while (sq_json_take(j, ','));
+    return sq_json_take(j, '}') && fields == 7;
 }
 
-static bool metadata(json *j) {
-    if (!take(j, '{'))
+static bool metadata(sq_json *j) {
+    if (!sq_json_take(j, '{'))
         return false;
-    if (take(j, '}'))
+    if (sq_json_take(j, '}'))
         return true;
     do {
-        if (!string(j, NULL, 0) || !take(j, ':') || !string(j, NULL, 0))
+        if (!sq_json_string(j, NULL, 0) || !sq_json_take(j, ':') || !sq_json_string(j, NULL, 0))
             return false;
-    } while (take(j, ','));
-    return take(j, '}');
+    } while (sq_json_take(j, ','));
+    return sq_json_take(j, '}');
 }
 
 static sq_status parse(sq_safetensors *file) {
@@ -278,14 +115,14 @@ static sq_status parse(sq_safetensors *file) {
     if (header < 2 || header > SQ_MAX_HEADER || header > file->size - 8)
         return sq_error(SQ_FORMAT, "invalid safetensors header length");
     file->base = 8 + (size_t)header;
-    json j = {file->data + 8, (size_t)header, 0};
-    if (!take(&j, '{'))
+    sq_json j = {file->data + 8, (size_t)header, 0};
+    if (!sq_json_take(&j, '{'))
         return sq_error(SQ_FORMAT, "expected tensor directory");
     bool seen_metadata = false;
-    if (!take(&j, '}')) {
+    if (!sq_json_take(&j, '}')) {
         do {
             char name[SQ_MAX_NAME + 1];
-            if (!string(&j, name, sizeof name) || !name[0] || !take(&j, ':'))
+            if (!sq_json_string(&j, name, sizeof name) || !name[0] || !sq_json_take(&j, ':'))
                 return sq_error(SQ_FORMAT, "invalid tensor name/key");
             if (!strcmp(name, "__metadata__")) {
                 if (seen_metadata || !metadata(&j))
@@ -316,11 +153,11 @@ static sq_status parse(sq_safetensors *file) {
             while (file->table[slot] != UINT16_MAX)
                 slot = (slot + 1) & 4095u;
             file->table[slot] = (uint16_t)file->count++;
-        } while (take(&j, ','));
-        if (!take(&j, '}'))
+        } while (sq_json_take(&j, ','));
+        if (!sq_json_take(&j, '}'))
             return sq_error(SQ_FORMAT, "unterminated tensor directory");
     }
-    ws(&j);
+    sq_json_ws(&j);
     if (j.pos != j.size)
         return sq_error(SQ_FORMAT, "trailing header data");
     uint64_t total = 0, payload = file->size - file->base;

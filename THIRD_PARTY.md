@@ -10,6 +10,10 @@ upstream terms and attribution. This file records the first C port slice.
 | `src/c/cuda_abi.h`, `test/cuda_abi_c.c`, `test/cuda_abi_probe.cu` | Generated from pinned `src/cuda.zig`, compared against actual CUDA bridge | Apache-2.0; generated attribution and exact-byte CI verification |
 | `.clang-format` | artalis-io/jev-bush `85fd51f8c99b1b8b7ea26d33e02413e681a9271d` | Copied formatting policy, 0BSD |
 | Makefile/API/error/testing conventions | Same Jev Bush revision | Adapted engineering patterns; no Jev model/numerical engine imported |
+| `src/c/tokenizer.c`, `src/c/tokenizer_load.c` | Translation/rework of pinned `src/tokenizer.zig` | Apache-2.0; original author, changed validation/ownership and preserved lexer/merge behavior identified |
+| `src/c/inkling.c` | Architecture/role binding derived from pinned `src/weights.zig` and `src/constants.zig` | Apache-2.0; layout validation only, no packing math replacement |
+| `src/c/tokenizer_profile.h` | Public Inkling ByteLevel configuration | Supported-profile schema only; no vocabulary, merges or model bytes embedded |
+| `src/c/json.c` | Extracted first-port JSON primitives plus strict configuration comparison | Apache-2.0; reused across checkpoint and tokenizer readers |
 | Other C host/test/helper additions | Artalis | Apache-2.0 |
 | CUDA runtime/cuBLAS/toolkit | Operator's installed NVIDIA toolkit | Not vendored; NVIDIA terms govern separately |
 | Inkling model/tokenizer | External operator-supplied checkpoint | Not included in source/build contexts; see model license/AUP links in design |
