@@ -118,8 +118,11 @@ On core-1, all **280 adaptive C/Zig requests** passed (38 short/copy cases plus
 real 8K and 131K cases, seven samplers each). All nine weight/KV copy combinations
 produced verified lookup hits. The copy fixture contains **158 actual prompt
 tokens**; its 1,024-token allocation is not a long-prefill claim. Fourteen AR/fixed
-regression requests also matched. Both memcheck runs reported zero errors and
-zero leaked bytes. Native prefill cancellation returned in 0.153337 seconds in
+regression requests also matched. All three memcheck runs reported zero errors and
+zero leaked bytes, including a C-only 256-token copy run with 18 actual lookup
+steps. Its prompt is the literal in `sq_adaptive_copy_fixture`
+(`test/adaptive_compare.c`), rendered by the CLI; it uses the default greedy
+sampler, NVFP4/FP8, seven drafts, threshold 0.8 and lookup enabled. Native prefill cancellation returned in 0.153337 seconds in
 one observation; this is not a cancellation-latency guarantee. Linux host checks,
 ASan/UBSan, ThreadSanitizer, 3,000 fuzz iterations per parser and installed C/C++
 consumers passed; macOS ARM64 ordinary host checks passed.

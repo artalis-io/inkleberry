@@ -754,6 +754,27 @@
         "overlapped drafts",
         "teardown"
       ]
+    },
+    "C_only_copy": {
+      "prompt_fixture": "test/adaptive_compare.c:sq_adaptive_copy_fixture",
+      "prompt_tokens": 158,
+      "new_tokens": 256,
+      "weight_mode": "nvfp4",
+      "kv": "fp8",
+      "temperature": 0,
+      "top_p": 0.95,
+      "top_k": 0,
+      "seed": 0,
+      "draft_tokens": 7,
+      "adaptive_threshold": 0.8,
+      "prompt_lookup": true,
+      "verified_lookup_steps": 18,
+      "width2": 25,
+      "width4": 10,
+      "width8": 28,
+      "draft_launches": 48,
+      "errors": 0,
+      "leaked_bytes": 0
     }
   },
   "regression_sentinels": {
