@@ -122,6 +122,18 @@ calls and the [prefix oracle/recovery tests](docs/prefix-validation.md) exercise
 actual reuse. Cancellation, errors, explicit reset and direct logits mutation
 invalidate cached history. See the contract for memory costs and limitations.
 
+## Text conversations and streaming
+
+The host-only [sq_chat.h](include/sq_chat.h) API encodes multi-turn text messages
+with separate trusted markers and untrusted text, optional reasoning history and
+prefix-cache hints. Its bounded stream filter separates content/reasoning,
+handles UTF-8 across token boundaries and suppresses custom stops without leaking
+partial matches. Streaming and collected results share the same filter.
+
+See [the contract and executed tests](docs/conversation-streaming.md). The legacy
+single-user CLI stays compatible. Tools, multimodal messages and HTTP serving
+remain separate; the HTTP adapter will resolve and pin the latest Keel release.
+
 ## Provenance and scope
 
 The evaluated source is pinned at `d10c0abb2c8990be81c08ba84c66a8333a691b33` in [UPSTREAM.json](UPSTREAM.json). `make generated-check` verifies every pinned CUDA/Zig/build/license input and the generated ABI. Original kernels and Zig host remain unchanged as the reference.

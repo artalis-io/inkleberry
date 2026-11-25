@@ -1,0 +1,1205 @@
+{
+  "date": "2026-11-25",
+  "upstream_commit": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+  "gpu_uuid": "GPU-5a215cb3-57b0-0a6e-d511-e90bb05c0e05",
+  "driver": "595.104.02",
+  "cuda": "13.5.37",
+  "zig": "0.17.1",
+  "architecture": "sm_120a",
+  "host_compiler": "GCC 13.3.0 Ubuntu 24.04",
+  "model_files": [
+    {
+      "name": "model-00001-of-00001.safetensors",
+      "bytes": 19526019168,
+      "sha256": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1"
+    },
+    {
+      "name": "mtp.safetensors",
+      "bytes": 635801416,
+      "sha256": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+    }
+  ],
+  "tokenizer_sha256": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+  "base_port_commit": "e6ebfc60d296e9ac3521ebd796d7241a0f517c54",
+  "merged_stack": {
+    "pull_requests": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "final_merge": "e6ebfc60d296e9ac3521ebd796d7241a0f517c54",
+    "merged_after_all_head_checks_green": true,
+    "tree_matches_qualified_prefix_head": true,
+    "tree": "27a50074022f404b086256df0b79d0a9c5e69367"
+  },
+  "chat_oracle": {
+    "chat_parity": true,
+    "cases": [
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 0,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 17,
+        "system_prefix": 10,
+        "ids_sha256": "0610fd444479d1ff612e03209cd2e2a72092ae4ab02da0bf2cb51fcf69061dc0"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 17,
+        "system_prefix": 10,
+        "ids_sha256": "0610fd444479d1ff612e03209cd2e2a72092ae4ab02da0bf2cb51fcf69061dc0"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 15,
+        "system_prefix": 10,
+        "ids_sha256": "544f9144668d6f413acacdebe89db5c46bd92fa7700162023b93404196dc937b"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 1,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "1a21b6340964e7bde98cb2284265711abd622dda0228834709a73c4a29d14222"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "1a21b6340964e7bde98cb2284265711abd622dda0228834709a73c4a29d14222"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 17,
+        "system_prefix": 12,
+        "ids_sha256": "c867f988a3fb15f46d44cbd0d173ca64058e53827c44394fc2cbd31945b220c7"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 2,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "8673a3a8655cfd43b84edea354d095f1ef0244f0dd2db46fd685cbf64724dece"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "8673a3a8655cfd43b84edea354d095f1ef0244f0dd2db46fd685cbf64724dece"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 17,
+        "system_prefix": 12,
+        "ids_sha256": "07aa8605e71d2ea75a8da54dd1e75e7be01c8cb13d676e8ecda1f861bb9cb3de"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 3,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "747bd493b952b46f6cc3f324db4c57a5b849dc17044caea45217041e70525c8f"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "747bd493b952b46f6cc3f324db4c57a5b849dc17044caea45217041e70525c8f"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 17,
+        "system_prefix": 12,
+        "ids_sha256": "20845bad7b9636e056f638d48be7c60f939e75f6952a2f8ff0387583cca7ed77"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 4,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "7e0b0beccbeb7ff38842cd2bffe53ab4d986f3d437e4d4c02c3d78d4de35b1bb"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "7e0b0beccbeb7ff38842cd2bffe53ab4d986f3d437e4d4c02c3d78d4de35b1bb"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 17,
+        "system_prefix": 12,
+        "ids_sha256": "b0f67b803677c63b4bec7d1fb82aceaa923f3969512e8672c1742df5704fac42"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 5,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "80e649390b0774edb88a0a9fed072b399f9758aa009ec1c3ae904b1c57113216"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 19,
+        "system_prefix": 12,
+        "ids_sha256": "80e649390b0774edb88a0a9fed072b399f9758aa009ec1c3ae904b1c57113216"
+      },
+      {
+        "conversation": 0,
+        "messages": 1,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 17,
+        "system_prefix": 12,
+        "ids_sha256": "f2831cb77076f18d7f24207cdbc6f5bc7bbe36f83dc4e17d59f22e9ad90d3868"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 0,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 52,
+        "system_prefix": 24,
+        "ids_sha256": "e06227599bbf1a5ab56da1ef3cf35b112f9001d28bd38d475109ea087275a243"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 58,
+        "system_prefix": 24,
+        "ids_sha256": "ee29a412196ed682c422e7daa025d7d3faa4cacf501d5fc3aa31961c50d133bb"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 56,
+        "system_prefix": 24,
+        "ids_sha256": "85284004235fb1f9a9dc64fe2ad30697941ac7bf00de373a900de4978afb973c"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 1,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 54,
+        "system_prefix": 26,
+        "ids_sha256": "b492040759da527fd82639efd1fb62851fe1fd85ec33e5fa49af0eb0114332aa"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 60,
+        "system_prefix": 26,
+        "ids_sha256": "39a1a6de3ce921421da04766ad7fcd681b4d1e22ea47358b2800a2279d4dd603"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 58,
+        "system_prefix": 26,
+        "ids_sha256": "b994fc42a933ed32a6e289bac838826b01fa4b0af10e07279fa57198190ba195"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 2,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 54,
+        "system_prefix": 26,
+        "ids_sha256": "d1cdbdd68fdab9071e40665e4b16e33365005a03e6bb0068c824c580eece8f62"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 60,
+        "system_prefix": 26,
+        "ids_sha256": "6fec76827cc5544ef33e6f500d0c86a8014da19549d921268719e320cfba0da9"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 58,
+        "system_prefix": 26,
+        "ids_sha256": "35df532fa6e9d654d19c6400f56ad8eecb198c985ac400c193463117893ac658"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 3,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 54,
+        "system_prefix": 26,
+        "ids_sha256": "1ce13e532da7e996886074325d3d5233d18241446ef5374c25b35f42b38a1f9d"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 60,
+        "system_prefix": 26,
+        "ids_sha256": "44123db87dcb50506256ccac4b684fe531fa7f80c3e0ef1eb69dd4e41054e84d"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 58,
+        "system_prefix": 26,
+        "ids_sha256": "da6fafebcb94f0613c29f1f97330d17eda3c568af61c703b266cf1913d0aac17"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 4,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 54,
+        "system_prefix": 26,
+        "ids_sha256": "f75d74acc1b424ff5743017b43e035cb88f9f6177ea330f53e47150c5a1b58c8"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 60,
+        "system_prefix": 26,
+        "ids_sha256": "078204b8f0723742e91ede50b6dc258552ced591af26a8d6ab824f82d8a9b52c"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 58,
+        "system_prefix": 26,
+        "ids_sha256": "fadaab06065c2f0cb8a11b74ea4bb6d194e989a5b059dde18eb09ab43c3261f8"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 5,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 54,
+        "system_prefix": 26,
+        "ids_sha256": "fc233c38883df93db614b2d3ab19d6b7ae8d2facbc332af218056c12e8d5204a"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 60,
+        "system_prefix": 26,
+        "ids_sha256": "2ddfbc025792e519211bcc8789e9351407cae8a59b824ac781b1823314af3e62"
+      },
+      {
+        "conversation": 1,
+        "messages": 5,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 58,
+        "system_prefix": 26,
+        "ids_sha256": "40dc1b7b1ccbb9d875148e6b9a3719457f06753fa5dab4003dab38d38292d2b2"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 0,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 45,
+        "system_prefix": 10,
+        "ids_sha256": "9cc0887dcd18ff42a3e293f6eb1cfb9a8c83696fdf4eeff289602746d551ddca"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 46,
+        "system_prefix": 10,
+        "ids_sha256": "93fcdba1c1b3f0259770aa785b5b034325e6e4890c0591819c6ccb9a61d1f709"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 44,
+        "system_prefix": 10,
+        "ids_sha256": "16c82bb9962cdad7f19b5475e29b01322c9fea504a53762455b59e59353ce33b"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 1,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 47,
+        "system_prefix": 12,
+        "ids_sha256": "b6dc7820fa9fac97e196c1ecff31e42be633a2d943e10a049f6784ea34bd662b"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 48,
+        "system_prefix": 12,
+        "ids_sha256": "0ad4ea6b31bc4efe58a3bf8f12c791453878fab6bdedb5f1fc613e5b05b0bd75"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 46,
+        "system_prefix": 12,
+        "ids_sha256": "828df8f94e5da4ea211cdd7da357e96a5ef58b35a34fa1e48d7b852ad0177f8c"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 2,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 47,
+        "system_prefix": 12,
+        "ids_sha256": "ad9ecdbebe1e69e794165ad32c1b2cae211118de4f27e43409794cc044ffd205"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 48,
+        "system_prefix": 12,
+        "ids_sha256": "47fcbc15c1b5c1714c6f1ce2c35f909d21fc325b62db914dcf69306617f3bca2"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 46,
+        "system_prefix": 12,
+        "ids_sha256": "11074b9c3fb091e7c3db4471638853cb55a05d9c3af775d4f33d780950bb32c3"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 3,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 47,
+        "system_prefix": 12,
+        "ids_sha256": "bf284978e9052e07301077652298b9214b050edd59f7e6fc2d6a1a2a3e48f17d"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 48,
+        "system_prefix": 12,
+        "ids_sha256": "a252f610f36c5705ee971b0ef70bcf4259f91fa96db514c41051b5564b2fcdcf"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 46,
+        "system_prefix": 12,
+        "ids_sha256": "8b08530159d55e621c4fd8ac6c5781f8767e758ef246de2caf90632f92a2d080"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 4,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 47,
+        "system_prefix": 12,
+        "ids_sha256": "e517f23b6cc401398263ea35f50338d6302af7e7d306feb8dc98ac41e8c5f9a0"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 48,
+        "system_prefix": 12,
+        "ids_sha256": "43891ce96e2aa9417a95644de859d86730f8d77d324b897d070e43881a0c603a"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 46,
+        "system_prefix": 12,
+        "ids_sha256": "ee02984620d1b537202a0eced9315652cbbdcaa220518e9ae037fc27fc605745"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 5,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 47,
+        "system_prefix": 12,
+        "ids_sha256": "c43deb3e661ab61655f2c5b9c659e545bdb223ff93ae6472fef11bfdb0ac0c59"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 48,
+        "system_prefix": 12,
+        "ids_sha256": "75b95115b9bf52773fd593d0524298951b005055f0cdbdb4191fc9da1ce8566c"
+      },
+      {
+        "conversation": 2,
+        "messages": 4,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 46,
+        "system_prefix": 12,
+        "ids_sha256": "decdb0c120973fbd2b28453b7917b0cdb1bfcf7033ffb2e66c6c0cea3ccab843"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 0,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 20,
+        "system_prefix": 18,
+        "ids_sha256": "30048d1fd22d696ea285bfe89b72a2eefe9f653bd9711c35b41680316c944b44"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 20,
+        "system_prefix": 18,
+        "ids_sha256": "30048d1fd22d696ea285bfe89b72a2eefe9f653bd9711c35b41680316c944b44"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 18,
+        "system_prefix": 18,
+        "ids_sha256": "54812bd031a40b21a9852854c8fc175d595dbf790746fbb84f50696b268b088b"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 1,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "1361730833cf99b89596604d3c306ef851a2bb9bb10d8c14a0d900d924d5b5c3"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "1361730833cf99b89596604d3c306ef851a2bb9bb10d8c14a0d900d924d5b5c3"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 20,
+        "system_prefix": 20,
+        "ids_sha256": "df7fe0e3b23193d79cbd33c0e1d87c4b52764c67fa54b4d9d23cc0b46ab051b4"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 2,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "70979a4033c621f201ab328c9636527dc01b971a71f280959c0bf30c8007d586"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "70979a4033c621f201ab328c9636527dc01b971a71f280959c0bf30c8007d586"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 20,
+        "system_prefix": 20,
+        "ids_sha256": "40f6a4337ac7f53bdd5809b162ed8e162c5623588587e57f396d7f5c596265c5"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 3,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "0727931fedca66fc2fde4f7dc1876bfda130ff1d78888b0cca3b58028839a78e"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "0727931fedca66fc2fde4f7dc1876bfda130ff1d78888b0cca3b58028839a78e"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 20,
+        "system_prefix": 20,
+        "ids_sha256": "84a4b7efb82ca3ec66ed29cdf6ab14a665df4a199b2354eb5f25cb45562a9a82"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 4,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "41b731226be293d9a01288f60cce9d2b40bc1de9a0830f66e265d52373c95db5"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "41b731226be293d9a01288f60cce9d2b40bc1de9a0830f66e265d52373c95db5"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 20,
+        "system_prefix": 20,
+        "ids_sha256": "a85e68add096efcbf5c2420654a36e799e840d37351b4580139ca6541219d6d0"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 5,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "47340a47de9666afaefd37d0c5befe02a0602650fdcb9468638a76bbc63d8d36"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 22,
+        "system_prefix": 20,
+        "ids_sha256": "47340a47de9666afaefd37d0c5befe02a0602650fdcb9468638a76bbc63d8d36"
+      },
+      {
+        "conversation": 3,
+        "messages": 1,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 20,
+        "system_prefix": 20,
+        "ids_sha256": "5f637e235e2be1539ad817486dcd36fd9fd0c46de5322e4f4dd123f0336ef2f3"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 0,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 33,
+        "system_prefix": 10,
+        "ids_sha256": "de2bae062e32435cc4b6d8323f726fba8003c68bf54122b5eb5916df33098cf2"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 39,
+        "system_prefix": 10,
+        "ids_sha256": "cc94bc5654b706a287e1bfb3a656666d53de5d8fa912405624cac6085db9cbb1"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 37,
+        "system_prefix": 10,
+        "ids_sha256": "a66ee70c6def6a9f04755bbfd9f0e37b9a503752f4d0ba86f98ab3cfcddc1f23"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 1,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 35,
+        "system_prefix": 12,
+        "ids_sha256": "0662acbadc1c39f392422d9c8a1680e100080057ce9b470c1ec3d3394a4858da"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 41,
+        "system_prefix": 12,
+        "ids_sha256": "e0d1962f19c1562e22963eb9d91f56d89f61e46e79d44772d0f4d057646b14d8"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 39,
+        "system_prefix": 12,
+        "ids_sha256": "243791b7e014310f007e0c4fa0645015d920744042b441fc047ec715cc955eee"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 2,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 35,
+        "system_prefix": 12,
+        "ids_sha256": "e57dfa631d9bcda5e87e094344a88b8bf5fa0d1ca0edfd7dbb718c7f4fd0fe53"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 41,
+        "system_prefix": 12,
+        "ids_sha256": "75f3efd053bd68606390de5473fdca8b765ea109d2c0fb5fe21135c64acd0e02"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 39,
+        "system_prefix": 12,
+        "ids_sha256": "d2f5be3b29ea08cad9cb7b98305f09ee005c2e8aa994747d834991b1e1de246c"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 3,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 35,
+        "system_prefix": 12,
+        "ids_sha256": "e3482eac6cbed25e5292f477c0c4a27ff03a604a66cba76bdd1daab270f2e507"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 41,
+        "system_prefix": 12,
+        "ids_sha256": "bf9d62eee4f0cf71498b3998284fa1335df799dbf8aa2aa240816e4c1ed39bc9"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 39,
+        "system_prefix": 12,
+        "ids_sha256": "a2d049379c0def4289f678ce81e6428dc4d9c98ac46896816423cdce691aea15"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 4,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 35,
+        "system_prefix": 12,
+        "ids_sha256": "1774764bf870f3556c06c86456a58a120d58b17bfbec7d2b0e91fe28358d4d98"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 41,
+        "system_prefix": 12,
+        "ids_sha256": "357d0666f2a2a4a47dce460d7267b3ba9f9b19aa62792adecc5eed2713eff159"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 39,
+        "system_prefix": 12,
+        "ids_sha256": "6a6d51d6d20416d388baf96d61193736b8d37aa81614f57a9db7fda3be8324e0"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 5,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 35,
+        "system_prefix": 12,
+        "ids_sha256": "b947c46816c75b4271dc267735bdec5697311f767c003afeeeca6a22fc3344b5"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 41,
+        "system_prefix": 12,
+        "ids_sha256": "83843014c5caaed6592fcc499e64fb23e701d1029d67b60b76926cd1f4ace819"
+      },
+      {
+        "conversation": 4,
+        "messages": 3,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 39,
+        "system_prefix": 12,
+        "ids_sha256": "f237e48218f4a8611d2a987c297d54a1a686e0b7b7f0c7aa4c31b669aaffd105"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 0,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 4108,
+        "system_prefix": 10,
+        "ids_sha256": "e9d2c1e5cf620f77fe55455f80355f089d5997c66994415d97a68025242a2ed7"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 4108,
+        "system_prefix": 10,
+        "ids_sha256": "e9d2c1e5cf620f77fe55455f80355f089d5997c66994415d97a68025242a2ed7"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 0,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 4106,
+        "system_prefix": 10,
+        "ids_sha256": "18fbb30979f5acac054b9682820132bacb1391af8e51ec15d08b4354cad43a44"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 1,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "05b8b23fee63ac5b97c21afbbaa4ae333eb05a07694fa284beacaabbae856664"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "05b8b23fee63ac5b97c21afbbaa4ae333eb05a07694fa284beacaabbae856664"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 1,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 4108,
+        "system_prefix": 12,
+        "ids_sha256": "c1cc2d122c6de72c4dc2621147e750fa2df090a14c89e80033d3e47f2222c6c2"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 2,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "ae3f7512da5c9bc8540d639e63ef524acd4bb324bc7d5f662b6493e208d792bc"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "ae3f7512da5c9bc8540d639e63ef524acd4bb324bc7d5f662b6493e208d792bc"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 2,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 4108,
+        "system_prefix": 12,
+        "ids_sha256": "63cef86c3aeba308745f902399e43e95cdfc5674a724e37bc2238e9eecd1e7cd"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 3,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "66d58f66aec2017d6aa008dd8e0dc9ff1e56f44c36b7b9f36db26f832f8f3689"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "66d58f66aec2017d6aa008dd8e0dc9ff1e56f44c36b7b9f36db26f832f8f3689"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 3,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 4108,
+        "system_prefix": 12,
+        "ids_sha256": "7ee65face932ac3d2bb5e72a47d1c7c992ee02bd73888da71996d3131092953d"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 4,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "38044e1c5706c212783497dd32ce728bf60cd3f90fecbf23e34a8db99671eba9"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "38044e1c5706c212783497dd32ce728bf60cd3f90fecbf23e34a8db99671eba9"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 4,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 4108,
+        "system_prefix": 12,
+        "ids_sha256": "8e0c4e45ce8cd92d358172a68bbc2f29b6128fac7d4008537cc47d1fbcadc98c"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 5,
+        "keep": 0,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "ae0aa55a89252f13d4a067dffcb6f8f1f5731bdea63e644dd71c3354d24e86e2"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 0,
+        "tokens": 4110,
+        "system_prefix": 12,
+        "ids_sha256": "ae0aa55a89252f13d4a067dffcb6f8f1f5731bdea63e644dd71c3354d24e86e2"
+      },
+      {
+        "conversation": 5,
+        "messages": 1024,
+        "effort": 5,
+        "keep": 1,
+        "thinking": 1,
+        "tokens": 4108,
+        "system_prefix": 12,
+        "ids_sha256": "54250c9bb63127f5ce2f365c3756b15f8ca5265db07f89dfebe7f1e6dbf6218d"
+      }
+    ]
+  },
+  "oracle_adapter": {
+    "source": "pinned server.zig encode_chat_template_zero_alloc",
+    "changes": "Visibility only in a generated .build copy; originals unchanged",
+    "reimplemented_renderer": false
+  },
+  "stream_reference": {
+    "fixtures": 90,
+    "reference": "Python UTF-8 errors=replace plus earliest full stop index",
+    "chunk_sizes": "unique of 1,2,3,7,input length",
+    "passed": true,
+    "every_callback_is_complete_utf8_asserted": true
+  },
+  "native": {
+    "passed": true,
+    "multi_turn_answer": "7",
+    "generations": 4,
+    "prompt_tokens": 876,
+    "generated_tokens_first_request": 3,
+    "prefix_reused_tokens": 846,
+    "content_bytes": 1,
+    "reasoning_bytes": 0,
+    "stream_vs_collected_equal": true,
+    "warm_ids_equal": true,
+    "custom_stop_suppressed_match": true,
+    "full_replay_after_stop": true
+  },
+  "memcheck": {
+    "passed": true,
+    "errors": 0,
+    "leaked_bytes": 0,
+    "path": "C-only chat encode, native MTP/adaptive generation, stream filter, cache replay, stop and full replay, destruction"
+  },
+  "host_checks": {
+    "macOS_ARM64": [
+      "check",
+      "install-check",
+      "lint"
+    ],
+    "Linux_AMD64": [
+      "check",
+      "install-check",
+      "ASan/UBSan with leak detection",
+      "ThreadSanitizer",
+      "stream/parser/tokenizer libFuzzer 3000 iterations each",
+      "lint"
+    ]
+  },
+  "limits": {
+    "messages": 1024,
+    "combined_input_bytes": 33554432,
+    "name_bytes": 128,
+    "stops": 8,
+    "stop_bytes": 64,
+    "header_bytes": 1024,
+    "output_callback_batch_bytes": 1024
+  },
+  "artifacts_sha256": {
+    "chat_native": "2812c267bae8f4515c5110ae8c23dc74a52e331c8d6db1658cb82eb15b3bc2d5",
+    "chat_oracle": "0a871ada603ea6b28db2d80ce7bb265f62bfc8943f74a5b0f53de20653ade68e"
+  },
+  "source_sha256": {
+    "include/sq_chat.h": "a02e972b64af65f8757a38d0f9d1a4bf18b205094c792aebd30d4dd22c4274fb",
+    "src/c/chat.c": "223f79eee57eb7d510ed70b67330254b693d95cc69da909fdff8aa057a83b8c9",
+    "src/c/stream.c": "4a2e82a82d8946bc8330e9839bc8741b4ffc9ea964c672ad28fecf4b761c259f",
+    "src/c/tokenizer_load.c": "78daa81a6a6837c608df391a1e8d15cb3bc8e78d86879db286ce246deb2f2f2a",
+    "tools/prepare_chat_oracle.py": "24600a891f86fd0c5cb44e0fcf76cf4fc17bdd9de9dd3eabdba2e7c60ac002d2",
+    "tools/validate_chat.py": "86f4388d2b7b8fe9da16c5e968f8f581315a4660f1672d6c45290a9156f914ed",
+    "test/chat.c": "44f74a1efa19fc73ec2499483be33f3e34cbf8da8d3018857bca141cbf57d6f1",
+    "test/chat_native.c": "c069fbe85d54ae8184b450667d578e4f5195114b0df1242532b48c843c069e0c",
+    "test/stream_cases.py": "9848f4ed5d3b2856db40ca015d19fa0f268dac80a2b7bffefeb6b1b77ba481ed",
+    "fuzz/fuzz_stream.c": "908dfc8e626383a175d4691f5c2fd1dc7372e3432326f88d066b868a0a461f14",
+    "test/stream_driver.c": "eb4e91d1093e3f76539f87951e0d88cd284bf834597c6bf9af90a6454bee5a92"
+  },
+  "limitations": [
+    "Text-only typed interface; tools, multimodal and content-part JSON arrays are unsupported.",
+    "No HTTP server or OpenAI compatibility claim; latest Keel release will be resolved/pinned in HTTP stage.",
+    "One native arithmetic fixture is functional integration evidence, not a quality/performance benchmark.",
+    "Stream mutable handles have a single owning thread; tokenizer is borrowed and must outlive the stream.",
+    "No production service, global installation, driver or GPU setting changed."
+  ]
+}

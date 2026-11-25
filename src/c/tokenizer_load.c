@@ -28,6 +28,16 @@ uint64_t sq_pair_hash(uint64_t key) {
     return h ? h : 1;
 }
 
+int32_t sq_special_lookup(const sq_tokenizer *t, const void *bytes, size_t size) {
+    for (size_t i = 0; i < t->special_count; i++) {
+        int32_t id = t->specials[i];
+        const sq_token_entry *e = &t->entries[id];
+        if (e->length == size && !memcmp(t->arena + e->offset, bytes, size))
+            return id;
+    }
+    return -1;
+}
+
 int32_t sq_vocab_lookup(const sq_tokenizer *t, const void *bytes, size_t size) {
     size_t slot = (size_t)sq_token_hash(bytes, size) & (t->vocab_slots - 1);
     for (size_t i = 0; i < t->vocab_slots; i++, slot = (slot + 1) & (t->vocab_slots - 1)) {
