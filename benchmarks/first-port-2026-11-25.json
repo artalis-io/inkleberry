@@ -4,7 +4,7 @@
   "upstream_revision": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
   "source_sha256": {
     "Makefile": "0d864746c6a027d58422a1cfa4c3bceea1b01c712424a659330a24996da96e7f",
-    "include/sq.h": "5091eb612e5fb70ee893c0e5c46b8e4afb35abb5194bde045df859327e13e4b3",
+    "include/sq.h": "311cac24f3a37a402238e87d7e315c664f4b2696165e7be7f58025aa5ef40357",
     "src/c/internal.h": "6bb60a091f48f0096508abdd11bd99ab30da5dd6ee86cf8d8341a567389dca73",
     "src/c/foundation.c": "c691283af32f88dfcd972215411e8e3cb3a31dcbfa55d18d16fb0f983d6e7ada",
     "src/c/safetensors.c": "290bb6aa5657642283ef188062a43ac3e56c493a403ddd2b0546b686bac5ca71",
@@ -67,5 +67,6 @@
     "Kernel smoke does not cover full model or cuBLAS lifetime",
     "macOS sanitizer startup blocked before main; no pass claimed"
   ],
-  "report": "docs/first-port-validation.md"
+  "report": "docs/first-port-validation.md",
+  "header_comment_revalidated_macos_utc": "2026-11-25T10:32:43.210321+00:00"
 }

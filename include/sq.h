@@ -47,7 +47,10 @@ typedef struct {
     sq_release_fn release;
 } sq_options;
 
+/* Keep this aggregate macro stable across clang-format 18 patch releases. */
+/* clang-format off */
 #define SQ_OPTIONS_INIT {sizeof(sq_options), SQ_API_VERSION, NULL, NULL, NULL}
+/* clang-format on */
 typedef struct sq_safetensors sq_safetensors;
 
 typedef struct {

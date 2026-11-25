@@ -18,12 +18,12 @@ jobs:
           - {os: macos-15, cc: clang, cxx: clang++}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: make -j2 CC=${{ matrix.cc }} CXX=${{ matrix.cxx }} check install-check
   sanitizers:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: make sanitize CXX=clang++
         env:
           ASAN_OPTIONS: detect_leaks=1
@@ -33,7 +33,7 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: sudo apt-get update && sudo apt-get install -y clang-format-18
       - run: make lint
 # CPU CI is not an inference or GPU qualification gate. Real GPU checks must
