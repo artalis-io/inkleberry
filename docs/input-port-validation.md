@@ -38,6 +38,7 @@ throughput result is claimed. [Machine-readable evidence](../benchmarks/input-po
 | Linux ASan/UBSan/leak checks | Full suite passed |
 | Linux libFuzzer | 3,000 runs each for safetensors and tokenizer load/encode/decode, under ASan/UBSan, passed |
 | Formatting/invariants/provenance | Passed with both clang-format 18.1.8 locally and Ubuntu 18.1.3 extracted into an isolated tools directory |
+| Complete real vocabulary | All 200,058 token IDs decoded to the independently reconstructed byte-level token bytes; added-token skip behavior checked |
 | Real tokenizer | 14/14 cases matched both pinned Zig and provider `tokenizers`; all decoded bytes round-tripped |
 | Real template | All six effort templates produced the same token IDs as Zig |
 | Real checkpoint binding | All 876 bound descriptors/data spans matched independent Python header inspection; all 422 vision descriptors remained unbound |

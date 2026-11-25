@@ -1,5 +1,6 @@
 {
   "tokenizer": {
+    "vocabulary_entries_matched": 200058,
     "tokenizer_cases": [
       {
         "case": 0,

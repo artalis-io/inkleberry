@@ -51,6 +51,27 @@ def main():
     if args.reference:
         from tokenizers import Tokenizer
         reference = Tokenizer.from_file(str(args.model/'tokenizer.json'))
+    metadata=json.loads((args.model/'tokenizer.json').read_text())
+    direct=list(range(33,127))+list(range(161,173))+list(range(174,256))
+    inverse={chr(b):b for b in direct}
+    for i,b in enumerate(b for b in range(256) if b not in direct):
+        inverse[chr(256+i)]=b
+    vocab_checked=0
+    try:
+        entries=[(token,bytes(inverse[ch] for ch in text),False)
+                 for text,token in metadata['model']['vocab'].items()]
+        entries += [(entry['id'],entry['content'].encode(),True) for entry in metadata['added_tokens']]
+        for token,expected,special in entries:
+            data,n=c.c_void_p(),c.c_size_t()
+            if lib.sq_tokenizer_decode(t,token,0,c.byref(data),c.byref(n)) or c.string_at(data,n.value)!=expected:
+                raise SystemExit('Vocabulary byte mapping mismatch at ID '+str(token))
+            if special and (lib.sq_tokenizer_decode(t,token,1,c.byref(data),c.byref(n)) or n.value):
+                raise SystemExit('Special-token skip mismatch')
+            vocab_checked+=1
+    except BaseException:
+        lib.sq_tokenizer_scratch_destroy(scratch)
+        lib.sq_tokenizer_close(t)
+        raise
     rows = []
     template_zig = []
     try:
@@ -104,7 +125,7 @@ def main():
     finally:
         lib.sq_tokenizer_scratch_destroy(scratch)
         lib.sq_tokenizer_close(t)
-    print(json.dumps({'tokenizer_cases': rows, 'template_efforts_matched': 6, 'template_zig': template_zig}, indent=2))
+    print(json.dumps({'vocabulary_entries_matched': vocab_checked, 'tokenizer_cases': rows, 'template_efforts_matched': 6, 'template_zig': template_zig}, indent=2))
     if not all(template_zig):raise SystemExit('Zig template token mismatch')
     if not all(r['roundtrip'] and r.get('zig', True) and r.get('provider', True) for r in rows):
         raise SystemExit('Token parity mismatch')
