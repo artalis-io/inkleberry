@@ -314,3 +314,17 @@ sq_status sq_safetensors_data(const sq_safetensors *file, size_t index, const vo
     *bytes = (size_t)info->bytes;
     return SQ_OK;
 }
+
+sq_status sq_safetensors_named_data(const sq_safetensors *file, const char *name, const void **out,
+                                    size_t *bytes) {
+    const sq_tensor_info *info = NULL;
+    sq_status status = sq_safetensors_find(file, name, strlen(name), &info);
+    if (status != SQ_OK) {
+        if (out)
+            *out = NULL;
+        if (bytes)
+            *bytes = 0;
+        return status;
+    }
+    return sq_safetensors_data(file, (size_t)(info - file->tensors), out, bytes);
+}

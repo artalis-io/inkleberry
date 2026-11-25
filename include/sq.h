@@ -35,7 +35,10 @@ enum {
     SQ_OUT_OF_MEMORY,
     SQ_NOT_FOUND,
     SQ_BUFFER_TOO_SMALL,
-    SQ_LIMIT
+    SQ_LIMIT,
+    SQ_BUSY,
+    SQ_GPU_ERROR,
+    SQ_UNSUPPORTED
 };
 
 typedef uint32_t sq_dtype;

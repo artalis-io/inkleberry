@@ -14,8 +14,9 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - Generated declarations for all 76 retained CUDA functions. A two-translation-unit probe compares the actual C and CUDA C++ record layouts and checks all function prototypes.
 - A C-hosted CUDA kernel smoke test with eager execution and graph replay; no Zig host required for that test.
 - Host CI, malformed-input tests, allocator fault injection, sanitizer/fuzzer targets, source provenance checks, formatting and installed-library consumers.
+- Optional owned CUDA weight upload/packing with exact/FP8/NVFP4, full-vocabulary MTP, bounded readback, recoverable errors and retryable cleanup; full payload parity against the pinned Zig loader.
 
-**C model inference is not implemented yet.** Owned GPU model/session resources, weight upload/packing, forward/prefill/decode, sampling/speculation and serving are subsequent port slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md).
+**C model inference is not implemented yet.** Forward/prefill/decode, KV-cache/session resources, sampling/speculation and serving are subsequent port slices. Kernel smoke tests and checkpoint inspection do not establish C generation correctness or performance. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md).
 
 ## Build and use
 
@@ -24,6 +25,7 @@ Host-only tools need a C11 compiler, a C++ compiler for the header consumer test
 ```sh
 make -j8
 ./squid-c --version
+./squid-c weight-plan nvfp4 mtp
 ./squid-c inspect /external/path/model.safetensors
 ./squid-c tokenize /external/path/tokenizer.json 'Hello, world!'
 ./squid-c validate-model /external/path/model-00001-of-00001.safetensors /external/path/mtp.safetensors
@@ -31,7 +33,7 @@ make check install-check
 make lint                 # requires clang-format 18
 make sanitize             # Clang ASan + UBSan; includes failure paths
 make fuzz-smoke           # Clang libFuzzer + ASan + UBSan, 3,000 iterations per parser
-make thread-sanitize      # dedicated immutable-lookup / TLS stress test
+make thread-sanitize      # immutable lookups, TLS and simulated GPU lifecycle concurrency
 ```
 
 `make install-check` stages inside `.build/stage`, never in a system prefix. To install explicitly: `make install DESTDIR=/staging/path PREFIX=/usr/local`. The public API is [include/sq.h](include/sq.h). It is an initial development API; no stable ABI is promised yet. Files supplied to the reader must remain immutable for the lifetime of the mapping. The bounded reader supports U8, BF16, F32 and F8_E4M3, 2,048 tensors, rank 8, 255-byte UTF-8 names and a 16 MiB header; it is not a universal safetensors implementation or a model-shape validator.
@@ -50,7 +52,7 @@ The tokenizer accepts the pinned Inkling ByteLevel/BPE JSON profile, not arbitra
 
 Tokenizers own their tables and permit concurrent immutable use with a distinct scratch handle per active call. Scratch owns about 8.25 MiB of working arrays. Invalid UTF-8 returns an error. Text inputs are counted and may contain NUL; decoded individual tokens can contain partial UTF-8 bytes. Buffer sizing returns the full required count with `SQ_BUFFER_TOO_SMALL`, including for a NULL/zero-capacity query; encoding never silently truncates. Rendering uses six typed thinking-effort presets, matching Zig's named levels; arbitrary numeric effort and general multi-turn/tool rendering are not ported yet.
 
-A checkpoint binding owns readonly mappings, with views borrowed until close. It validates architecture layout and excludes vision, but does not scan every payload for non-finite values, validate model `config.json`, authenticate the weight contents, upload or quantize weights, or establish GPU packing parity. Auxiliary ablation/pruned-draft-vocabulary loading remains later work. A caller's files must stay immutable while mapped. Omit the MTP argument for AR-only validation; supplying a missing/incompatible MTP never silently falls back.
+A checkpoint binding owns readonly mappings, with views borrowed until close. It validates architecture layout and excludes vision, but does not scan every payload for non-finite values, validate model `config.json`, authenticate the weight contents. The optional GPU API consumes this binding and performs upload/packing separately. Auxiliary ablation/pruned-draft-vocabulary loading remains later work. A caller's files must stay immutable while mapped. Omit the MTP argument for AR-only validation; supplying a missing/incompatible MTP never silently falls back.
 
 Real input parity tools need external files and a normal non-sanitized shared library:
 

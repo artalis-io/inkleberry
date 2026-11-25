@@ -1,0 +1,166 @@
+{
+  "gpu_uuid": "GPU-5a215cb3-57b0-0a6e-d511-e90bb05c0e05",
+  "model_directory": "inkling-2-mini-c9d028302cd0",
+  "sampling_interval_seconds": 0.25,
+  "cases": [
+    {
+      "oracle_parity": true,
+      "mode": 0,
+      "mtp": 0,
+      "payload_spans": 686,
+      "payload_bytes": 18884907008,
+      "descriptors": 646,
+      "c_load_seconds": 0.725838,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": false,
+      "elapsed_seconds": 7.895025528996484,
+      "sampled_combined_oracle_and_c_vram_mib": 37466
+    },
+    {
+      "oracle_parity": true,
+      "mode": 0,
+      "mtp": 1,
+      "payload_spans": 732,
+      "payload_bytes": 19623932712,
+      "descriptors": 693,
+      "c_load_seconds": 0.863071,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": false,
+      "elapsed_seconds": 8.760506966995308,
+      "sampled_combined_oracle_and_c_vram_mib": 38972
+    },
+    {
+      "oracle_parity": true,
+      "mode": 1,
+      "mtp": 0,
+      "payload_spans": 759,
+      "payload_bytes": 17780405480,
+      "descriptors": 646,
+      "c_load_seconds": 0.728196,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": false,
+      "elapsed_seconds": 7.602102078002645,
+      "sampled_combined_oracle_and_c_vram_mib": 35358
+    },
+    {
+      "oracle_parity": true,
+      "mode": 1,
+      "mtp": 1,
+      "payload_spans": 821,
+      "payload_bytes": 18069354672,
+      "descriptors": 693,
+      "c_load_seconds": 0.861971,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": false,
+      "elapsed_seconds": 8.447724708006717,
+      "sampled_combined_oracle_and_c_vram_mib": 36008
+    },
+    {
+      "oracle_parity": true,
+      "mode": 2,
+      "mtp": 0,
+      "payload_spans": 935,
+      "payload_bytes": 15332632992,
+      "descriptors": 646,
+      "c_load_seconds": 0.784812,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": false,
+      "elapsed_seconds": 7.055467658996349,
+      "sampled_combined_oracle_and_c_vram_mib": 30690
+    },
+    {
+      "oracle_parity": true,
+      "mode": 2,
+      "mtp": 1,
+      "payload_spans": 997,
+      "payload_bytes": 15621582184,
+      "descriptors": 693,
+      "c_load_seconds": 0.921326,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": false,
+      "elapsed_seconds": 7.607473978976486,
+      "sampled_combined_oracle_and_c_vram_mib": 31336
+    },
+    {
+      "oracle_parity": true,
+      "mode": 1,
+      "mtp": 1,
+      "payload_spans": 805,
+      "payload_bytes": 18519431184,
+      "descriptors": 693,
+      "c_load_seconds": 0.865003,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": true,
+      "elapsed_seconds": 9.019156807014951,
+      "sampled_combined_oracle_and_c_vram_mib": 36864
+    },
+    {
+      "oracle_parity": true,
+      "mode": 2,
+      "mtp": 1,
+      "payload_spans": 981,
+      "payload_bytes": 16071658696,
+      "descriptors": 693,
+      "c_load_seconds": 0.923697,
+      "caller_context_preserved": true,
+      "oracle_allocation_survived": true,
+      "mtp_bf16": true,
+      "elapsed_seconds": 7.895151768025244,
+      "sampled_combined_oracle_and_c_vram_mib": 32196
+    }
+  ],
+  "date": "2026-11-25",
+  "upstream_commit": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "base_port_commit": "803838d28307e0678793ec281470c2590fa92ca1",
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+  "driver": "595.104.02",
+  "cuda": "13.5.37",
+  "zig": "0.17.1",
+  "architecture": "sm_120a",
+  "gpu_memory_mib": 97887,
+  "model_files": [
+    {
+      "name": "model-00001-of-00001.safetensors",
+      "bytes": 19526019168,
+      "sha256": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1"
+    },
+    {
+      "name": "mtp.safetensors",
+      "bytes": 635801416,
+      "sha256": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+    }
+  ],
+  "repetitions_per_case": 1,
+  "timing_scope": "Warm-cache loader validation observations, not a performance benchmark",
+  "vram_scope": "Sampled combined Zig and C images plus context fixtures; not standalone C peak",
+  "tests": {
+    "cpu_planner_combinations": 9,
+    "linux_host": "passed",
+    "macos_arm64_host": "passed",
+    "linux_asan_ubsan": "passed",
+    "linux_tsan": "passed",
+    "fuzzer_runs_per_parser": 3000,
+    "fuzzers": 2,
+    "installed_gpu_consumer": "passed",
+    "memcheck_small_packing": {
+      "cases": 5,
+      "errors": 0,
+      "leaked_bytes": 0
+    },
+    "memcheck_full_model": {
+      "mode": "exact",
+      "mtp": false,
+      "payload_bytes_read": 18884907008,
+      "errors": 0,
+      "leaked_bytes": 0
+    }
+  },
+  "inference_implemented": false
+}

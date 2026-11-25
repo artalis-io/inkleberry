@@ -35,3 +35,5 @@ leak-*
 
 # macOS metadata must not become C sources on Linux transfers
 ._*
+
+/squid-c-weights
