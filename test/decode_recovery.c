@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * C-only sampler/speculation state isolation, cancellation and ownership. */
-#include "platform.h"
 #include "decode_compare.c"
 static unsigned ifn_decode_recovery_local_emitted, ifn_decode_recovery_local_cutoff;
 

@@ -1037,8 +1037,17 @@ ifn_status ifn_file_map_open(const char *path, size_t minimum, size_t maximum,
     if (file == INVALID_HANDLE_VALUE)
         return ifn_win32_error(IFN_IO, error, "cannot open mapped file");
     LARGE_INTEGER size;
-    if (GetFileType(file) != FILE_TYPE_DISK || !GetFileSizeEx(file, &size) || size.QuadPart < 0 ||
-        (uint64_t)size.QuadPart < minimum || (uint64_t)size.QuadPart > maximum) {
+    if (GetFileType(file) != FILE_TYPE_DISK) {
+        (void)CloseHandle(file);
+        return ifn_error(IFN_FORMAT, "invalid mapped file type");
+    }
+    if (!GetFileSizeEx(file, &size)) {
+        error = GetLastError();
+        (void)CloseHandle(file);
+        return ifn_win32_error(IFN_IO, error, "cannot query mapped file size");
+    }
+    if (size.QuadPart < 0 || (uint64_t)size.QuadPart < minimum ||
+        (uint64_t)size.QuadPart > maximum) {
         (void)CloseHandle(file);
         return ifn_error(IFN_FORMAT, "invalid mapped file size/type");
     }

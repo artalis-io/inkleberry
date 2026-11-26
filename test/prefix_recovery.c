@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * C-only prefix invalidation, cancellation, snapshot reuse and teardown. */
-#include "platform.h"
 #include "prefix_compare.c"
 static unsigned ifn_prefix_recovery_local_seen;
 

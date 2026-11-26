@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "infer_internal.h"
 #include "platform.h"
-#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 extern atomic_uint ifn_infer_mock_uploads;

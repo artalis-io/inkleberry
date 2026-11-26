@@ -3,7 +3,6 @@
 #include "ifn_infer.h"
 #include "ifn_infer_inkling.h"
 #include "platform.h"
-#include "platform.h"
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>

@@ -30,6 +30,7 @@ source scripts/msvc-env.sh
 make -j4 CC=cl PYTHON=python check install-check install-contract-check windows-sdk-check
 make -j4 CC=clang-cl PYTHON=python check install-check install-contract-check windows-sdk-check
 make -j2 CC=cl PYTHON=python windows-cuda-build-check
+make -j2 CC=clang-cl PYTHON=python windows-cuda-build-check
 ```
 
 The host suites exercise ordinary and amalgamated implementations: parser/BPE
@@ -51,8 +52,8 @@ archives and extracted C/C++ consumers run under both native compiler profiles.
 PE checks enforce ASLR/DEP, private-symbol boundaries and absence of MSYS,
 Cygwin, winpthread or libgcc runtime imports.
 
-The MSVC CUDA check builds the native GPU archive, generator and provider DLL,
-verifies its single export and negotiates its ABI without preparing a GPU
+Both native compiler CUDA checks build the native GPU archive, generator and provider DLL,
+verify its single export and negotiate its ABI without preparing a GPU
 session. The CPU-only C/NVCC ABI probe checks 76 prototypes, seven records and
 72 layout facts.
 
