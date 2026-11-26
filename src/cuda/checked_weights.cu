@@ -25,7 +25,7 @@ extern "C" int ifn_cuda_enter(int device, ifn_device_scope *old) {
         cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device));
     IFN_CHECKED_WEIGHTS_LOCAL_TRY(
         cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device));
-    return major == 12 && minor == 0 ? 0 : (int)cudaErrorNotSupported;
+    return ifn_cuda_capability_supported(major, minor) ? 0 : (int)cudaErrorNotSupported;
 }
 
 extern "C" int ifn_cuda_leave(const ifn_device_scope *old) {
