@@ -13,8 +13,11 @@ Do not import Jev Bush's model algorithms or imply its CPU inference applies her
 - `reference/design/c-port-design.md` for historical port decisions. Historical
   names in `reference/` are intentional; current public contracts take precedence.
 
-`artalis` is the development/release branch. `main` preserves the upstream
-snapshot. Use focused feature branches; never rewrite the preserved snapshot.
+`main` is the integration/release branch. Use focused feature branches based on
+`main` and require Linux CI before merging. The former upstream-main snapshot is
+preserved by tag `reference/upstream-main-51b85dd`; the pinned implementation and
+its frozen oracle remain separately recorded in `UPSTREAM.json` and `reference/`.
+Never replace maintained inference code with unqualified upstream changes.
 
 ## Architecture and naming
 

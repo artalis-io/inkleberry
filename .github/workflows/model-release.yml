@@ -22,7 +22,7 @@ permissions:
   contents: read
 jobs:
   qualify:
-    if: github.ref == 'refs/heads/artalis'
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, inkleberry-release]
     timeout-minutes: 120
     steps:

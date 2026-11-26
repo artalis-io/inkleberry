@@ -36,9 +36,25 @@ adapt only link names in disposable `.build/native-oracle-src` copies, without
 changing checked-in originals. There are no legacy C/CUDA compatibility aliases.
 
 The native namespace map records old names as provenance data, not production
-symbols. Reversing this identifier-only map (and removing each file's modification
-notice) must reproduce every original upstream CUDA hash. Legal notices, original
+symbols. Reversing the identifier map and reviewed host-error adapters (and removing
+each file's modification notice) must reproduce every original upstream CUDA hash. Legal notices, original
 hashes, upstream URLs and historical documentation retain attribution.
 
 Host qualification and numerical GPU qualification are distinct. See
 [distribution validation](distribution-validation.md) for the executed model-backed modular and amalgamated qualification.
+
+
+## Canonical branch and history
+
+`main` is the integration and release branch for Inkleberry Finn. The old
+upstream-main history is preserved by tag `reference/upstream-main-51b85dd`.
+The pinned reference implementation and production CUDA provenance remain in
+`reference/`, `UPSTREAM.json`, `THIRD_PARTY.md` and `NOTICE`. Upstream changes are
+reviewed and qualified explicitly; there is no automatic synchronization branch.
+
+GitHub's fork-network label is separate from source provenance. Preserve the
+repository's PR history and settings when requesting metadata detachment:
+[GitHub's detachment documentation](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/detaching-a-fork)
+warns that self-service detachment loses repository metadata, while support-assisted
+detachment can preserve issue and PR history. Removing a fork relationship never
+replaces the project's retained attribution or frozen reference material.

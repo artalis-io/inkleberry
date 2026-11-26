@@ -69,7 +69,7 @@ its installed GCC 13 runtime directory avoids an incomplete GCC search path:
 ## Required and optional CI
 
 Pull requests and pushes run Linux GCC/Clang host checks, ASan/UBSan with timed
-fuzzing, lint and TSan. All five are required merge checks on `artalis`, bound to
+fuzzing, lint and TSan. All five are required merge checks on `main`, bound to
 the GitHub Actions app. Branches must be up to date; administrators are subject
 to the same checks. The desired configuration is checked in at
 [.github/branch-protection.json](../.github/branch-protection.json). Changes to
@@ -79,7 +79,7 @@ macOS tests only the portable host C library. It is an optional manual workflow,
 not a PR/push dependency and not CUDA qualification:
 
 ```sh
-gh workflow run macos-portability.yml --repo artalis-io/inkleberry --ref artalis
+gh workflow run macos-portability.yml --repo artalis-io/inkleberry --ref main
 ```
 
 The workflow becomes available on the default branch once its PR is merged.

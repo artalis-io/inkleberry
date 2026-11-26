@@ -1,9 +1,9 @@
 name: Inkleberry Finn
 on:
   push:
-    branches: [artalis, 'feat/**', 'fix/**']
+    branches: [main, 'feat/**', 'fix/**']
   pull_request:
-    branches: [artalis]
+    branches: [main]
 permissions:
   contents: read
 jobs:

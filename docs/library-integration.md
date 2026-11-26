@@ -117,7 +117,7 @@ variability and rerun controlled A/B measurements when a gate fails; do not waiv
 quality failures or silently relax thresholds.
 
 `.github/workflows/model-release.yml` exposes the same command manually on a
-trusted self-hosted runner restricted to `artalis`. It requires operator-provided
+trusted self-hosted runner restricted to `main`. It requires operator-provided
 local assets and reserved GPU; no runner is installed by this repository. It is
 not an automatic PR GPU job. Never run untrusted pull requests on a model host.
 
