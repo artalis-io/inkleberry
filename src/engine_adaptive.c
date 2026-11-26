@@ -4,34 +4,33 @@
  * next-draft overlap. Every exit drains work before reset or resource release. */
 #include "engine_internal.h"
 
-static void capture_finish(ifn_session *s, void **graph) {
-    ifn_ar_check(s, squid_cuda_graph_end_instantiate(s->stream, graph),
+static void ifn_engine_adaptive_local_capture_finish(ifn_session *s, void **graph) {
+    ifn_ar_check(s, ifn_cuda_graph_end_instantiate(s->stream, graph),
                  "finish adaptive component capture");
 }
 
-static void prepare(ifn_session *s, float threshold) {
+static void ifn_engine_adaptive_local_prepare(ifn_session *s, float threshold) {
     if (!s->draft_graph) {
-        ifn_ar_check(s, squid_cuda_graph_begin(s->stream), "begin draft graph");
+        ifn_ar_check(s, ifn_cuda_graph_begin(s->stream), "begin draft graph");
         if (s->status != IFN_OK)
             return;
         ifn_spec_draft(s, 7, s->d_conf);
-        capture_finish(s, &s->draft_graph);
+        ifn_engine_adaptive_local_capture_finish(s, &s->draft_graph);
     }
     if (s->status != IFN_OK)
         return;
     if (!s->lookup_graph) {
-        ifn_ar_check(s, squid_cuda_graph_begin(s->stream), "begin lookup graph");
+        ifn_ar_check(s, ifn_cuda_graph_begin(s->stream), "begin lookup graph");
         if (s->status != IFN_OK)
             return;
         ifn_spec_verify(s, 7);
         if (s->status == IFN_OK)
-            ifn_ar_check(s, squid_cuda_memcpy_d2h_async(s->h_count, s->d_num_acc, 4, s->stream),
+            ifn_ar_check(s, ifn_cuda_memcpy_d2h_async(s->h_count, s->d_num_acc, 4, s->stream),
                          "capture lookup count");
         if (s->status == IFN_OK)
-            ifn_ar_check(s,
-                         squid_cuda_memcpy_d2h_async(s->h_accepted, s->d_accepted, 32, s->stream),
+            ifn_ar_check(s, ifn_cuda_memcpy_d2h_async(s->h_accepted, s->d_accepted, 32, s->stream),
                          "capture lookup output");
-        capture_finish(s, &s->lookup_graph);
+        ifn_engine_adaptive_local_capture_finish(s, &s->lookup_graph);
     }
     if (s->status != IFN_OK || s->adaptive_threshold == threshold)
         return;
@@ -61,12 +60,12 @@ static void prepare(ifn_session *s, float threshold) {
         s->adaptive_threshold = threshold;
 }
 
-static void draft(ifn_session *s) {
+static void ifn_engine_adaptive_local_draft(ifn_session *s) {
     if (s->status != IFN_OK)
         return;
     /* Conservatively retain the in-flight marker if launch/sync fails. */
     s->draft_in_flight = true;
-    int e = squid_cuda_graph_launch(s->draft_graph, s->stream);
+    int e = ifn_cuda_graph_launch(s->draft_graph, s->stream);
     ifn_ar_check(s, e, "launch overlapped draft");
     if (!e)
         s->decode_info.draft_launches++;
@@ -75,7 +74,7 @@ static void draft(ifn_session *s) {
 void ifn_adaptive_step(ifn_session *s, const ifn_decode_options *options, bool lookup) {
     if (s->status != IFN_OK)
         return;
-    prepare(s, options->spec_threshold);
+    ifn_engine_adaptive_local_prepare(s, options->spec_threshold);
     if (s->status != IFN_OK)
         return;
     if (lookup) {
@@ -88,7 +87,7 @@ void ifn_adaptive_step(ifn_session *s, const ifn_decode_options *options, bool l
                 s, b->copy(b->context, s->d_drafts, (int32_t *)s->pinned + 10, 28, 0, s->stream),
                 "upload lookup proposal");
         if (s->status == IFN_OK)
-            ifn_ar_check(s, squid_cuda_graph_launch(s->lookup_graph, s->stream),
+            ifn_ar_check(s, ifn_cuda_graph_launch(s->lookup_graph, s->stream),
                          "verify lookup proposal");
         if (s->status == IFN_OK)
             ifn_ar_check(s, b->sync(b->context, s->stream), "finish lookup verification");
@@ -97,17 +96,17 @@ void ifn_adaptive_step(ifn_session *s, const ifn_decode_options *options, bool l
         return;
     }
     if (!s->draft_in_flight)
-        draft(s);
+        ifn_engine_adaptive_local_draft(s);
     if (s->status == IFN_OK)
         ifn_ar_check(s, ifn_adaptive_launch(s->adaptive_state, s->stream),
                      "launch adaptive verification");
     if (s->status == IFN_OK)
-        ifn_ar_check(s, squid_cuda_event_record(s->done_event, s->stream),
+        ifn_ar_check(s, ifn_cuda_event_record(s->done_event, s->stream),
                      "record verified-output event");
     if (s->status == IFN_OK)
-        draft(s);
+        ifn_engine_adaptive_local_draft(s);
     if (s->status == IFN_OK)
-        ifn_ar_check(s, squid_cuda_event_sync(s->done_event), "await verified outputs");
+        ifn_ar_check(s, ifn_cuda_event_sync(s->done_event), "await verified outputs");
 }
 
 void ifn_adaptive_drain(ifn_session *s) {

@@ -1,16 +1,17 @@
+// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
 #include "kernels.hpp"
 #include "kernels_common.cuh"
 
 #include <cstdio>
 
-namespace squid {
+namespace ifn_cuda {
 
 namespace {
 
 // ============================================================================
 // Fast F32 -> F16 conversion (vectorized float4 -> half2x2)
 // ============================================================================
-__global__ void f32_to_f16_kernel(const float* __restrict__ src, __half* __restrict__ dst, int n) {
+__global__ void ifn_cuda_f32_to_f16_kernel(const float* __restrict__ src, __half* __restrict__ dst, int n) {
     int i = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
     if (i + 3 < n) {
         float4 v = *reinterpret_cast<const float4*>(src + i);
@@ -31,7 +32,7 @@ __global__ void f32_to_f16_kernel(const float* __restrict__ src, __half* __restr
 
 template <int B_CONST, bool ADD_RES, int TPR = 32>
 __global__ void __launch_bounds__(128)
-linear_nvfp4_h_kernel(
+ifn_cuda_linear_nvfp4_h_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float global_scale,
@@ -55,10 +56,10 @@ linear_nvfp4_h_kernel(
 
     for (int blk = lane; blk < n_blocks16; blk += TPR) {
         uint2 w8 = __ldg(w_row + blk);
-        float sc = cvt_e4m3_to_float(__ldg(s_row + blk));
+        float sc = ifn_cuda_cvt_e4m3_to_float(__ldg(s_row + blk));
         __half2 wh[8];
-        cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
-        cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
 
         int koff = blk << 4;
         #pragma unroll
@@ -83,7 +84,7 @@ linear_nvfp4_h_kernel(
 
     #pragma unroll
     for (int b = 0; b < B_CONST; ++b) {
-        float s = ((TPR == 32) ? warp_sum(acc[b]) : half_warp_sum(acc[b])) * global_scale;
+        float s = ((TPR == 32) ? ifn_cuda_warp_sum(acc[b]) : ifn_cuda_half_warp_sum(acc[b])) * global_scale;
         if (lane == 0) {
             if constexpr (ADD_RES) y[(size_t)b * N + row] += s;
             else                   y[(size_t)b * N + row] = s;
@@ -96,66 +97,66 @@ linear_nvfp4_h_kernel(
 // Adapted from satellitedown/inkling-2-mini-abliterated-ingine (Apache-2.0).
 // ============================================================================
 
-struct Nvfp4Chunk32 {
+struct ifn_cuda_nvfp4_chunk32 {
     uint4 q;
     uint16_t s;
 };
 
-struct Mxfp8Chunk32 {
+struct ifn_cuda_mxfp8_chunk32 {
     uint4 q0, q1;
     uint8_t s;
 };
 
-struct Fp8Chunk32 {
+struct ifn_cuda_fp8_chunk32 {
     uint4 q0, q1;
 };
 
-__device__ __forceinline__ Fp8Chunk32 load_fp8_chunk32(const uint8_t* codes, int c) {
-    Fp8Chunk32 ch;
-    ch.q0 = ld_stream_u4(codes + (size_t)c * 32);
-    ch.q1 = ld_stream_u4(codes + (size_t)c * 32 + 16);
+__device__ __forceinline__ ifn_cuda_fp8_chunk32 ifn_cuda_load_fp8_chunk32(const uint8_t* codes, int c) {
+    ifn_cuda_fp8_chunk32 ch;
+    ch.q0 = ifn_cuda_ld_stream_u4(codes + (size_t)c * 32);
+    ch.q1 = ifn_cuda_ld_stream_u4(codes + (size_t)c * 32 + 16);
     return ch;
 }
 
 // Lossless E4M3 -> FP16 unpack (every E4M3 finite value is bit-exact in FP16) for mma.m16n8k16.f32.f16!
-__device__ __forceinline__ void decode_fp8_chunk32_f16(const Fp8Chunk32& ch, uint32_t (&o)[16]) {
+__device__ __forceinline__ void ifn_cuda_decode_fp8_chunk32_f16(const ifn_cuda_fp8_chunk32& ch, uint32_t (&o)[16]) {
     const uint32_t words[8] = {ch.q0.x, ch.q0.y, ch.q0.z, ch.q0.w, ch.q1.x, ch.q1.y, ch.q1.z, ch.q1.w};
     #pragma unroll
     for (int w = 0; w < 8; ++w) {
-        __half2 h0 = cvt_e4m3x2_to_half2(uint16_t(words[w] & 0xFFFFu));
-        __half2 h1 = cvt_e4m3x2_to_half2(uint16_t(words[w] >> 16));
+        __half2 h0 = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(words[w] & 0xFFFFu));
+        __half2 h1 = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(words[w] >> 16));
         o[2 * w + 0] = *reinterpret_cast<uint32_t*>(&h0);
         o[2 * w + 1] = *reinterpret_cast<uint32_t*>(&h1);
     }
 }
 
-__device__ __forceinline__ Nvfp4Chunk32 load_nvfp4_chunk32(
+__device__ __forceinline__ ifn_cuda_nvfp4_chunk32 ifn_cuda_load_nvfp4_chunk32(
     const uint8_t* codes, const uint8_t* scales, int c) {
-    Nvfp4Chunk32 ch;
-    ch.q = ld_stream_u4(codes + (size_t)c * 16);
-    ch.s = ld_scale_u16(scales + (size_t)c * 2);
+    ifn_cuda_nvfp4_chunk32 ch;
+    ch.q = ifn_cuda_ld_stream_u4(codes + (size_t)c * 16);
+    ch.s = ifn_cuda_ld_scale_u16(scales + (size_t)c * 2);
     return ch;
 }
 
-__device__ __forceinline__ Mxfp8Chunk32 load_mxfp8_chunk32(
+__device__ __forceinline__ ifn_cuda_mxfp8_chunk32 ifn_cuda_load_mxfp8_chunk32(
     const uint8_t* codes, const uint8_t* scales, int c) {
-    Mxfp8Chunk32 ch;
-    ch.q0 = ld_stream_u4(codes + (size_t)c * 32);
-    ch.q1 = ld_stream_u4(codes + (size_t)c * 32 + 16);
-    ch.s = ld_scale_u8(scales + c);
+    ifn_cuda_mxfp8_chunk32 ch;
+    ch.q0 = ifn_cuda_ld_stream_u4(codes + (size_t)c * 32);
+    ch.q1 = ifn_cuda_ld_stream_u4(codes + (size_t)c * 32 + 16);
+    ch.s = ifn_cuda_ld_scale_u8(scales + c);
     return ch;
 }
 
 // Exact FP16 decode of 32 NVFP4 weights * 2 E4M3 scales -> 16 half2 words!
 // Range: |e2m1 * e4m3| in {0} U [2^-10, 2688], <= 6 mantissa bits -> 100% bit-exact in FP16!
-__device__ __forceinline__ void decode_nvfp4_chunk32_f16(const Nvfp4Chunk32& ch, uint32_t (&o)[16]) {
-    const __half2 sc = cvt_e4m3x2_to_half2(ch.s);
+__device__ __forceinline__ void ifn_cuda_decode_nvfp4_chunk32_f16(const ifn_cuda_nvfp4_chunk32& ch, uint32_t (&o)[16]) {
+    const __half2 sc = ifn_cuda_cvt_e4m3x2_to_half2(ch.s);
     const __half2 slo = __low2half2(sc), shi = __high2half2(sc);
     const uint32_t words[4] = {ch.q.x, ch.q.y, ch.q.z, ch.q.w};
     #pragma unroll
     for (int w = 0; w < 4; ++w) {
         __half2 h0, h1, h2, h3;
-        cvt_e2m1x8_to_half2x4(words[w], h0, h1, h2, h3);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(words[w], h0, h1, h2, h3);
         const __half2 sm = (w < 2) ? slo : shi;
         __half2 p0 = __hmul2(h0, sm), p1 = __hmul2(h1, sm), p2 = __hmul2(h2, sm), p3 = __hmul2(h3, sm);
         o[4 * w + 0] = *reinterpret_cast<uint32_t*>(&p0);
@@ -165,21 +166,21 @@ __device__ __forceinline__ void decode_nvfp4_chunk32_f16(const Nvfp4Chunk32& ch,
     }
 }
 
-__device__ __forceinline__ uint32_t pack_bf16x2(float lo, float hi) {
+__device__ __forceinline__ uint32_t ifn_cuda_pack_bf16x2(float lo, float hi) {
     __nv_bfloat162 v = __floats2bfloat162_rn(lo, hi);
     return *reinterpret_cast<uint32_t*>(&v);
 }
 
-__device__ __forceinline__ void decode_mxfp8_chunk32_bf16(const Mxfp8Chunk32& ch, uint32_t (&o)[16]) {
-    const float sc = cvt_ue8m0_to_float(ch.s);
+__device__ __forceinline__ void ifn_cuda_decode_mxfp8_chunk32_bf16(const ifn_cuda_mxfp8_chunk32& ch, uint32_t (&o)[16]) {
+    const float sc = ifn_cuda_cvt_ue8m0_to_float(ch.s);
     const uint32_t words[8] = {ch.q0.x, ch.q0.y, ch.q0.z, ch.q0.w, ch.q1.x, ch.q1.y, ch.q1.z, ch.q1.w};
     #pragma unroll
     for (int w = 0; w < 8; ++w) {
         #pragma unroll
         for (int hh = 0; hh < 2; ++hh) {
-            __half2 h2 = cvt_e4m3x2_to_half2(uint16_t(words[w] >> (16 * hh)));
+            __half2 h2 = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(words[w] >> (16 * hh)));
             float2 v = __half22float2(h2);
-            o[2 * w + hh] = pack_bf16x2(v.x * sc, v.y * sc);
+            o[2 * w + hh] = ifn_cuda_pack_bf16x2(v.x * sc, v.y * sc);
         }
     }
 }
@@ -192,7 +193,7 @@ __device__ __forceinline__ void decode_mxfp8_chunk32_bf16(const Mxfp8Chunk32& ch
 // Issues ALL weight & scale streaming loads BEFORE pdl_wait_fenced(zero) -> overlaps predecessor tail!
 template <bool ADD_RES, int ITERS>
 __global__ void __launch_bounds__(128)
-linear_nvfp4_b1_pdl_kernel(
+ifn_cuda_linear_nvfp4_b1_pdl_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float global_scale,
@@ -212,22 +213,22 @@ linear_nvfp4_b1_pdl_kernel(
     #pragma unroll
     for (int iter = 0; iter < ITERS; ++iter) {
         int blk = lane + iter * 16;
-        w8[iter] = ld_stream_u2(w_row + blk);
-        s8[iter] = ld_scale_u8(s_row + blk);
+        w8[iter] = ifn_cuda_ld_stream_u2(w_row + blk);
+        s8[iter] = ifn_cuda_ld_scale_u8(s_row + blk);
     }
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     float acc = 0.0f;
     #pragma unroll
     for (int iter = 0; iter < ITERS; ++iter) {
         int koff = (lane + iter * 16) << 4;
-        uint4 xv0 = ld_dep_u4(x_h + koff);
-        uint4 xv1 = ld_dep_u4(x_h + koff + 8);
+        uint4 xv0 = ifn_cuda_ld_dep_u4(x_h + koff);
+        uint4 xv1 = ifn_cuda_ld_dep_u4(x_h + koff + 8);
         __half2 wh[8];
-        cvt_e2m1x8_to_half2x4(w8[iter].x, wh[0], wh[1], wh[2], wh[3]);
-        cvt_e2m1x8_to_half2x4(w8[iter].y, wh[4], wh[5], wh[6], wh[7]);
-        float sc = cvt_e4m3_to_float(s8[iter]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8[iter].x, wh[0], wh[1], wh[2], wh[3]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8[iter].y, wh[4], wh[5], wh[6], wh[7]);
+        float sc = ifn_cuda_cvt_e4m3_to_float(s8[iter]);
         const __half2* xb0 = reinterpret_cast<const __half2*>(&xv0);
         const __half2* xb1 = reinterpret_cast<const __half2*>(&xv1);
         __half2 p0 = __hmul2(wh[0], xb0[0]);
@@ -242,7 +243,7 @@ linear_nvfp4_b1_pdl_kernel(
         acc = fmaf(pf.x + pf.y, sc, acc);
     }
 
-    float s = half_warp_sum(acc) * global_scale;
+    float s = ifn_cuda_half_warp_sum(acc) * global_scale;
     if (lane == 0) {
         if constexpr (ADD_RES) y[row] += s;
         else                   y[row] = s;
@@ -253,7 +254,7 @@ linear_nvfp4_b1_pdl_kernel(
 // Pre-issues batch 0's weight chunks BEFORE pdl_wait_fenced(zero) + binds each batch with dep = xor & zero!
 template <int B_CONST, bool ADD_RES, int K_DIM, int SPLITK>
 __global__ void __launch_bounds__(SPLITK * 32)
-linear_nvfp4_mma_kernel(
+ifn_cuda_linear_nvfp4_mma_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float global_scale,
@@ -283,18 +284,18 @@ linear_nvfp4_mma_kernel(
     #pragma unroll 1
     for (int jb = 0; jb < NB; ++jb) {
         const int c_base = c_warp + jb * (4 * U);
-        Nvfp4Chunk32 A[U], B[U];
+        ifn_cuda_nvfp4_chunk32 A[U], B[U];
         #pragma unroll
         for (int u = 0; u < U; ++u) {
             int c = c_base + 4 * u;
-            if (la) A[u] = load_nvfp4_chunk32(w_data + (size_t)ra * CB, w_scales + (size_t)ra * SB, c);
+            if (la) A[u] = ifn_cuda_load_nvfp4_chunk32(w_data + (size_t)ra * CB, w_scales + (size_t)ra * SB, c);
             else { A[u].q = make_uint4(0, 0, 0, 0); A[u].s = 0; }
-            if (lb) B[u] = load_nvfp4_chunk32(w_data + (size_t)rb * CB, w_scales + (size_t)rb * SB, c);
+            if (lb) B[u] = ifn_cuda_load_nvfp4_chunk32(w_data + (size_t)rb * CB, w_scales + (size_t)rb * SB, c);
             else { B[u].q = make_uint4(0, 0, 0, 0); B[u].s = 0; }
         }
         if (jb == 0) {
-            pdl_wait_fenced(zero);
-            pdl_trigger();
+            ifn_cuda_pdl_wait_fenced(zero);
+            ifn_cuda_pdl_trigger();
         }
 
         uint32_t xw[U][16];
@@ -304,7 +305,7 @@ linear_nvfp4_mma_kernel(
             if (lx) {
                 #pragma unroll
                 for (int v = 0; v < 4; ++v) {
-                    uint4 q = ld_dep_u4(xg + col + 8 * v);
+                    uint4 q = ifn_cuda_ld_dep_u4(xg + col + 8 * v);
                     xw[u][4 * v + 0] = q.x; xw[u][4 * v + 1] = q.y;
                     xw[u][4 * v + 2] = q.z; xw[u][4 * v + 3] = q.w;
                 }
@@ -324,11 +325,11 @@ linear_nvfp4_mma_kernel(
         #pragma unroll
         for (int u = 0; u < U; ++u) {
             uint32_t a[16], b[16];
-            decode_nvfp4_chunk32_f16(A[u], a);
-            decode_nvfp4_chunk32_f16(B[u], b);
+            ifn_cuda_decode_nvfp4_chunk32_f16(A[u], a);
+            ifn_cuda_decode_nvfp4_chunk32_f16(B[u], b);
             #pragma unroll
             for (int i = 0; i < 8; ++i) {
-                mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+                ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                      a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                      xw[u][2 * i] ^ dep, xw[u][2 * i + 1],
                                      d[0], d[1], d[2], d[3]);
@@ -360,7 +361,7 @@ linear_nvfp4_mma_kernel(
 // FUSED Q+R+Gate+Sink (6552) + K (1024) + V (1024) = 8600 rows in ONE launch!
 // B=1: 1075 CTAs x 128 threads (16 threads/row), pre-issues ALL 9 weight chunks before pdl_wait_fenced!
 __global__ void __launch_bounds__(128)
-qkvrg_fused_nvfp4_b1_pdl_kernel(
+ifn_cuda_qkvrg_fused_nvfp4_b1_pdl_kernel(
     const uint8_t* __restrict__ wq_d, const uint8_t* __restrict__ wq_s, float q_gs,
     const uint8_t* __restrict__ wk_d, const uint8_t* __restrict__ wk_s, float k_gs,
     const uint8_t* __restrict__ wv_d, const uint8_t* __restrict__ wv_s, float v_gs,
@@ -371,8 +372,8 @@ qkvrg_fused_nvfp4_b1_pdl_kernel(
     float* __restrict__ y_k,
     float* __restrict__ y_v,
     uint32_t zero) {
-    constexpr int N_Q = Q_DIM + R_DIM + Q_DIM + NUM_HEADS; // 6552
-    constexpr int N_K = KV_DIM;                            // 1024
+    constexpr int N_Q = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS; // 6552
+    constexpr int N_K = IFN_CUDA_KV_DIM;                            // 1024
     constexpr int N_TOT = N_Q + N_K + N_K;                 // 8600
 
     int hw = threadIdx.x >> 4;
@@ -397,8 +398,8 @@ qkvrg_fused_nvfp4_b1_pdl_kernel(
         x_h = xv_h; y_out = y_v; row = g_row - (N_Q + N_K);
     }
 
-    constexpr int NBLK = HIDDEN >> 4; // 144 = 9 * 16
-    const uint2* w_row = reinterpret_cast<const uint2*>(w_data + (size_t)row * (HIDDEN >> 1));
+    constexpr int NBLK = IFN_CUDA_HIDDEN >> 4; // 144 = 9 * 16
+    const uint2* w_row = reinterpret_cast<const uint2*>(w_data + (size_t)row * (IFN_CUDA_HIDDEN >> 1));
     const uint8_t* s_row = w_scales + (size_t)row * NBLK;
 
     uint2 w8[9];
@@ -406,22 +407,22 @@ qkvrg_fused_nvfp4_b1_pdl_kernel(
     #pragma unroll
     for (int iter = 0; iter < 9; ++iter) {
         int blk = lane + iter * 16;
-        w8[iter] = ld_stream_u2(w_row + blk);
-        s8[iter] = ld_scale_u8(s_row + blk);
+        w8[iter] = ifn_cuda_ld_stream_u2(w_row + blk);
+        s8[iter] = ifn_cuda_ld_scale_u8(s_row + blk);
     }
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     float acc = 0.0f;
     #pragma unroll
     for (int iter = 0; iter < 9; ++iter) {
         int koff = (lane + iter * 16) << 4;
-        uint4 xv0 = ld_dep_u4(x_h + koff);
-        uint4 xv1 = ld_dep_u4(x_h + koff + 8);
+        uint4 xv0 = ifn_cuda_ld_dep_u4(x_h + koff);
+        uint4 xv1 = ifn_cuda_ld_dep_u4(x_h + koff + 8);
         __half2 wh[8];
-        cvt_e2m1x8_to_half2x4(w8[iter].x, wh[0], wh[1], wh[2], wh[3]);
-        cvt_e2m1x8_to_half2x4(w8[iter].y, wh[4], wh[5], wh[6], wh[7]);
-        float sc = cvt_e4m3_to_float(s8[iter]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8[iter].x, wh[0], wh[1], wh[2], wh[3]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8[iter].y, wh[4], wh[5], wh[6], wh[7]);
+        float sc = ifn_cuda_cvt_e4m3_to_float(s8[iter]);
         const __half2* xb0 = reinterpret_cast<const __half2*>(&xv0);
         const __half2* xb1 = reinterpret_cast<const __half2*>(&xv1);
         __half2 p0 = __hmul2(wh[0], xb0[0]);
@@ -435,14 +436,14 @@ qkvrg_fused_nvfp4_b1_pdl_kernel(
         float2 pf = __half22float2(__hadd2(p0, p1));
         acc = fmaf(pf.x + pf.y, sc, acc);
     }
-    float s = half_warp_sum(acc) * gscale;
+    float s = ifn_cuda_half_warp_sum(acc) * gscale;
     if (lane == 0) y_out[row] = s;
 }
 
 // B=2..8 Tensor Core FUSED QKV+R+G+S: 538 non-straddling CTAs (410 Q + 64 K + 64 V), 6 warps (192 threads)!
 template <int B_CONST>
 __global__ void __launch_bounds__(192)
-qkvrg_fused_nvfp4_mma_kernel(
+ifn_cuda_qkvrg_fused_nvfp4_mma_kernel(
     const uint8_t* __restrict__ wq_d, const uint8_t* __restrict__ wq_s, float q_gs,
     const uint8_t* __restrict__ wk_d, const uint8_t* __restrict__ wk_s, float k_gs,
     const uint8_t* __restrict__ wv_d, const uint8_t* __restrict__ wv_s, float v_gs,
@@ -453,13 +454,13 @@ qkvrg_fused_nvfp4_mma_kernel(
     float* __restrict__ y_k,
     float* __restrict__ y_v,
     uint32_t zero) {
-    constexpr int N_Q = Q_DIM + R_DIM + Q_DIM + NUM_HEADS; // 6552 -> 410 tiles of 16
+    constexpr int N_Q = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS; // 6552 -> 410 tiles of 16
     constexpr int T_Q = (N_Q + 15) / 16;                   // 410
-    constexpr int T_K = KV_DIM / 16;                       // 64
+    constexpr int T_K = IFN_CUDA_KV_DIM / 16;                       // 64
     constexpr int SPLITK = 6;
     constexpr int U = 3;                                   // 6 * 3 * 128 = 2304 EXACT!
-    constexpr int CB = HIDDEN >> 1;
-    constexpr int SB = HIDDEN >> 4;
+    constexpr int CB = IFN_CUDA_HIDDEN >> 1;
+    constexpr int SB = IFN_CUDA_HIDDEN >> 4;
     __shared__ float cs[SPLITK][16][8];
 
     int blk = blockIdx.x;
@@ -474,10 +475,10 @@ qkvrg_fused_nvfp4_mma_kernel(
         x_h = xq_h; y_out = y_qrgs; r0 = blk * 16; N_out = N_Q;
     } else if (blk < T_Q + T_K) {
         w_data = wk_d; w_scales = wk_s; gscale = k_gs;
-        x_h = xk_h; y_out = y_k; r0 = (blk - T_Q) * 16; N_out = KV_DIM;
+        x_h = xk_h; y_out = y_k; r0 = (blk - T_Q) * 16; N_out = IFN_CUDA_KV_DIM;
     } else {
         w_data = wv_d; w_scales = wv_s; gscale = v_gs;
-        x_h = xv_h; y_out = y_v; r0 = (blk - T_Q - T_K) * 16; N_out = KV_DIM;
+        x_h = xv_h; y_out = y_v; r0 = (blk - T_Q - T_K) * 16; N_out = IFN_CUDA_KV_DIM;
     }
 
     const int warp = threadIdx.x >> 5;
@@ -488,28 +489,28 @@ qkvrg_fused_nvfp4_mma_kernel(
     const bool la = (ra < N_out), lb = (rb < N_out);
     const int c_base = warp * (4 * U) + t;
 
-    Nvfp4Chunk32 A[U], B[U];
+    ifn_cuda_nvfp4_chunk32 A[U], B[U];
     #pragma unroll
     for (int u = 0; u < U; ++u) {
         int c = c_base + 4 * u;
-        if (la) A[u] = load_nvfp4_chunk32(w_data + (size_t)ra * CB, w_scales + (size_t)ra * SB, c);
+        if (la) A[u] = ifn_cuda_load_nvfp4_chunk32(w_data + (size_t)ra * CB, w_scales + (size_t)ra * SB, c);
         else { A[u].q = make_uint4(0, 0, 0, 0); A[u].s = 0; }
-        if (lb) B[u] = load_nvfp4_chunk32(w_data + (size_t)rb * CB, w_scales + (size_t)rb * SB, c);
+        if (lb) B[u] = ifn_cuda_load_nvfp4_chunk32(w_data + (size_t)rb * CB, w_scales + (size_t)rb * SB, c);
         else { B[u].q = make_uint4(0, 0, 0, 0); B[u].s = 0; }
     }
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     uint32_t xw[U][16];
     const bool lx = (g < B_CONST);
-    const __half* xg = lx ? (x_h + (size_t)g * HIDDEN) : nullptr;
+    const __half* xg = lx ? (x_h + (size_t)g * IFN_CUDA_HIDDEN) : nullptr;
     #pragma unroll
     for (int u = 0; u < U; ++u) {
         int col = (c_base + 4 * u) * 32;
         if (lx) {
             #pragma unroll
             for (int v = 0; v < 4; ++v) {
-                uint4 q = ld_dep_u4(xg + col + 8 * v);
+                uint4 q = ifn_cuda_ld_dep_u4(xg + col + 8 * v);
                 xw[u][4 * v + 0] = q.x; xw[u][4 * v + 1] = q.y;
                 xw[u][4 * v + 2] = q.z; xw[u][4 * v + 3] = q.w;
             }
@@ -528,11 +529,11 @@ qkvrg_fused_nvfp4_mma_kernel(
     #pragma unroll
     for (int u = 0; u < U; ++u) {
         uint32_t a[16], b[16];
-        decode_nvfp4_chunk32_f16(A[u], a);
-        decode_nvfp4_chunk32_f16(B[u], b);
+        ifn_cuda_decode_nvfp4_chunk32_f16(A[u], a);
+        ifn_cuda_decode_nvfp4_chunk32_f16(B[u], b);
         #pragma unroll
         for (int i = 0; i < 8; ++i) {
-            mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+            ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                  a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                  xw[u][2 * i] ^ dep, xw[u][2 * i + 1],
                                  d[0], d[1], d[2], d[3]);
@@ -565,7 +566,7 @@ qkvrg_fused_nvfp4_mma_kernel(
 
 template <bool ADD_RES, int ITERS>
 __global__ void __launch_bounds__(128)
-linear_fp8_b1_pdl_kernel(
+ifn_cuda_linear_fp8_b1_pdl_kernel(
     const uint8_t* __restrict__ w_data,
     const float* __restrict__ row_scales,
     const __half* __restrict__ x_h,
@@ -582,24 +583,24 @@ linear_fp8_b1_pdl_kernel(
     // Prefetch first 3 weight chunks before PDL wait to overlap predecessor tail
     uint4 w_pre[3];
     #pragma unroll
-    for (int p = 0; p < 3; ++p) w_pre[p] = ld_stream_u4(w_row + lane + p * 16);
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    for (int p = 0; p < 3; ++p) w_pre[p] = ifn_cuda_ld_stream_u4(w_row + lane + p * 16);
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     float acc = 0.0f;
     #pragma unroll
     for (int iter = 0; iter < ITERS; ++iter) {
-        uint4 w16 = (iter < 3) ? w_pre[iter] : ld_stream_u4(w_row + lane + iter * 16);
+        uint4 w16 = (iter < 3) ? w_pre[iter] : ifn_cuda_ld_stream_u4(w_row + lane + iter * 16);
         int koff = (lane + iter * 16) << 4;
-        uint4 xv0 = ld_dep_u4(x_h + koff);
-        uint4 xv1 = ld_dep_u4(x_h + koff + 8);
+        uint4 xv0 = ifn_cuda_ld_dep_u4(x_h + koff);
+        uint4 xv1 = ifn_cuda_ld_dep_u4(x_h + koff + 8);
         const __half2* xb0 = reinterpret_cast<const __half2*>(&xv0);
         const __half2* xb1 = reinterpret_cast<const __half2*>(&xv1);
         const uint32_t ws[4] = {w16.x, w16.y, w16.z, w16.w};
         #pragma unroll
         for (int j = 0; j < 2; ++j) {
-            float2 wf0 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[j] & 0xFFFFu)));
-            float2 wf1 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[j] >> 16)));
+            float2 wf0 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[j] & 0xFFFFu)));
+            float2 wf1 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[j] >> 16)));
             float2 xf0 = __half22float2(xb0[2 * j + 0]);
             float2 xf1 = __half22float2(xb0[2 * j + 1]);
             acc = fmaf(wf0.x, xf0.x, acc); acc = fmaf(wf0.y, xf0.y, acc);
@@ -607,15 +608,15 @@ linear_fp8_b1_pdl_kernel(
         }
         #pragma unroll
         for (int j = 0; j < 2; ++j) {
-            float2 wf0 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] & 0xFFFFu)));
-            float2 wf1 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] >> 16)));
+            float2 wf0 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] & 0xFFFFu)));
+            float2 wf1 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] >> 16)));
             float2 xf0 = __half22float2(xb1[2 * j + 0]);
             float2 xf1 = __half22float2(xb1[2 * j + 1]);
             acc = fmaf(wf0.x, xf0.x, acc); acc = fmaf(wf0.y, xf0.y, acc);
             acc = fmaf(wf1.x, xf1.x, acc); acc = fmaf(wf1.y, xf1.y, acc);
         }
     }
-    float s = half_warp_sum(acc) * rscale;
+    float s = ifn_cuda_half_warp_sum(acc) * rscale;
     if (lane == 0) {
         if constexpr (ADD_RES) y[row] += s;
         else                   y[row] = s;
@@ -623,7 +624,7 @@ linear_fp8_b1_pdl_kernel(
 }
 
 __global__ void __launch_bounds__(128)
-qkvrg_fused_fp8_b1_pdl_kernel(
+ifn_cuda_qkvrg_fused_fp8_b1_pdl_kernel(
     const uint8_t* __restrict__ wq_d, const float* __restrict__ wq_rs,
     const uint8_t* __restrict__ wk_d, const float* __restrict__ wk_rs,
     const uint8_t* __restrict__ wv_d, const float* __restrict__ wv_rs,
@@ -634,8 +635,8 @@ qkvrg_fused_fp8_b1_pdl_kernel(
     float* __restrict__ y_k,
     float* __restrict__ y_v,
     uint32_t zero) {
-    constexpr int N_Q = Q_DIM + R_DIM + Q_DIM + NUM_HEADS; // 6552
-    constexpr int N_K = KV_DIM;                            // 1024
+    constexpr int N_Q = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS; // 6552
+    constexpr int N_K = IFN_CUDA_KV_DIM;                            // 1024
     constexpr int N_TOT = N_Q + 2 * N_K;                   // 8600
 
     int hw = threadIdx.x >> 4;
@@ -656,29 +657,29 @@ qkvrg_fused_fp8_b1_pdl_kernel(
         w_data = wv_d; rscales = wv_rs; x_h = xv_h; y_out = y_v; row = g_row - (N_Q + N_K);
     }
 
-    const uint4* w_row = reinterpret_cast<const uint4*>(w_data + (size_t)row * HIDDEN);
+    const uint4* w_row = reinterpret_cast<const uint4*>(w_data + (size_t)row * IFN_CUDA_HIDDEN);
     float rscale = rscales[row];
 
     uint4 w_pre[3];
     #pragma unroll
-    for (int p = 0; p < 3; ++p) w_pre[p] = ld_stream_u4(w_row + lane + p * 16);
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    for (int p = 0; p < 3; ++p) w_pre[p] = ifn_cuda_ld_stream_u4(w_row + lane + p * 16);
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     float acc = 0.0f;
     #pragma unroll
     for (int iter = 0; iter < 9; ++iter) {
-        uint4 w16 = (iter < 3) ? w_pre[iter] : ld_stream_u4(w_row + lane + iter * 16);
+        uint4 w16 = (iter < 3) ? w_pre[iter] : ifn_cuda_ld_stream_u4(w_row + lane + iter * 16);
         int koff = (lane + iter * 16) << 4;
-        uint4 xv0 = ld_dep_u4(x_h + koff);
-        uint4 xv1 = ld_dep_u4(x_h + koff + 8);
+        uint4 xv0 = ifn_cuda_ld_dep_u4(x_h + koff);
+        uint4 xv1 = ifn_cuda_ld_dep_u4(x_h + koff + 8);
         const __half2* xb0 = reinterpret_cast<const __half2*>(&xv0);
         const __half2* xb1 = reinterpret_cast<const __half2*>(&xv1);
         const uint32_t ws[4] = {w16.x, w16.y, w16.z, w16.w};
         #pragma unroll
         for (int j = 0; j < 2; ++j) {
-            float2 wf0 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[j] & 0xFFFFu)));
-            float2 wf1 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[j] >> 16)));
+            float2 wf0 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[j] & 0xFFFFu)));
+            float2 wf1 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[j] >> 16)));
             float2 xf0 = __half22float2(xb0[2 * j + 0]);
             float2 xf1 = __half22float2(xb0[2 * j + 1]);
             acc = fmaf(wf0.x, xf0.x, acc); acc = fmaf(wf0.y, xf0.y, acc);
@@ -686,21 +687,21 @@ qkvrg_fused_fp8_b1_pdl_kernel(
         }
         #pragma unroll
         for (int j = 0; j < 2; ++j) {
-            float2 wf0 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] & 0xFFFFu)));
-            float2 wf1 = __half22float2(cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] >> 16)));
+            float2 wf0 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] & 0xFFFFu)));
+            float2 wf1 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(ws[2 + j] >> 16)));
             float2 xf0 = __half22float2(xb1[2 * j + 0]);
             float2 xf1 = __half22float2(xb1[2 * j + 1]);
             acc = fmaf(wf0.x, xf0.x, acc); acc = fmaf(wf0.y, xf0.y, acc);
             acc = fmaf(wf1.x, xf1.x, acc); acc = fmaf(wf1.y, xf1.y, acc);
         }
     }
-    float s = half_warp_sum(acc) * rscale;
+    float s = ifn_cuda_half_warp_sum(acc) * rscale;
     if (lane == 0) y_out[row] = s;
 }
 
 template <int B_CONST, bool ADD_RES, int K_DIM, int SPLITK>
 __global__ void __launch_bounds__(SPLITK * 32)
-linear_fp8_mma_kernel(
+ifn_cuda_linear_fp8_mma_kernel(
     const uint8_t* __restrict__ w_data,
     const float* __restrict__ row_scales,
     const __half* __restrict__ x_h,
@@ -721,24 +722,24 @@ linear_fp8_mma_kernel(
     const bool lx = (g < B_CONST);
     const __half* xg = lx ? (x_h + (size_t)g * K_DIM) : nullptr;
 
-    Fp8Chunk32 A_cur, B_cur;
-    if (la) A_cur = load_fp8_chunk32(w_data + (size_t)ra * K_DIM, c_warp);
+    ifn_cuda_fp8_chunk32 A_cur, B_cur;
+    if (la) A_cur = ifn_cuda_load_fp8_chunk32(w_data + (size_t)ra * K_DIM, c_warp);
     else { A_cur.q0 = make_uint4(0, 0, 0, 0); A_cur.q1 = make_uint4(0, 0, 0, 0); }
-    if (lb) B_cur = load_fp8_chunk32(w_data + (size_t)rb * K_DIM, c_warp);
+    if (lb) B_cur = ifn_cuda_load_fp8_chunk32(w_data + (size_t)rb * K_DIM, c_warp);
     else { B_cur.q0 = make_uint4(0, 0, 0, 0); B_cur.q1 = make_uint4(0, 0, 0, 0); }
 
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     float d[4] = {0.f, 0.f, 0.f, 0.f};
     #pragma unroll
     for (int u = 0; u < TOTAL_U; ++u) {
-        Fp8Chunk32 A_nxt, B_nxt;
+        ifn_cuda_fp8_chunk32 A_nxt, B_nxt;
         if (u + 1 < TOTAL_U) {
             int c_nxt = c_warp + 4 * (u + 1);
-            if (la) A_nxt = load_fp8_chunk32(w_data + (size_t)ra * K_DIM, c_nxt);
+            if (la) A_nxt = ifn_cuda_load_fp8_chunk32(w_data + (size_t)ra * K_DIM, c_nxt);
             else { A_nxt.q0 = make_uint4(0, 0, 0, 0); A_nxt.q1 = make_uint4(0, 0, 0, 0); }
-            if (lb) B_nxt = load_fp8_chunk32(w_data + (size_t)rb * K_DIM, c_nxt);
+            if (lb) B_nxt = ifn_cuda_load_fp8_chunk32(w_data + (size_t)rb * K_DIM, c_nxt);
             else { B_nxt.q0 = make_uint4(0, 0, 0, 0); B_nxt.q1 = make_uint4(0, 0, 0, 0); }
         }
         uint32_t xw[16];
@@ -746,7 +747,7 @@ linear_fp8_mma_kernel(
         if (lx) {
             #pragma unroll
             for (int v = 0; v < 4; ++v) {
-                uint4 q = ld_dep_u4(xg + col + 8 * v);
+                uint4 q = ifn_cuda_ld_dep_u4(xg + col + 8 * v);
                 xw[4 * v + 0] = q.x; xw[4 * v + 1] = q.y;
                 xw[4 * v + 2] = q.z; xw[4 * v + 3] = q.w;
             }
@@ -756,11 +757,11 @@ linear_fp8_mma_kernel(
         }
         uint32_t dep = (A_cur.q0.x ^ A_cur.q1.w ^ B_cur.q0.x ^ B_cur.q1.w ^ xw[0]) & zero;
         uint32_t a[16], b[16];
-        decode_fp8_chunk32_f16(A_cur, a);
-        decode_fp8_chunk32_f16(B_cur, b);
+        ifn_cuda_decode_fp8_chunk32_f16(A_cur, a);
+        ifn_cuda_decode_fp8_chunk32_f16(B_cur, b);
         #pragma unroll
         for (int i = 0; i < 8; ++i) {
-            mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+            ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                  a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                  xw[2 * i] ^ dep, xw[2 * i + 1],
                                  d[0], d[1], d[2], d[3]);
@@ -791,7 +792,7 @@ linear_fp8_mma_kernel(
 
 template <int B_CONST>
 __global__ void __launch_bounds__(192)
-qkvrg_fused_fp8_mma_kernel(
+ifn_cuda_qkvrg_fused_fp8_mma_kernel(
     const uint8_t* __restrict__ wq_d, const float* __restrict__ wq_rs,
     const uint8_t* __restrict__ wk_d, const float* __restrict__ wk_rs,
     const uint8_t* __restrict__ wv_d, const float* __restrict__ wv_rs,
@@ -802,9 +803,9 @@ qkvrg_fused_fp8_mma_kernel(
     float* __restrict__ y_k,
     float* __restrict__ y_v,
     uint32_t zero) {
-    constexpr int N_Q = Q_DIM + R_DIM + Q_DIM + NUM_HEADS; // 6552 -> 410 tiles of 16
+    constexpr int N_Q = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS; // 6552 -> 410 tiles of 16
     constexpr int T_Q = (N_Q + 15) / 16;                   // 410
-    constexpr int T_K = KV_DIM / 16;                       // 64
+    constexpr int T_K = IFN_CUDA_KV_DIM / 16;                       // 64
     constexpr int SPLITK = 6;
     constexpr int TOTAL_U = 3;                             // 6 * 3 * 128 = 2304 EXACT!
     __shared__ float cs[SPLITK][16][8];
@@ -818,9 +819,9 @@ qkvrg_fused_fp8_mma_kernel(
     if (blk < T_Q) {
         w_data = wq_d; rscales = wq_rs; x_h = xq_h; y_out = y_qrgs; r0 = blk * 16; N_out = N_Q;
     } else if (blk < T_Q + T_K) {
-        w_data = wk_d; rscales = wk_rs; x_h = xk_h; y_out = y_k; r0 = (blk - T_Q) * 16; N_out = KV_DIM;
+        w_data = wk_d; rscales = wk_rs; x_h = xk_h; y_out = y_k; r0 = (blk - T_Q) * 16; N_out = IFN_CUDA_KV_DIM;
     } else {
-        w_data = wv_d; rscales = wv_rs; x_h = xv_h; y_out = y_v; r0 = (blk - T_Q - T_K) * 16; N_out = KV_DIM;
+        w_data = wv_d; rscales = wv_rs; x_h = xv_h; y_out = y_v; r0 = (blk - T_Q - T_K) * 16; N_out = IFN_CUDA_KV_DIM;
     }
 
     const int warp = threadIdx.x >> 5;
@@ -831,26 +832,26 @@ qkvrg_fused_fp8_mma_kernel(
     const bool la = (ra < N_out), lb = (rb < N_out);
     const int c_base = warp * (4 * TOTAL_U) + t;
     const bool lx = (g < B_CONST);
-    const __half* xg = lx ? (x_h + (size_t)g * HIDDEN) : nullptr;
+    const __half* xg = lx ? (x_h + (size_t)g * IFN_CUDA_HIDDEN) : nullptr;
 
-    Fp8Chunk32 A_cur, B_cur;
-    if (la) A_cur = load_fp8_chunk32(w_data + (size_t)ra * HIDDEN, c_base);
+    ifn_cuda_fp8_chunk32 A_cur, B_cur;
+    if (la) A_cur = ifn_cuda_load_fp8_chunk32(w_data + (size_t)ra * IFN_CUDA_HIDDEN, c_base);
     else { A_cur.q0 = make_uint4(0, 0, 0, 0); A_cur.q1 = make_uint4(0, 0, 0, 0); }
-    if (lb) B_cur = load_fp8_chunk32(w_data + (size_t)rb * HIDDEN, c_base);
+    if (lb) B_cur = ifn_cuda_load_fp8_chunk32(w_data + (size_t)rb * IFN_CUDA_HIDDEN, c_base);
     else { B_cur.q0 = make_uint4(0, 0, 0, 0); B_cur.q1 = make_uint4(0, 0, 0, 0); }
 
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
     float d[4] = {0.f, 0.f, 0.f, 0.f};
     #pragma unroll
     for (int u = 0; u < TOTAL_U; ++u) {
-        Fp8Chunk32 A_nxt, B_nxt;
+        ifn_cuda_fp8_chunk32 A_nxt, B_nxt;
         if (u + 1 < TOTAL_U) {
             int c_nxt = c_base + 4 * (u + 1);
-            if (la) A_nxt = load_fp8_chunk32(w_data + (size_t)ra * HIDDEN, c_nxt);
+            if (la) A_nxt = ifn_cuda_load_fp8_chunk32(w_data + (size_t)ra * IFN_CUDA_HIDDEN, c_nxt);
             else { A_nxt.q0 = make_uint4(0, 0, 0, 0); A_nxt.q1 = make_uint4(0, 0, 0, 0); }
-            if (lb) B_nxt = load_fp8_chunk32(w_data + (size_t)rb * HIDDEN, c_nxt);
+            if (lb) B_nxt = ifn_cuda_load_fp8_chunk32(w_data + (size_t)rb * IFN_CUDA_HIDDEN, c_nxt);
             else { B_nxt.q0 = make_uint4(0, 0, 0, 0); B_nxt.q1 = make_uint4(0, 0, 0, 0); }
         }
         uint32_t xw[16];
@@ -858,7 +859,7 @@ qkvrg_fused_fp8_mma_kernel(
         if (lx) {
             #pragma unroll
             for (int v = 0; v < 4; ++v) {
-                uint4 q = ld_dep_u4(xg + col + 8 * v);
+                uint4 q = ifn_cuda_ld_dep_u4(xg + col + 8 * v);
                 xw[4 * v + 0] = q.x; xw[4 * v + 1] = q.y;
                 xw[4 * v + 2] = q.z; xw[4 * v + 3] = q.w;
             }
@@ -868,11 +869,11 @@ qkvrg_fused_fp8_mma_kernel(
         }
         uint32_t dep = (A_cur.q0.x ^ A_cur.q1.w ^ B_cur.q0.x ^ B_cur.q1.w ^ xw[0]) & zero;
         uint32_t a[16], b[16];
-        decode_fp8_chunk32_f16(A_cur, a);
-        decode_fp8_chunk32_f16(B_cur, b);
+        ifn_cuda_decode_fp8_chunk32_f16(A_cur, a);
+        ifn_cuda_decode_fp8_chunk32_f16(B_cur, b);
         #pragma unroll
         for (int i = 0; i < 8; ++i) {
-            mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+            ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                  a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                  xw[2 * i] ^ dep, xw[2 * i + 1],
                                  d[0], d[1], d[2], d[3]);
@@ -901,7 +902,7 @@ qkvrg_fused_fp8_mma_kernel(
 
 template <int B_CONST, bool ADD_RES>
 __global__ void __launch_bounds__(128)
-linear_fp8_h_kernel(
+ifn_cuda_linear_fp8_h_kernel(
     const uint8_t* __restrict__ w_data,
     const float* __restrict__ row_scales,
     const __half* __restrict__ x_h,
@@ -923,14 +924,14 @@ linear_fp8_h_kernel(
     for (int v = lane; v < n_vec16; v += 32) {
         uint4 w16 = __ldg(w_row + v);
         __half2 wh[8];
-        wh[0] = cvt_e4m3x2_to_half2(uint16_t(w16.x & 0xFFFFu));
-        wh[1] = cvt_e4m3x2_to_half2(uint16_t(w16.x >> 16));
-        wh[2] = cvt_e4m3x2_to_half2(uint16_t(w16.y & 0xFFFFu));
-        wh[3] = cvt_e4m3x2_to_half2(uint16_t(w16.y >> 16));
-        wh[4] = cvt_e4m3x2_to_half2(uint16_t(w16.z & 0xFFFFu));
-        wh[5] = cvt_e4m3x2_to_half2(uint16_t(w16.z >> 16));
-        wh[6] = cvt_e4m3x2_to_half2(uint16_t(w16.w & 0xFFFFu));
-        wh[7] = cvt_e4m3x2_to_half2(uint16_t(w16.w >> 16));
+        wh[0] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.x & 0xFFFFu));
+        wh[1] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.x >> 16));
+        wh[2] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.y & 0xFFFFu));
+        wh[3] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.y >> 16));
+        wh[4] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.z & 0xFFFFu));
+        wh[5] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.z >> 16));
+        wh[6] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.w & 0xFFFFu));
+        wh[7] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.w >> 16));
 
         int koff = v << 4;
         float2 wf[8];
@@ -958,7 +959,7 @@ linear_fp8_h_kernel(
     }
     #pragma unroll
     for (int b = 0; b < B_CONST; ++b) {
-        float s = warp_sum(acc[b]) * rscale;
+        float s = ifn_cuda_warp_sum(acc[b]) * rscale;
         if (lane == 0) {
             if constexpr (ADD_RES) y[(size_t)b * N + row] += s;
             else                   y[(size_t)b * N + row] = s;
@@ -968,7 +969,7 @@ linear_fp8_h_kernel(
 
 template <int B_CONST, bool ADD_RES>
 __global__ void __launch_bounds__(128)
-linear_bf16_nosmem_t_kernel(
+ifn_cuda_linear_bf16_nosmem_t_kernel(
     const __nv_bfloat16* __restrict__ w_data,
     const float* __restrict__ x,
     float* __restrict__ y,
@@ -1005,7 +1006,7 @@ linear_bf16_nosmem_t_kernel(
     }
     #pragma unroll
     for (int b = 0; b < B_CONST; ++b) {
-        float s = warp_sum(acc[b]);
+        float s = ifn_cuda_warp_sum(acc[b]);
         if (lane == 0) {
             if constexpr (ADD_RES) y[(size_t)b * N + row] += s;
             else                   y[(size_t)b * N + row] = s;
@@ -1015,7 +1016,7 @@ linear_bf16_nosmem_t_kernel(
 
 template <int B_CONST, bool ADD_RES>
 __global__ void __launch_bounds__(128)
-linear_nvfp4_f32_kernel(
+ifn_cuda_linear_nvfp4_f32_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float global_scale,
@@ -1038,10 +1039,10 @@ linear_nvfp4_f32_kernel(
 
     for (int blk = lane; blk < n_blocks16; blk += 32) {
         uint2 w8 = __ldg(w_row + blk);
-        float sc = cvt_e4m3_to_float(__ldg(s_row + blk));
+        float sc = ifn_cuda_cvt_e4m3_to_float(__ldg(s_row + blk));
         __half2 wh[8];
-        cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
-        cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
+        ifn_cuda_cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
         int koff = blk << 4;
         #pragma unroll
         for (int b = 0; b < B_CONST; ++b) {
@@ -1061,7 +1062,7 @@ linear_nvfp4_f32_kernel(
     }
     #pragma unroll
     for (int b = 0; b < B_CONST; ++b) {
-        float s = warp_sum(acc[b]) * global_scale;
+        float s = ifn_cuda_warp_sum(acc[b]) * global_scale;
         if (lane == 0) {
             if constexpr (ADD_RES) y[(size_t)b * N + row] += s;
             else                   y[(size_t)b * N + row] = s;
@@ -1071,7 +1072,7 @@ linear_nvfp4_f32_kernel(
 
 template <int B_CONST, bool ADD_RES>
 __global__ void __launch_bounds__(128)
-linear_fp8_f32_kernel(
+ifn_cuda_linear_fp8_f32_kernel(
     const uint8_t* __restrict__ w_data,
     const float* __restrict__ row_scales,
     const float* __restrict__ x,
@@ -1093,14 +1094,14 @@ linear_fp8_f32_kernel(
     for (int v = lane; v < n_vec16; v += 32) {
         uint4 w16 = __ldg(w_row + v);
         __half2 wh[8];
-        wh[0] = cvt_e4m3x2_to_half2(uint16_t(w16.x & 0xFFFFu));
-        wh[1] = cvt_e4m3x2_to_half2(uint16_t(w16.x >> 16));
-        wh[2] = cvt_e4m3x2_to_half2(uint16_t(w16.y & 0xFFFFu));
-        wh[3] = cvt_e4m3x2_to_half2(uint16_t(w16.y >> 16));
-        wh[4] = cvt_e4m3x2_to_half2(uint16_t(w16.z & 0xFFFFu));
-        wh[5] = cvt_e4m3x2_to_half2(uint16_t(w16.z >> 16));
-        wh[6] = cvt_e4m3x2_to_half2(uint16_t(w16.w & 0xFFFFu));
-        wh[7] = cvt_e4m3x2_to_half2(uint16_t(w16.w >> 16));
+        wh[0] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.x & 0xFFFFu));
+        wh[1] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.x >> 16));
+        wh[2] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.y & 0xFFFFu));
+        wh[3] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.y >> 16));
+        wh[4] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.z & 0xFFFFu));
+        wh[5] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.z >> 16));
+        wh[6] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.w & 0xFFFFu));
+        wh[7] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.w >> 16));
         int koff = v << 4;
         float2 wf[8];
         #pragma unroll
@@ -1121,7 +1122,7 @@ linear_fp8_f32_kernel(
     }
     #pragma unroll
     for (int b = 0; b < B_CONST; ++b) {
-        float s = warp_sum(acc[b]) * rscale;
+        float s = ifn_cuda_warp_sum(acc[b]) * rscale;
         if (lane == 0) {
             if constexpr (ADD_RES) y[(size_t)b * N + row] += s;
             else                   y[(size_t)b * N + row] = s;
@@ -1130,67 +1131,67 @@ linear_fp8_f32_kernel(
 }
 
 template <int B_CONST>
-static void dispatch_linear_b(
-    const LinearWeight& w, const float* x, float* y, bool add_res, cudaStream_t stream) {
+static void ifn_cuda_dispatch_linear_b(
+    const ifn_cuda_linear_weight& w, const float* x, float* y, bool add_res, cudaStream_t stream) {
     int grid = (w.rows + 3) / 4;
-    if (w.kind == WeightKind::NVFP4) {
-        if (add_res) linear_nvfp4_f32_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
+    if (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) {
+        if (add_res) ifn_cuda_linear_nvfp4_f32_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x, y, w.rows, w.cols);
-        else linear_nvfp4_f32_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
+        else ifn_cuda_linear_nvfp4_f32_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x, y, w.rows, w.cols);
-    } else if (w.kind == WeightKind::FP8) {
-        if (add_res) linear_fp8_f32_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
+    } else if (w.kind == ifn_cuda_weight_kind::IFN_CUDA_FP8) {
+        if (add_res) ifn_cuda_linear_fp8_f32_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.row_scales, x, y, w.rows, w.cols);
-        else linear_fp8_f32_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
+        else ifn_cuda_linear_fp8_f32_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.row_scales, x, y, w.rows, w.cols);
     } else {
-        if (add_res) linear_bf16_nosmem_t_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
+        if (add_res) ifn_cuda_linear_bf16_nosmem_t_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
             static_cast<const __nv_bfloat16*>(w.data), x, y, w.rows, w.cols);
-        else linear_bf16_nosmem_t_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
+        else ifn_cuda_linear_bf16_nosmem_t_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
             static_cast<const __nv_bfloat16*>(w.data), x, y, w.rows, w.cols);
     }
 }
 
 template <int B_CONST>
-static void dispatch_linear_h_b(
-    const LinearWeight& w, const __half* x_h, float* y, bool add_res, cudaStream_t stream) {
-    if (w.kind == WeightKind::NVFP4) {
+static void ifn_cuda_dispatch_linear_h_b(
+    const ifn_cuda_linear_weight& w, const __half* x_h, float* y, bool add_res, cudaStream_t stream) {
+    if (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) {
         if constexpr (B_CONST == 1) {
             if (w.cols == 3072) {
                 int grid = (w.rows + 7) / 8;
-                if (add_res) launch_pdl(linear_nvfp4_b1_pdl_kernel<true, 12>, dim3(grid), 128, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_b1_pdl_kernel<true, 12>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols, 0u);
-                else launch_pdl(linear_nvfp4_b1_pdl_kernel<false, 12>, dim3(grid), 128, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_b1_pdl_kernel<false, 12>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols, 0u);
                 return;
             } else if (w.cols == 2304) {
                 int grid = (w.rows + 7) / 8;
-                if (add_res) launch_pdl(linear_nvfp4_b1_pdl_kernel<true, 9>, dim3(grid), 128, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_b1_pdl_kernel<true, 9>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols, 0u);
-                else launch_pdl(linear_nvfp4_b1_pdl_kernel<false, 9>, dim3(grid), 128, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_b1_pdl_kernel<false, 9>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols, 0u);
                 return;
             }
         } else {
             if (w.cols == 3072) {
                 int grid = (w.rows + 15) / 16;
-                if (add_res) launch_pdl(linear_nvfp4_mma_kernel<B_CONST, true, 3072, 8>, dim3(grid), 256, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_mma_kernel<B_CONST, true, 3072, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, 0u);
-                else launch_pdl(linear_nvfp4_mma_kernel<B_CONST, false, 3072, 8>, dim3(grid), 256, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_mma_kernel<B_CONST, false, 3072, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, 0u);
                 return;
             } else if (w.cols == 2304) {
                 int grid = (w.rows + 15) / 16;
-                if (add_res) launch_pdl(linear_nvfp4_mma_kernel<B_CONST, true, 2304, 6>, dim3(grid), 192, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_mma_kernel<B_CONST, true, 2304, 6>, dim3(grid), 192, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, 0u);
-                else launch_pdl(linear_nvfp4_mma_kernel<B_CONST, false, 2304, 6>, dim3(grid), 192, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_mma_kernel<B_CONST, false, 2304, 6>, dim3(grid), 192, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, 0u);
                 return;
             } else if (w.cols == 9216) {
                 int grid = (w.rows + 15) / 16;
-                if (add_res) launch_pdl(linear_nvfp4_mma_kernel<B_CONST, true, 9216, 8>, dim3(grid), 256, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_mma_kernel<B_CONST, true, 9216, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, 0u);
-                else launch_pdl(linear_nvfp4_mma_kernel<B_CONST, false, 9216, 8>, dim3(grid), 256, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_nvfp4_mma_kernel<B_CONST, false, 9216, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, 0u);
                 return;
             }
@@ -1198,62 +1199,62 @@ static void dispatch_linear_h_b(
         bool use_half_warp = (((w.cols >> 4) & 31) != 0);
         if (use_half_warp) {
             int grid = (w.rows + 7) / 8;
-            if (add_res) linear_nvfp4_h_kernel<B_CONST, true, 16><<<grid, 128, 0, stream>>>(
+            if (add_res) ifn_cuda_linear_nvfp4_h_kernel<B_CONST, true, 16><<<grid, 128, 0, stream>>>(
                 static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols);
-            else linear_nvfp4_h_kernel<B_CONST, false, 16><<<grid, 128, 0, stream>>>(
+            else ifn_cuda_linear_nvfp4_h_kernel<B_CONST, false, 16><<<grid, 128, 0, stream>>>(
                 static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols);
         } else {
             int grid = (w.rows + 3) / 4;
-            if (add_res) linear_nvfp4_h_kernel<B_CONST, true, 32><<<grid, 128, 0, stream>>>(
+            if (add_res) ifn_cuda_linear_nvfp4_h_kernel<B_CONST, true, 32><<<grid, 128, 0, stream>>>(
                 static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols);
-            else linear_nvfp4_h_kernel<B_CONST, false, 32><<<grid, 128, 0, stream>>>(
+            else ifn_cuda_linear_nvfp4_h_kernel<B_CONST, false, 32><<<grid, 128, 0, stream>>>(
                 static_cast<const uint8_t*>(w.data), w.scales, w.global_scale, x_h, y, w.rows, w.cols);
         }
-    } else if (w.kind == WeightKind::FP8) {
+    } else if (w.kind == ifn_cuda_weight_kind::IFN_CUDA_FP8) {
         if constexpr (B_CONST == 1) {
             if (w.cols == 3072) {
                 int grid = (w.rows + 7) / 8;
-                if (add_res) launch_pdl(linear_fp8_b1_pdl_kernel<true, 12>, dim3(grid), 128, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_b1_pdl_kernel<true, 12>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, w.cols, 0u);
-                else launch_pdl(linear_fp8_b1_pdl_kernel<false, 12>, dim3(grid), 128, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_b1_pdl_kernel<false, 12>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, w.cols, 0u);
                 return;
             } else if (w.cols == 2304) {
                 int grid = (w.rows + 7) / 8;
-                if (add_res) launch_pdl(linear_fp8_b1_pdl_kernel<true, 9>, dim3(grid), 128, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_b1_pdl_kernel<true, 9>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, w.cols, 0u);
-                else launch_pdl(linear_fp8_b1_pdl_kernel<false, 9>, dim3(grid), 128, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_b1_pdl_kernel<false, 9>, dim3(grid), 128, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, w.cols, 0u);
                 return;
             }
         } else {
             if (w.cols == 3072) {
                 int grid = (w.rows + 15) / 16;
-                if (add_res) launch_pdl(linear_fp8_mma_kernel<B_CONST, true, 3072, 8>, dim3(grid), 256, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_mma_kernel<B_CONST, true, 3072, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, 0u);
-                else launch_pdl(linear_fp8_mma_kernel<B_CONST, false, 3072, 8>, dim3(grid), 256, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_mma_kernel<B_CONST, false, 3072, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, 0u);
                 return;
             } else if (w.cols == 2304) {
                 int grid = (w.rows + 15) / 16;
-                if (add_res) launch_pdl(linear_fp8_mma_kernel<B_CONST, true, 2304, 6>, dim3(grid), 192, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_mma_kernel<B_CONST, true, 2304, 6>, dim3(grid), 192, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, 0u);
-                else launch_pdl(linear_fp8_mma_kernel<B_CONST, false, 2304, 6>, dim3(grid), 192, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_mma_kernel<B_CONST, false, 2304, 6>, dim3(grid), 192, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, 0u);
                 return;
             } else if (w.cols == 9216) {
                 int grid = (w.rows + 15) / 16;
-                if (add_res) launch_pdl(linear_fp8_mma_kernel<B_CONST, true, 9216, 8>, dim3(grid), 256, stream,
+                if (add_res) ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_mma_kernel<B_CONST, true, 9216, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, 0u);
-                else launch_pdl(linear_fp8_mma_kernel<B_CONST, false, 9216, 8>, dim3(grid), 256, stream,
+                else ifn_cuda_launch_pdl(ifn_cuda_linear_fp8_mma_kernel<B_CONST, false, 9216, 8>, dim3(grid), 256, stream,
                     static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, 0u);
                 return;
             }
         }
         int grid = (w.rows + 3) / 4;
-        if (add_res) linear_fp8_h_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
+        if (add_res) ifn_cuda_linear_fp8_h_kernel<B_CONST, true><<<grid, 128, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, w.cols);
-        else linear_fp8_h_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
+        else ifn_cuda_linear_fp8_h_kernel<B_CONST, false><<<grid, 128, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.row_scales, x_h, y, w.rows, w.cols);
     }
 }
@@ -1262,11 +1263,11 @@ static void dispatch_linear_h_b(
 // Fused LM Head + Softcap(30) + GPU Argmax (HALF-WARP NVFP4 -> 0% tail waste!)
 // ============================================================================
 
-constexpr int LM_HEAD_BLOCKS = 680;
+constexpr int IFN_CUDA_LM_HEAD_BLOCKS = 680;
 
 template <int B_CONST, int KIND>
 __global__ void __launch_bounds__(256)
-lm_head_stage1_kernel(
+ifn_cuda_lm_head_stage1_kernel(
     const void* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     const float* __restrict__ row_scales,
@@ -1275,22 +1276,22 @@ lm_head_stage1_kernel(
     float* __restrict__ out_logits,
     float* __restrict__ blk_max_val,
     int32_t* __restrict__ blk_max_idx,
-    const SampleConfig* __restrict__ sample_cfg,
+    const ifn_cuda_sample_config* __restrict__ sample_cfg,
     int V) {
     const bool write_logits = (out_logits != nullptr) && (sample_cfg == nullptr || sample_cfg->inv_temp != 0.0f);
-    __shared__ uint16_t s_x16[B_CONST * HIDDEN];
+    __shared__ uint16_t s_x16[B_CONST * IFN_CUDA_HIDDEN];
     int tid = threadIdx.x;
-    int total_x = B_CONST * HIDDEN;
-    pdl_wait();
-    pdl_trigger();
+    int total_x = B_CONST * IFN_CUDA_HIDDEN;
+    ifn_cuda_pdl_wait();
+    ifn_cuda_pdl_trigger();
     if constexpr (KIND == 0) {
         for (int i = tid; i < total_x; i += 256) {
-            __nv_bfloat16 bv = __float2bfloat16(ld_dep_f32(x + i));
+            __nv_bfloat16 bv = __float2bfloat16(ifn_cuda_ld_dep_f32(x + i));
             s_x16[i] = *reinterpret_cast<uint16_t*>(&bv);
         }
     } else {
         for (int i = tid; i < total_x; i += 256) {
-            __half hv = __float2half(ld_dep_f32(x + i));
+            __half hv = __float2half(ifn_cuda_ld_dep_f32(x + i));
             s_x16[i] = *reinterpret_cast<uint16_t*>(&hv);
         }
     }
@@ -1317,20 +1318,20 @@ lm_head_stage1_kernel(
 
         if constexpr (KIND == 2) {
             const uint2* wr = reinterpret_cast<const uint2*>(
-                static_cast<const uint8_t*>(w_data) + (size_t)row * (HIDDEN >> 1));
-            const uint8_t* sr = w_scales + (size_t)row * (HIDDEN >> 4);
+                static_cast<const uint8_t*>(w_data) + (size_t)row * (IFN_CUDA_HIDDEN >> 1));
+            const uint8_t* sr = w_scales + (size_t)row * (IFN_CUDA_HIDDEN >> 4);
             #pragma unroll
             for (int iter = 0; iter < 9; ++iter) {
                 int blk = lane + iter * 16;
                 uint2 w8 = __ldg(wr + blk);
-                float sc = cvt_e4m3_to_float(__ldg(sr + blk));
+                float sc = ifn_cuda_cvt_e4m3_to_float(__ldg(sr + blk));
                 __half2 wh[8];
-                cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
-                cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
+                ifn_cuda_cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
+                ifn_cuda_cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
                 int koff = blk << 4;
                 #pragma unroll
                 for (int b = 0; b < B_CONST; ++b) {
-                    const __half2* xb = reinterpret_cast<const __half2*>(s_xh + b * HIDDEN + koff);
+                    const __half2* xb = reinterpret_cast<const __half2*>(s_xh + b * IFN_CUDA_HIDDEN + koff);
                     __half2 p0 = __hmul2(wh[0], xb[0]), p1 = __hmul2(wh[1], xb[1]);
                     p0 = __hfma2(wh[2], xb[2], p0); p1 = __hfma2(wh[3], xb[3], p1);
                     p0 = __hfma2(wh[4], xb[4], p0); p1 = __hfma2(wh[5], xb[5], p1);
@@ -1341,26 +1342,26 @@ lm_head_stage1_kernel(
             }
         } else if constexpr (KIND == 1) {
             const uint4* wr = reinterpret_cast<const uint4*>(
-                static_cast<const uint8_t*>(w_data) + (size_t)row * HIDDEN);
-            constexpr int NVEC = HIDDEN >> 4;
+                static_cast<const uint8_t*>(w_data) + (size_t)row * IFN_CUDA_HIDDEN);
+            constexpr int NVEC = IFN_CUDA_HIDDEN >> 4;
             for (int v = lane; v < NVEC; v += 32) {
                 uint4 w16 = __ldg(wr + v);
                 __half2 wh[8];
-                wh[0] = cvt_e4m3x2_to_half2(uint16_t(w16.x & 0xFFFFu));
-                wh[1] = cvt_e4m3x2_to_half2(uint16_t(w16.x >> 16));
-                wh[2] = cvt_e4m3x2_to_half2(uint16_t(w16.y & 0xFFFFu));
-                wh[3] = cvt_e4m3x2_to_half2(uint16_t(w16.y >> 16));
-                wh[4] = cvt_e4m3x2_to_half2(uint16_t(w16.z & 0xFFFFu));
-                wh[5] = cvt_e4m3x2_to_half2(uint16_t(w16.z >> 16));
-                wh[6] = cvt_e4m3x2_to_half2(uint16_t(w16.w & 0xFFFFu));
-                wh[7] = cvt_e4m3x2_to_half2(uint16_t(w16.w >> 16));
+                wh[0] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.x & 0xFFFFu));
+                wh[1] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.x >> 16));
+                wh[2] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.y & 0xFFFFu));
+                wh[3] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.y >> 16));
+                wh[4] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.z & 0xFFFFu));
+                wh[5] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.z >> 16));
+                wh[6] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.w & 0xFFFFu));
+                wh[7] = ifn_cuda_cvt_e4m3x2_to_half2(uint16_t(w16.w >> 16));
                 int koff = v << 4;
                 float2 wf[8];
                 #pragma unroll
                 for (int j = 0; j < 8; ++j) wf[j] = __half22float2(wh[j]);
                 #pragma unroll
                 for (int b = 0; b < B_CONST; ++b) {
-                    const __half2* xb = reinterpret_cast<const __half2*>(s_xh + b * HIDDEN + koff);
+                    const __half2* xb = reinterpret_cast<const __half2*>(s_xh + b * IFN_CUDA_HIDDEN + koff);
                     #pragma unroll
                     for (int j = 0; j < 8; ++j) {
                         float2 xf = __half22float2(xb[j]);
@@ -1371,8 +1372,8 @@ lm_head_stage1_kernel(
             }
         } else {
             const uint4* wr = reinterpret_cast<const uint4*>(
-                static_cast<const __nv_bfloat16*>(w_data) + (size_t)row * HIDDEN);
-            constexpr int NVEC = HIDDEN >> 3;
+                static_cast<const __nv_bfloat16*>(w_data) + (size_t)row * IFN_CUDA_HIDDEN);
+            constexpr int NVEC = IFN_CUDA_HIDDEN >> 3;
             for (int v = lane; v < NVEC; v += 32) {
                 uint4 w8 = __ldg(wr + v);
                 const __nv_bfloat162* wb = reinterpret_cast<const __nv_bfloat162*>(&w8);
@@ -1381,7 +1382,7 @@ lm_head_stage1_kernel(
                 int koff = v << 3;
                 #pragma unroll
                 for (int b = 0; b < B_CONST; ++b) {
-                    uint4 x8 = *reinterpret_cast<const uint4*>(s_xbf + b * HIDDEN + koff);
+                    uint4 x8 = *reinterpret_cast<const uint4*>(s_xbf + b * IFN_CUDA_HIDDEN + koff);
                     const __nv_bfloat162* xbf = reinterpret_cast<const __nv_bfloat162*>(&x8);
                     float2 xf0 = __bfloat1622float2(xbf[0]), xf1 = __bfloat1622float2(xbf[1]);
                     float2 xf2 = __bfloat1622float2(xbf[2]), xf3 = __bfloat1622float2(xbf[3]);
@@ -1396,10 +1397,10 @@ lm_head_stage1_kernel(
         float scale = (KIND == 2) ? global_scale : ((KIND == 1) ? row_scales[row] : 1.0f);
         #pragma unroll
         for (int b = 0; b < B_CONST; ++b) {
-            float val = ((TPR == 16) ? half_warp_sum(acc[b]) : warp_sum(acc[b])) * scale;
+            float val = ((TPR == 16) ? ifn_cuda_half_warp_sum(acc[b]) : ifn_cuda_warp_sum(acc[b])) * scale;
             if (lane == 0) {
                 if (write_logits) {
-                    float cap_val = fast_tanh(val * (1.0f / FINAL_SOFTCAP)) * FINAL_SOFTCAP;
+                    float cap_val = ifn_cuda_fast_tanh(val * (1.0f / IFN_CUDA_FINAL_SOFTCAP)) * IFN_CUDA_FINAL_SOFTCAP;
                     out_logits[(size_t)b * V + row] = cap_val;
                     if (cap_val > best_val[b]) { best_val[b] = cap_val; best_idx[b] = row; }
                 } else {
@@ -1423,15 +1424,15 @@ lm_head_stage1_kernel(
         for (int w = 1; w < RPB; ++w) {
             if (sm_val[b][w] > bv || (sm_val[b][w] == bv && sm_idx[b][w] < bi)) { bv = sm_val[b][w]; bi = sm_idx[b][w]; }
         }
-        blk_max_val[b * LM_HEAD_BLOCKS + blockIdx.x] = bv;
-        blk_max_idx[b * LM_HEAD_BLOCKS + blockIdx.x] = bi;
+        blk_max_val[b * IFN_CUDA_LM_HEAD_BLOCKS + blockIdx.x] = bv;
+        blk_max_idx[b * IFN_CUDA_LM_HEAD_BLOCKS + blockIdx.x] = bi;
     }
 }
 
 // B=2..8 Tensor Core NVFP4 LM Head Stage 1 (680 persistent CTAs, 6 warps = 192 threads, mma.m16n8k16)!
 template <int B_CONST>
 __global__ void __launch_bounds__(192)
-lm_head_nvfp4_mma_stage1_kernel(
+ifn_cuda_lm_head_nvfp4_mma_stage1_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float global_scale,
@@ -1439,14 +1440,14 @@ lm_head_nvfp4_mma_stage1_kernel(
     float* __restrict__ out_logits,
     float* __restrict__ blk_max_val,
     int32_t* __restrict__ blk_max_idx,
-    const SampleConfig* __restrict__ sample_cfg,
+    const ifn_cuda_sample_config* __restrict__ sample_cfg,
     int V, uint32_t zero) {
     const bool write_logits = (out_logits != nullptr) && (sample_cfg == nullptr || sample_cfg->inv_temp != 0.0f);
     constexpr int SPLITK = 6;
     constexpr int U = 3; // 6 * 3 * 128 = 2304
-    constexpr int CB = HIDDEN >> 1;
-    constexpr int SB = HIDDEN >> 4;
-    __shared__ __half s_xh[B_CONST][HIDDEN];
+    constexpr int CB = IFN_CUDA_HIDDEN >> 1;
+    constexpr int SB = IFN_CUDA_HIDDEN >> 4;
+    __shared__ __half s_xh[B_CONST][IFN_CUDA_HIDDEN];
     __shared__ float cs[SPLITK][16][8];
 
     const int tid = threadIdx.x;
@@ -1456,12 +1457,12 @@ lm_head_nvfp4_mma_stage1_kernel(
     const int t = lane & 3;
     const int c_base = warp * (4 * U) + t;
 
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
-    int total_x = B_CONST * HIDDEN;
+    int total_x = B_CONST * IFN_CUDA_HIDDEN;
     for (int i = tid; i < total_x; i += 192) {
-        s_xh[i / HIDDEN][i % HIDDEN] = __float2half(ld_dep_f32(x + i));
+        s_xh[i / IFN_CUDA_HIDDEN][i % IFN_CUDA_HIDDEN] = __float2half(ifn_cuda_ld_dep_f32(x + i));
     }
     __syncthreads();
 
@@ -1495,13 +1496,13 @@ lm_head_nvfp4_mma_stage1_kernel(
         int ra = r0 + g, rb = r0 + g + 8;
         bool la = (ra < V), lb = (rb < V);
 
-        Nvfp4Chunk32 A[U], B[U];
+        ifn_cuda_nvfp4_chunk32 A[U], B[U];
         #pragma unroll
         for (int u = 0; u < U; ++u) {
             int c = c_base + 4 * u;
-            if (la) A[u] = load_nvfp4_chunk32(w_data + (size_t)ra * CB, w_scales + (size_t)ra * SB, c);
+            if (la) A[u] = ifn_cuda_load_nvfp4_chunk32(w_data + (size_t)ra * CB, w_scales + (size_t)ra * SB, c);
             else { A[u].q = make_uint4(0, 0, 0, 0); A[u].s = 0; }
-            if (lb) B[u] = load_nvfp4_chunk32(w_data + (size_t)rb * CB, w_scales + (size_t)rb * SB, c);
+            if (lb) B[u] = ifn_cuda_load_nvfp4_chunk32(w_data + (size_t)rb * CB, w_scales + (size_t)rb * SB, c);
             else { B[u].q = make_uint4(0, 0, 0, 0); B[u].s = 0; }
         }
         uint32_t dep = 0;
@@ -1513,11 +1514,11 @@ lm_head_nvfp4_mma_stage1_kernel(
         #pragma unroll
         for (int u = 0; u < U; ++u) {
             uint32_t a[16], b[16];
-            decode_nvfp4_chunk32_f16(A[u], a);
-            decode_nvfp4_chunk32_f16(B[u], b);
+            ifn_cuda_decode_nvfp4_chunk32_f16(A[u], a);
+            ifn_cuda_decode_nvfp4_chunk32_f16(B[u], b);
             #pragma unroll
             for (int i = 0; i < 8; ++i) {
-                mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+                ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                      a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                      xw[u][2 * i] ^ dep, xw[u][2 * i + 1],
                                      d[0], d[1], d[2], d[3]);
@@ -1538,7 +1539,7 @@ lm_head_nvfp4_mma_stage1_kernel(
                             + cs[3][tid][b] + cs[4][tid][b] + cs[5][tid][b];
                     float val = s * global_scale;
                     if (write_logits) {
-                        float cap_val = fast_tanh(val * (1.0f / FINAL_SOFTCAP)) * FINAL_SOFTCAP;
+                        float cap_val = ifn_cuda_fast_tanh(val * (1.0f / IFN_CUDA_FINAL_SOFTCAP)) * IFN_CUDA_FINAL_SOFTCAP;
                         out_logits[(size_t)b * V + row] = cap_val;
                         if (cap_val > best_val[b] || (cap_val == best_val[b] && row < best_idx[b])) {
                             best_val[b] = cap_val; best_idx[b] = row;
@@ -1566,8 +1567,8 @@ lm_head_nvfp4_mma_stage1_kernel(
                 if (ov > bv || (ov == bv && oi < bi)) { bv = ov; bi = oi; }
             }
             if (tid == 0) {
-                blk_max_val[b * LM_HEAD_BLOCKS + blockIdx.x] = bv;
-                blk_max_idx[b * LM_HEAD_BLOCKS + blockIdx.x] = bi;
+                blk_max_val[b * IFN_CUDA_LM_HEAD_BLOCKS + blockIdx.x] = bv;
+                blk_max_idx[b * IFN_CUDA_LM_HEAD_BLOCKS + blockIdx.x] = bi;
             }
         }
     }
@@ -1576,19 +1577,19 @@ lm_head_nvfp4_mma_stage1_kernel(
 // Persistent Blackwell Tensor Core (mma.m16n8k16.f32.f16) + PDL FP8 LM Head for B = 2..8!
 template <int B_CONST>
 __global__ void __launch_bounds__(192)
-lm_head_fp8_mma_stage1_kernel(
+ifn_cuda_lm_head_fp8_mma_stage1_kernel(
     const uint8_t* __restrict__ w_data,
     const float* __restrict__ row_scales,
     const float* __restrict__ x,
     float* __restrict__ out_logits,
     float* __restrict__ blk_max_val,
     int32_t* __restrict__ blk_max_idx,
-    const SampleConfig* __restrict__ sample_cfg,
+    const ifn_cuda_sample_config* __restrict__ sample_cfg,
     int V, uint32_t zero) {
     const bool write_logits = (out_logits != nullptr) && (sample_cfg == nullptr || sample_cfg->inv_temp != 0.0f);
     constexpr int SPLITK = 6;
     constexpr int U = 3; // 6 * 3 * 128 = 2304
-    __shared__ __half s_xh[B_CONST][HIDDEN];
+    __shared__ __half s_xh[B_CONST][IFN_CUDA_HIDDEN];
     __shared__ float cs[SPLITK][16][8];
 
     const int tid = threadIdx.x;
@@ -1598,12 +1599,12 @@ lm_head_fp8_mma_stage1_kernel(
     const int t = lane & 3;
     const int c_base = warp * (4 * U) + t;
 
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
-    int total_x = B_CONST * HIDDEN;
+    int total_x = B_CONST * IFN_CUDA_HIDDEN;
     for (int i = tid; i < total_x; i += 192) {
-        s_xh[i / HIDDEN][i % HIDDEN] = __float2half(ld_dep_f32(x + i));
+        s_xh[i / IFN_CUDA_HIDDEN][i % IFN_CUDA_HIDDEN] = __float2half(ifn_cuda_ld_dep_f32(x + i));
     }
     __syncthreads();
 
@@ -1641,18 +1642,18 @@ lm_head_fp8_mma_stage1_kernel(
         #pragma unroll
         for (int u = 0; u < U; ++u) {
             int c = c_base + 4 * u;
-            Fp8Chunk32 Ac, Bc;
-            if (la) Ac = load_fp8_chunk32(w_data + (size_t)ra * HIDDEN, c);
+            ifn_cuda_fp8_chunk32 Ac, Bc;
+            if (la) Ac = ifn_cuda_load_fp8_chunk32(w_data + (size_t)ra * IFN_CUDA_HIDDEN, c);
             else { Ac.q0 = make_uint4(0, 0, 0, 0); Ac.q1 = make_uint4(0, 0, 0, 0); }
-            if (lb) Bc = load_fp8_chunk32(w_data + (size_t)rb * HIDDEN, c);
+            if (lb) Bc = ifn_cuda_load_fp8_chunk32(w_data + (size_t)rb * IFN_CUDA_HIDDEN, c);
             else { Bc.q0 = make_uint4(0, 0, 0, 0); Bc.q1 = make_uint4(0, 0, 0, 0); }
             uint32_t dep = (Ac.q0.x ^ Ac.q1.w ^ Bc.q0.x ^ Bc.q1.w) & zero;
             uint32_t a[16], b[16];
-            decode_fp8_chunk32_f16(Ac, a);
-            decode_fp8_chunk32_f16(Bc, b);
+            ifn_cuda_decode_fp8_chunk32_f16(Ac, a);
+            ifn_cuda_decode_fp8_chunk32_f16(Bc, b);
             #pragma unroll
             for (int i = 0; i < 8; ++i) {
-                mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+                ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                      a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                      xw[u][2 * i] ^ dep, xw[u][2 * i + 1],
                                      d[0], d[1], d[2], d[3]);
@@ -1674,7 +1675,7 @@ lm_head_fp8_mma_stage1_kernel(
                             + cs[3][tid][b] + cs[4][tid][b] + cs[5][tid][b];
                     float val = s * rscale;
                     if (write_logits) {
-                        float cap_val = fast_tanh(val * (1.0f / FINAL_SOFTCAP)) * FINAL_SOFTCAP;
+                        float cap_val = ifn_cuda_fast_tanh(val * (1.0f / IFN_CUDA_FINAL_SOFTCAP)) * IFN_CUDA_FINAL_SOFTCAP;
                         out_logits[(size_t)b * V + row] = cap_val;
                         if (cap_val > best_val[b] || (cap_val == best_val[b] && row < best_idx[b])) {
                             best_val[b] = cap_val; best_idx[b] = row;
@@ -1702,19 +1703,19 @@ lm_head_fp8_mma_stage1_kernel(
                 if (ov > bv || (ov == bv && oi < bi)) { bv = ov; bi = oi; }
             }
             if (tid == 0) {
-                blk_max_val[b * LM_HEAD_BLOCKS + blockIdx.x] = bv;
-                blk_max_idx[b * LM_HEAD_BLOCKS + blockIdx.x] = bi;
+                blk_max_val[b * IFN_CUDA_LM_HEAD_BLOCKS + blockIdx.x] = bv;
+                blk_max_idx[b * IFN_CUDA_LM_HEAD_BLOCKS + blockIdx.x] = bi;
             }
         }
     }
 }
 
-__global__ void lm_head_stage2_argmax_kernel(
+__global__ void ifn_cuda_lm_head_stage2_argmax_kernel(
     const float* __restrict__ blk_max_val,
     const int32_t* __restrict__ blk_max_idx,
     const float* __restrict__ out_logits,
     int32_t* __restrict__ out_tokens,
-    const SampleConfig* __restrict__ sample_cfg,
+    const ifn_cuda_sample_config* __restrict__ sample_cfg,
     const int32_t* __restrict__ d_pos,
     const int32_t* __restrict__ d_draft_tokens,
     const float* __restrict__ d_draft_probs,
@@ -1724,15 +1725,15 @@ __global__ void lm_head_stage2_argmax_kernel(
     int draft_vocab_size,
     int V,
     int B) {
-    pdl_wait_fenced(0u);
+    ifn_cuda_pdl_wait_fenced(0u);
     int b = blockIdx.x;
     if (b >= B) return;
     int tid = threadIdx.x;
     float bv = -1e30f;
     int32_t bi = 0;
-    for (int i = tid; i < LM_HEAD_BLOCKS; i += 256) {
-        float v = ld_dep_f32(blk_max_val + b * LM_HEAD_BLOCKS + i);
-        int32_t idx = blk_max_idx[b * LM_HEAD_BLOCKS + i];
+    for (int i = tid; i < IFN_CUDA_LM_HEAD_BLOCKS; i += 256) {
+        float v = ifn_cuda_ld_dep_f32(blk_max_val + b * IFN_CUDA_LM_HEAD_BLOCKS + i);
+        int32_t idx = blk_max_idx[b * IFN_CUDA_LM_HEAD_BLOCKS + i];
         if (v > bv || (v == bv && idx < bi)) { bv = v; bi = idx; }
     }
     #pragma unroll
@@ -1796,7 +1797,7 @@ __global__ void lm_head_stage2_argmax_kernel(
         __syncthreads();
 
         for (int row = tid; row < V; row += 256) {
-            float d = (max_logit - ld_dep_f32(logits + row)) * inv_temp;
+            float d = (max_logit - ifn_cuda_ld_dep_f32(logits + row)) * inv_temp;
             if (d < HIST_RANGE) {
                 int bin = (int)(d * HIST_SCALE);
                 if (bin < 0) bin = 0;
@@ -1839,10 +1840,10 @@ __global__ void lm_head_stage2_argmax_kernel(
     if (d_draft_tokens != nullptr && b < B - 1) {
         float local_z = 0.0f;
         for (int row = tid; row < V; row += 256) {
-            float l = ld_dep_f32(logits + row);
+            float l = ifn_cuda_ld_dep_f32(logits + row);
             if (l >= tau) local_z += __expf((l - max_logit) * inv_temp);
         }
-        local_z = warp_sum(local_z);
+        local_z = ifn_cuda_warp_sum(local_z);
         if ((tid & 31) == 0) sv[tid >> 5] = local_z;
         __syncthreads();
         if (tid == 0) {
@@ -1854,10 +1855,10 @@ __global__ void lm_head_stage2_argmax_kernel(
             s_draft_tok = x;
             int32_t is_d = (d_draft_is_delta != nullptr && *d_draft_is_delta != 0) ? 1 : 0;
             s_is_delta = is_d;
-            float lx = (x >= 0 && x < V) ? ld_dep_f32(logits + x) : -1e30f;
+            float lx = (x >= 0 && x < V) ? ifn_cuda_ld_dep_f32(logits + x) : -1e30f;
             float px = (lx >= tau) ? (__expf((lx - max_logit) * inv_temp) * inv_z) : 0.0f;
             float qx = is_d ? 1.0f : (d_draft_q_sel ? d_draft_q_sel[b] : 1.0f);
-            float u_acc = hash_u01(seed ^ 0x517CC1B727220A95ULL, pos, 0x5A5A5A5A);
+            float u_acc = ifn_cuda_hash_u01(seed ^ 0x517CC1B727220A95ULL, pos, 0x5A5A5A5A);
             int32_t acc = (px > 0.0f && (qx <= 0.0f || (u_acc * qx <= px))) ? 1 : 0;
             s_accept = acc;
             if (acc) out_tokens[b] = x;
@@ -1872,7 +1873,7 @@ __global__ void lm_head_stage2_argmax_kernel(
         float best_s = -1e30f;
         int32_t best_t = -1;
         for (int row = tid; row < V; row += 256) {
-            float l = ld_dep_f32(logits + row);
+            float l = ifn_cuda_ld_dep_f32(logits + row);
             if (l >= tau) {
                 float pv = __expf((l - max_logit) * inv_temp) * inv_z;
                 float qv = 0.0f;
@@ -1886,7 +1887,7 @@ __global__ void lm_head_stage2_argmax_kernel(
                 }
                 float diff = pv - qv;
                 if (diff > 0.0f) {
-                    float sc = __logf(diff) + hash_gumbel(seed, pos, row);
+                    float sc = __logf(diff) + ifn_cuda_hash_gumbel(seed, pos, row);
                     if (sc > best_s) { best_s = sc; best_t = row; }
                 }
             }
@@ -1915,9 +1916,9 @@ __global__ void lm_head_stage2_argmax_kernel(
     float best_s = -1e30f;
     int32_t best_t = greedy_idx;
     for (int row = tid; row < V; row += 256) {
-        float l = ld_dep_f32(logits + row);
+        float l = ifn_cuda_ld_dep_f32(logits + row);
         if (l >= tau) {
-            float sc = (l - max_logit) * inv_temp + hash_gumbel(seed, pos, row);
+            float sc = (l - max_logit) * inv_temp + ifn_cuda_hash_gumbel(seed, pos, row);
             if (sc > best_s) { best_s = sc; best_t = row; }
         }
     }
@@ -1942,19 +1943,19 @@ __global__ void lm_head_stage2_argmax_kernel(
 // ZERO-SMEM, ZERO-SPILL MoE Expert Kernels (B=1 AND B=2..8 Specialized Grouped!)
 // ============================================================================
 
-__global__ void build_expert_groups_kernel(
+__global__ void ifn_cuda_build_expert_groups_kernel(
     const int32_t* __restrict__ route_ids,
     const float* __restrict__ route_w,
-    ExpertGroups* __restrict__ g,
+    ifn_cuda_expert_groups* __restrict__ g,
     int B) {
     if (threadIdx.x != 0) return;
     int n_uniq = 0;
-    int exp_to_u[NUM_EXPERTS];
-    for (int e = 0; e < NUM_EXPERTS; ++e) exp_to_u[e] = -1;
+    int exp_to_u[IFN_CUDA_NUM_EXPERTS];
+    for (int e = 0; e < IFN_CUDA_NUM_EXPERTS; ++e) exp_to_u[e] = -1;
     for (int b = 0; b < B; ++b) {
-        for (int s = 0; s < TOP_K; ++s) {
-            int e = route_ids[b * TOP_K + s];
-            float rw = route_w[b * TOP_K + s];
+        for (int s = 0; s < IFN_CUDA_TOP_K; ++s) {
+            int e = route_ids[b * IFN_CUDA_TOP_K + s];
+            float rw = route_w[b * IFN_CUDA_TOP_K + s];
             int u = exp_to_u[e];
             if (u < 0) {
                 u = n_uniq++;
@@ -1976,38 +1977,38 @@ __global__ void build_expert_groups_kernel(
 // Adapted from satellitedown/inkling-2-mini-abliterated-ingine (Apache-2.0).
 // ============================================================================
 
-constexpr int MOE_TILE = 16;
-constexpr int MOE_MAXM = 8;
-constexpr int MOE_UP_WARPS = HIDDEN / 128;         // 18 warps (576 threads)
-constexpr int MOE_DOWN_GROUPS = INTERMEDIATE / 128; // 9 column groups
-constexpr int MOE_DOWN_PAR = 2;                     // 2 experts per round
-constexpr int MOE_DOWN_WARPS = MOE_DOWN_GROUPS * MOE_DOWN_PAR; // 18 warps (576 threads)
+constexpr int IFN_CUDA_MOE_TILE = 16;
+constexpr int IFN_CUDA_MOE_MAXM = 8;
+constexpr int IFN_CUDA_MOE_UP_WARPS = IFN_CUDA_HIDDEN / 128;         // 18 warps (576 threads)
+constexpr int IFN_CUDA_MOE_DOWN_GROUPS = IFN_CUDA_INTERMEDIATE / 128; // 9 column groups
+constexpr int IFN_CUDA_MOE_DOWN_PAR = 2;                     // 2 experts per round
+constexpr int IFN_CUDA_MOE_DOWN_WARPS = IFN_CUDA_MOE_DOWN_GROUPS * IFN_CUDA_MOE_DOWN_PAR; // 18 warps (576 threads)
 
 template <int FMT> struct MoeFrag;
-template <> struct MoeFrag<0> { Nvfp4Chunk32 r0, r1; uint32_t x[16]; };
-template <> struct MoeFrag<1> { Mxfp8Chunk32 r0, r1; uint32_t x[16]; };
+template <> struct MoeFrag<0> { ifn_cuda_nvfp4_chunk32 r0, r1; uint32_t x[16]; };
+template <> struct MoeFrag<1> { ifn_cuda_mxfp8_chunk32 r0, r1; uint32_t x[16]; };
 
 template <int FMT, int K>
-__device__ __forceinline__ void moe_load_w(
+__device__ __forceinline__ void ifn_cuda_moe_load_w(
     MoeFrag<FMT>& f, const uint8_t* codes, const uint8_t* scales, int c) {
     if constexpr (FMT == 0) {
         constexpr int CB = K >> 1, SB = K >> 4;
-        f.r0 = load_nvfp4_chunk32(codes, scales, c);
-        f.r1 = load_nvfp4_chunk32(codes + 8 * CB, scales + 8 * SB, c);
+        f.r0 = ifn_cuda_load_nvfp4_chunk32(codes, scales, c);
+        f.r1 = ifn_cuda_load_nvfp4_chunk32(codes + 8 * CB, scales + 8 * SB, c);
     } else {
         constexpr int CB = K, SB = K >> 5;
-        f.r0 = load_mxfp8_chunk32(codes, scales, c);
-        f.r1 = load_mxfp8_chunk32(codes + 8 * CB, scales + 8 * SB, c);
+        f.r0 = ifn_cuda_load_mxfp8_chunk32(codes, scales, c);
+        f.r1 = ifn_cuda_load_mxfp8_chunk32(codes + 8 * CB, scales + 8 * SB, c);
     }
 }
 
 template <int FMT>
-__device__ __forceinline__ void moe_load_x(MoeFrag<FMT>& f, const __half* xrow, int c) {
+__device__ __forceinline__ void ifn_cuda_moe_load_x(MoeFrag<FMT>& f, const __half* xrow, int c) {
     if (xrow) {
         const __half* xp = xrow + c * 32;
         #pragma unroll
         for (int v = 0; v < 4; ++v) {
-            uint4 q = ld_dep_u4(xp + v * 8);
+            uint4 q = ifn_cuda_ld_dep_u4(xp + v * 8);
             if constexpr (FMT == 0) {
                 f.x[4 * v + 0] = q.x; f.x[4 * v + 1] = q.y;
                 f.x[4 * v + 2] = q.z; f.x[4 * v + 3] = q.w;
@@ -2016,7 +2017,7 @@ __device__ __forceinline__ void moe_load_x(MoeFrag<FMT>& f, const __half* xrow, 
                 #pragma unroll
                 for (int j = 0; j < 4; ++j) {
                     float2 fv = __half22float2(*reinterpret_cast<const __half2*>(&ws[j]));
-                    f.x[4 * v + j] = pack_bf16x2(fv.x, fv.y);
+                    f.x[4 * v + j] = ifn_cuda_pack_bf16x2(fv.x, fv.y);
                 }
             }
         }
@@ -2027,24 +2028,24 @@ __device__ __forceinline__ void moe_load_x(MoeFrag<FMT>& f, const __half* xrow, 
 }
 
 template <int FMT>
-__device__ __forceinline__ void moe_mma_frag(const MoeFrag<FMT>& f, float (&d)[4]) {
+__device__ __forceinline__ void ifn_cuda_moe_mma_frag(const MoeFrag<FMT>& f, float (&d)[4]) {
     uint32_t a[16], b[16];
     if constexpr (FMT == 0) {
-        decode_nvfp4_chunk32_f16(f.r0, a);
-        decode_nvfp4_chunk32_f16(f.r1, b);
+        ifn_cuda_decode_nvfp4_chunk32_f16(f.r0, a);
+        ifn_cuda_decode_nvfp4_chunk32_f16(f.r1, b);
         #pragma unroll
         for (int i = 0; i < 8; ++i) {
-            mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+            ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                  a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                  f.x[2 * i], f.x[2 * i + 1],
                                  d[0], d[1], d[2], d[3]);
         }
     } else {
-        decode_mxfp8_chunk32_bf16(f.r0, a);
-        decode_mxfp8_chunk32_bf16(f.r1, b);
+        ifn_cuda_decode_mxfp8_chunk32_bf16(f.r0, a);
+        ifn_cuda_decode_mxfp8_chunk32_bf16(f.r1, b);
         #pragma unroll
         for (int i = 0; i < 8; ++i) {
-            mma_m16n8k16_f32_bf16(d[0], d[1], d[2], d[3],
+            ifn_cuda_mma_m16n8k16_f32_bf16(d[0], d[1], d[2], d[3],
                                   a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                   f.x[2 * i], f.x[2 * i + 1],
                                   d[0], d[1], d[2], d[3]);
@@ -2052,15 +2053,15 @@ __device__ __forceinline__ void moe_mma_frag(const MoeFrag<FMT>& f, float (&d)[4
     }
 }
 
-__device__ __forceinline__ uint64_t moe_slot_mask(int e, int lo, int hi) {
+__device__ __forceinline__ uint64_t ifn_cuda_moe_slot_mask(int e, int lo, int hi) {
     uint32_t m0 = __ballot_sync(0xffffffffu, lo == e);
     uint32_t m1 = __ballot_sync(0xffffffffu, hi == e);
     return uint64_t(m0) | (uint64_t(m1) << 32);
 }
 
 template <int FMT>
-__global__ void __launch_bounds__(MOE_UP_WARPS * 32)
-moe_up_tc_kernel(
+__global__ void __launch_bounds__(IFN_CUDA_MOE_UP_WARPS * 32)
+ifn_cuda_moe_up_tc_kernel(
     const __half* __restrict__ x_h,
     const int32_t* __restrict__ idx,
     const uint8_t* __restrict__ w,
@@ -2068,12 +2069,12 @@ moe_up_tc_kernel(
     const float* __restrict__ wfactor,
     int M,
     __half* __restrict__ out_act_h) {
-    constexpr int K = HIDDEN;
-    constexpr int R = 2 * INTERMEDIATE;
+    constexpr int K = IFN_CUDA_HIDDEN;
+    constexpr int R = 2 * IFN_CUDA_INTERMEDIATE;
     constexpr int CB = (FMT == 0) ? (K >> 1) : K;
     constexpr int SB = (FMT == 0) ? (K >> 4) : (K >> 5);
-    __shared__ float red[MOE_UP_WARPS][32][4];
-    __shared__ float tile_out[MOE_TILE][MOE_MAXM + 1];
+    __shared__ float red[IFN_CUDA_MOE_UP_WARPS][32][4];
+    __shared__ float tile_out[IFN_CUDA_MOE_TILE][IFN_CUDA_MOE_MAXM + 1];
 
     const int lane = threadIdx.x & 31;
     const int warp = threadIdx.x >> 5;
@@ -2081,24 +2082,24 @@ moe_up_tc_kernel(
     const int t = lane & 3;
     const int tile = blockIdx.x;
     const int slot = blockIdx.y;
-    const int nslots = M * TOP_K;
+    const int nslots = M * IFN_CUDA_TOP_K;
 
-    pdl_wait();
-    pdl_trigger();
+    ifn_cuda_pdl_wait();
+    ifn_cuda_pdl_trigger();
 
-    const int lo = (lane < nslots) ? ld_dep_i32(idx + lane) : -1;
-    const int hi = (lane + 32 < nslots) ? ld_dep_i32(idx + lane + 32) : -1;
-    const int e = ld_dep_i32(idx + slot);
-    const uint64_t mask = moe_slot_mask(e, lo, hi);
+    const int lo = (lane < nslots) ? ifn_cuda_ld_dep_i32(idx + lane) : -1;
+    const int hi = (lane + 32 < nslots) ? ifn_cuda_ld_dep_i32(idx + lane + 32) : -1;
+    const int e = ifn_cuda_ld_dep_i32(idx + slot);
+    const uint64_t mask = ifn_cuda_moe_slot_mask(e, lo, hi);
     if (__ffsll(static_cast<long long>(mask)) - 1 != slot) return;
 
-    const size_t row = (size_t)e * R + tile * MOE_TILE + g;
+    const size_t row = (size_t)e * R + tile * IFN_CUDA_MOE_TILE + g;
     const bool on = (g < M) && (((mask >> (8 * g)) & 0xffu) != 0);
     MoeFrag<FMT> f;
-    moe_load_w<FMT, K>(f, w + row * CB, ws + row * SB, 4 * warp + t);
-    moe_load_x<FMT>(f, on ? (x_h + (size_t)g * K) : nullptr, 4 * warp + t);
+    ifn_cuda_moe_load_w<FMT, K>(f, w + row * CB, ws + row * SB, 4 * warp + t);
+    ifn_cuda_moe_load_x<FMT>(f, on ? (x_h + (size_t)g * K) : nullptr, 4 * warp + t);
     float d[4] = {0.f, 0.f, 0.f, 0.f};
-    moe_mma_frag<FMT>(f, d);
+    ifn_cuda_moe_mma_frag<FMT>(f, d);
 
     #pragma unroll
     for (int v = 0; v < 4; ++v) red[warp][lane][v] = d[v];
@@ -2107,7 +2108,7 @@ moe_up_tc_kernel(
     if (threadIdx.x < 32) {
         float s[4] = {0.f, 0.f, 0.f, 0.f};
         #pragma unroll
-        for (int ww = 0; ww < MOE_UP_WARPS; ++ww) {
+        for (int ww = 0; ww < IFN_CUDA_MOE_UP_WARPS; ++ww) {
             #pragma unroll
             for (int v = 0; v < 4; ++v) s[v] += red[ww][lane][v];
         }
@@ -2119,28 +2120,28 @@ moe_up_tc_kernel(
     }
     __syncthreads();
 
-    if (threadIdx.x < (MOE_TILE / 2) * MOE_MAXM) {
+    if (threadIdx.x < (IFN_CUDA_MOE_TILE / 2) * IFN_CUDA_MOE_MAXM) {
         const int p = threadIdx.x & 7;
         const int n = threadIdx.x >> 3;
         uint32_t kmask = (n < M) ? (uint32_t(mask >> (8 * n)) & 0xffu) : 0u;
         if (kmask) {
             const float gate = tile_out[2 * p][n];
             const float up   = tile_out[2 * p + 1][n];
-            const float g_cap = fast_tanh(gate * (1.0f / GATE_SOFTCAP)) * GATE_SOFTCAP;
-            const float u_cap = fast_tanh(up * (1.0f / UP_SOFTCAP)) * UP_SOFTCAP;
-            const __half ah = __float2half((g_cap * fast_sigmoid(gate)) * u_cap);
+            const float g_cap = ifn_cuda_fast_tanh(gate * (1.0f / IFN_CUDA_GATE_SOFTCAP)) * IFN_CUDA_GATE_SOFTCAP;
+            const float u_cap = ifn_cuda_fast_tanh(up * (1.0f / IFN_CUDA_UP_SOFTCAP)) * IFN_CUDA_UP_SOFTCAP;
+            const __half ah = __float2half((g_cap * ifn_cuda_fast_sigmoid(gate)) * u_cap);
             while (kmask) {
                 const int k = __ffs(kmask) - 1;
                 kmask &= kmask - 1;
-                out_act_h[((size_t)n * TOP_K + k) * INTERMEDIATE + tile * (MOE_TILE / 2) + p] = ah;
+                out_act_h[((size_t)n * IFN_CUDA_TOP_K + k) * IFN_CUDA_INTERMEDIATE + tile * (IFN_CUDA_MOE_TILE / 2) + p] = ah;
             }
         }
     }
 }
 
 template <int FMT>
-__global__ void __launch_bounds__(MOE_DOWN_WARPS * 32)
-moe_down_tc_kernel(
+__global__ void __launch_bounds__(IFN_CUDA_MOE_DOWN_WARPS * 32)
+ifn_cuda_moe_down_tc_kernel(
     const __half* __restrict__ act_h,
     const int32_t* __restrict__ idx,
     const float* __restrict__ wts,
@@ -2149,15 +2150,15 @@ moe_down_tc_kernel(
     const float* __restrict__ wfactor,
     int M,
     float* __restrict__ out_down) {
-    constexpr int K = INTERMEDIATE;
-    constexpr int R = HIDDEN;
+    constexpr int K = IFN_CUDA_INTERMEDIATE;
+    constexpr int R = IFN_CUDA_HIDDEN;
     constexpr int CB = (FMT == 0) ? (K >> 1) : K;
     constexpr int SB = (FMT == 0) ? (K >> 4) : (K >> 5);
-    __shared__ float part[MOE_DOWN_WARPS][32][4];
-    __shared__ float ybuf[TOP_K * MOE_MAXM][MOE_TILE][MOE_MAXM];
-    __shared__ int uexp[TOP_K * MOE_MAXM];
-    __shared__ unsigned long long umask[TOP_K * MOE_MAXM];
-    __shared__ uint8_t slot_u[TOP_K * MOE_MAXM];
+    __shared__ float part[IFN_CUDA_MOE_DOWN_WARPS][32][4];
+    __shared__ float ybuf[IFN_CUDA_TOP_K * IFN_CUDA_MOE_MAXM][IFN_CUDA_MOE_TILE][IFN_CUDA_MOE_MAXM];
+    __shared__ int uexp[IFN_CUDA_TOP_K * IFN_CUDA_MOE_MAXM];
+    __shared__ unsigned long long umask[IFN_CUDA_TOP_K * IFN_CUDA_MOE_MAXM];
+    __shared__ uint8_t slot_u[IFN_CUDA_TOP_K * IFN_CUDA_MOE_MAXM];
     __shared__ int nuniq;
 
     const int lane = threadIdx.x & 31;
@@ -2165,18 +2166,18 @@ moe_down_tc_kernel(
     const int g = lane >> 2;
     const int t = lane & 3;
     const int tile = blockIdx.x;
-    const int nslots = M * TOP_K;
+    const int nslots = M * IFN_CUDA_TOP_K;
 
     // idx was completed by router before moe_up passed its wait and triggered us!
     if (warp == 0) {
-        const int lo = (lane < nslots) ? ld_dep_i32(idx + lane) : -1;
-        const int hi = (lane + 32 < nslots) ? ld_dep_i32(idx + lane + 32) : -1;
+        const int lo = (lane < nslots) ? ifn_cuda_ld_dep_i32(idx + lane) : -1;
+        const int hi = (lane + 32 < nslots) ? ifn_cuda_ld_dep_i32(idx + lane + 32) : -1;
         uint64_t remaining = (nslots == 64) ? ~0ull : ((1ull << nslots) - 1);
         int u = 0;
         for (; remaining; ++u) {
             const int s = __ffsll(static_cast<long long>(remaining)) - 1;
             const int e = __shfl_sync(0xffffffffu, s < 32 ? lo : hi, s & 31);
-            const uint64_t mask = moe_slot_mask(e, lo, hi);
+            const uint64_t mask = ifn_cuda_moe_slot_mask(e, lo, hi);
             remaining &= ~mask;
             if (lane == 0) { uexp[u] = e; umask[u] = mask; }
             if ((mask >> lane) & 1) slot_u[lane] = uint8_t(u);
@@ -2187,49 +2188,49 @@ moe_down_tc_kernel(
     __syncthreads();
 
     const int U = nuniq;
-    const int p = warp / MOE_DOWN_GROUPS;
-    const int c = 4 * (warp % MOE_DOWN_GROUPS) + t;
+    const int p = warp / IFN_CUDA_MOE_DOWN_GROUPS;
+    const int c = 4 * (warp % IFN_CUDA_MOE_DOWN_GROUPS) + t;
 
     auto xrow = [&](int u) -> const __half* {
         const uint32_t kmask = (g < M) ? (uint32_t(umask[u] >> (8 * g)) & 0xffu) : 0u;
-        return kmask ? (act_h + ((size_t)g * TOP_K + (__ffs(kmask) - 1)) * K) : nullptr;
+        return kmask ? (act_h + ((size_t)g * IFN_CUDA_TOP_K + (__ffs(kmask) - 1)) * K) : nullptr;
     };
     auto load_w_u = [&](int u, MoeFrag<FMT>& f) {
         const int e = uexp[u];
-        const size_t row = (size_t)e * R + tile * MOE_TILE + g;
-        moe_load_w<FMT, K>(f, w + row * CB, ws + row * SB, c);
+        const size_t row = (size_t)e * R + tile * IFN_CUDA_MOE_TILE + g;
+        ifn_cuda_moe_load_w<FMT, K>(f, w + row * CB, ws + row * SB, c);
     };
 
     // Prefetch round 0 W2 weights BEFORE pdl_wait() -> hides moe_up tail completely!
     MoeFrag<FMT> nxt;
     if (p < U) load_w_u(p, nxt);
-    pdl_wait();
-    if (p < U) moe_load_x<FMT>(nxt, xrow(p), c);
+    ifn_cuda_pdl_wait();
+    if (p < U) ifn_cuda_moe_load_x<FMT>(nxt, xrow(p), c);
 
     #pragma unroll 1
-    for (int base = 0; base < U; base += MOE_DOWN_PAR) {
+    for (int base = 0; base < U; base += IFN_CUDA_MOE_DOWN_PAR) {
         const MoeFrag<FMT> cur = nxt;
         const int u = base + p;
-        if (u + MOE_DOWN_PAR < U) {
-            load_w_u(u + MOE_DOWN_PAR, nxt);
-            moe_load_x<FMT>(nxt, xrow(u + MOE_DOWN_PAR), c);
+        if (u + IFN_CUDA_MOE_DOWN_PAR < U) {
+            load_w_u(u + IFN_CUDA_MOE_DOWN_PAR, nxt);
+            ifn_cuda_moe_load_x<FMT>(nxt, xrow(u + IFN_CUDA_MOE_DOWN_PAR), c);
         }
         float d[4] = {0.f, 0.f, 0.f, 0.f};
-        if (u < U) moe_mma_frag<FMT>(cur, d);
+        if (u < U) ifn_cuda_moe_mma_frag<FMT>(cur, d);
         #pragma unroll
         for (int v = 0; v < 4; ++v) part[warp][lane][v] = d[v];
         __syncthreads();
 
-        if (threadIdx.x < MOE_DOWN_PAR * 32 && base + (threadIdx.x >> 5) < U) {
+        if (threadIdx.x < IFN_CUDA_MOE_DOWN_PAR * 32 && base + (threadIdx.x >> 5) < U) {
             const int pp = threadIdx.x >> 5;
             float s[4] = {0.f, 0.f, 0.f, 0.f};
             #pragma unroll
-            for (int j = 0; j < MOE_DOWN_GROUPS; ++j) {
+            for (int j = 0; j < IFN_CUDA_MOE_DOWN_GROUPS; ++j) {
                 #pragma unroll
-                for (int v = 0; v < 4; ++v) s[v] += part[pp * MOE_DOWN_GROUPS + j][lane][v];
+                for (int v = 0; v < 4; ++v) s[v] += part[pp * IFN_CUDA_MOE_DOWN_GROUPS + j][lane][v];
             }
             const float es = (FMT == 0) ? wfactor[uexp[base + pp]] : 1.0f;
-            float (&y)[MOE_TILE][MOE_MAXM] = ybuf[base + pp];
+            float (&y)[IFN_CUDA_MOE_TILE][IFN_CUDA_MOE_MAXM] = ybuf[base + pp];
             y[g][2 * t]         = s[0] * es;
             y[g][2 * t + 1]     = s[1] * es;
             y[g + 8][2 * t]     = s[2] * es;
@@ -2237,42 +2238,42 @@ moe_down_tc_kernel(
         }
         __syncthreads();
     }
-    pdl_trigger();
+    ifn_cuda_pdl_trigger();
 
-    if (threadIdx.x < MOE_TILE * M) {
-        const int r = threadIdx.x & (MOE_TILE - 1);
-        const int n = threadIdx.x / MOE_TILE;
+    if (threadIdx.x < IFN_CUDA_MOE_TILE * M) {
+        const int r = threadIdx.x & (IFN_CUDA_MOE_TILE - 1);
+        const int n = threadIdx.x / IFN_CUDA_MOE_TILE;
         float s = 0.f;
         #pragma unroll
-        for (int k = 0; k < TOP_K; ++k) {
-            const int sl = n * TOP_K + k;
-            s = fmaf(ld_dep_f32(wts + sl), ybuf[slot_u[sl]][r][n], s);
+        for (int k = 0; k < IFN_CUDA_TOP_K; ++k) {
+            const int sl = n * IFN_CUDA_TOP_K + k;
+            s = fmaf(ifn_cuda_ld_dep_f32(wts + sl), ybuf[slot_u[sl]][r][n], s);
         }
-        out_down[(size_t)n * HIDDEN + tile * MOE_TILE + r] = s;
+        out_down[(size_t)n * IFN_CUDA_HIDDEN + tile * IFN_CUDA_MOE_TILE + r] = s;
     }
 }
 
 } // namespace
 
-void launch_f32_to_f16(const float* src, __half* dst, int n, cudaStream_t stream) {
+void ifn_cuda_launch_f32_to_f16(const float* src, __half* dst, int n, cudaStream_t stream) {
     int threads = 256;
     int blocks = ((n + 3) / 4 + threads - 1) / threads;
-    f32_to_f16_kernel<<<blocks, threads, 0, stream>>>(src, dst, n);
+    ifn_cuda_f32_to_f16_kernel<<<blocks, threads, 0, stream>>>(src, dst, n);
 }
 
-void launch_linear(
-    const LinearWeight& w, const float* x, float* y, int B, bool add_residual, cudaStream_t stream) {
+void ifn_cuda_launch_linear(
+    const ifn_cuda_linear_weight& w, const float* x, float* y, int B, bool add_residual, cudaStream_t stream) {
     while (B > 0) {
         int chunk = (B >= 8) ? 8 : B;
         switch (chunk) {
-            case 1: dispatch_linear_b<1>(w, x, y, add_residual, stream); break;
-            case 2: dispatch_linear_b<2>(w, x, y, add_residual, stream); break;
-            case 3: dispatch_linear_b<3>(w, x, y, add_residual, stream); break;
-            case 4: dispatch_linear_b<4>(w, x, y, add_residual, stream); break;
-            case 5: dispatch_linear_b<5>(w, x, y, add_residual, stream); break;
-            case 6: dispatch_linear_b<6>(w, x, y, add_residual, stream); break;
-            case 7: dispatch_linear_b<7>(w, x, y, add_residual, stream); break;
-            case 8: dispatch_linear_b<8>(w, x, y, add_residual, stream); break;
+            case 1: ifn_cuda_dispatch_linear_b<1>(w, x, y, add_residual, stream); break;
+            case 2: ifn_cuda_dispatch_linear_b<2>(w, x, y, add_residual, stream); break;
+            case 3: ifn_cuda_dispatch_linear_b<3>(w, x, y, add_residual, stream); break;
+            case 4: ifn_cuda_dispatch_linear_b<4>(w, x, y, add_residual, stream); break;
+            case 5: ifn_cuda_dispatch_linear_b<5>(w, x, y, add_residual, stream); break;
+            case 6: ifn_cuda_dispatch_linear_b<6>(w, x, y, add_residual, stream); break;
+            case 7: ifn_cuda_dispatch_linear_b<7>(w, x, y, add_residual, stream); break;
+            case 8: ifn_cuda_dispatch_linear_b<8>(w, x, y, add_residual, stream); break;
         }
         x += (size_t)chunk * w.cols;
         y += (size_t)chunk * w.rows;
@@ -2280,37 +2281,37 @@ void launch_linear(
     }
 }
 
-void launch_linear_h(
-    const LinearWeight& w, const __half* x_h, float* y, int B, bool add_residual, cudaStream_t stream) {
+void ifn_cuda_launch_linear_h(
+    const ifn_cuda_linear_weight& w, const __half* x_h, float* y, int B, bool add_residual, cudaStream_t stream) {
     switch (B) {
-        case 1: dispatch_linear_h_b<1>(w, x_h, y, add_residual, stream); break;
-        case 2: dispatch_linear_h_b<2>(w, x_h, y, add_residual, stream); break;
-        case 3: dispatch_linear_h_b<3>(w, x_h, y, add_residual, stream); break;
-        case 4: dispatch_linear_h_b<4>(w, x_h, y, add_residual, stream); break;
-        case 5: dispatch_linear_h_b<5>(w, x_h, y, add_residual, stream); break;
-        case 6: dispatch_linear_h_b<6>(w, x_h, y, add_residual, stream); break;
-        case 7: dispatch_linear_h_b<7>(w, x_h, y, add_residual, stream); break;
-        case 8: dispatch_linear_h_b<8>(w, x_h, y, add_residual, stream); break;
+        case 1: ifn_cuda_dispatch_linear_h_b<1>(w, x_h, y, add_residual, stream); break;
+        case 2: ifn_cuda_dispatch_linear_h_b<2>(w, x_h, y, add_residual, stream); break;
+        case 3: ifn_cuda_dispatch_linear_h_b<3>(w, x_h, y, add_residual, stream); break;
+        case 4: ifn_cuda_dispatch_linear_h_b<4>(w, x_h, y, add_residual, stream); break;
+        case 5: ifn_cuda_dispatch_linear_h_b<5>(w, x_h, y, add_residual, stream); break;
+        case 6: ifn_cuda_dispatch_linear_h_b<6>(w, x_h, y, add_residual, stream); break;
+        case 7: ifn_cuda_dispatch_linear_h_b<7>(w, x_h, y, add_residual, stream); break;
+        case 8: ifn_cuda_dispatch_linear_h_b<8>(w, x_h, y, add_residual, stream); break;
     }
 }
 
 template <int B_CONST>
-static void dispatch_qkvrg_b(
-    const LayerWeights& lw, const __half* xq, const __half* xk, const __half* xv,
+static void ifn_cuda_dispatch_qkvrg_b(
+    const ifn_cuda_layer_weights& lw, const __half* xq, const __half* xk, const __half* xv,
     float* y_qrgs, float* y_k, float* y_v, cudaStream_t stream) {
-    if (lw.w_qrgs.kind == WeightKind::FP8) {
+    if (lw.w_qrgs.kind == ifn_cuda_weight_kind::IFN_CUDA_FP8) {
         if constexpr (B_CONST == 1) {
-            constexpr int N_TOT = (Q_DIM + R_DIM + Q_DIM + NUM_HEADS) + 2 * KV_DIM; // 8600
+            constexpr int N_TOT = (IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS) + 2 * IFN_CUDA_KV_DIM; // 8600
             int grid = (N_TOT + 7) / 8;
-            launch_pdl(qkvrg_fused_fp8_b1_pdl_kernel, dim3(grid), 128, stream,
+            ifn_cuda_launch_pdl(ifn_cuda_qkvrg_fused_fp8_b1_pdl_kernel, dim3(grid), 128, stream,
                 static_cast<const uint8_t*>(lw.w_qrgs.data), lw.w_qrgs.row_scales,
                 static_cast<const uint8_t*>(lw.w_k.data), lw.w_k.row_scales,
                 static_cast<const uint8_t*>(lw.w_v.data), lw.w_v.row_scales,
                 xq, xk, xv, y_qrgs, y_k, y_v, 0u);
         } else {
-            constexpr int N_Q = Q_DIM + R_DIM + Q_DIM + NUM_HEADS; // 6552 -> 410 tiles
-            constexpr int GRID = ((N_Q + 15) / 16) + (KV_DIM / 16) + (KV_DIM / 16); // 538 CTAs
-            launch_pdl(qkvrg_fused_fp8_mma_kernel<B_CONST>, dim3(GRID), 192, stream,
+            constexpr int N_Q = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS; // 6552 -> 410 tiles
+            constexpr int GRID = ((N_Q + 15) / 16) + (IFN_CUDA_KV_DIM / 16) + (IFN_CUDA_KV_DIM / 16); // 538 CTAs
+            ifn_cuda_launch_pdl(ifn_cuda_qkvrg_fused_fp8_mma_kernel<B_CONST>, dim3(GRID), 192, stream,
                 static_cast<const uint8_t*>(lw.w_qrgs.data), lw.w_qrgs.row_scales,
                 static_cast<const uint8_t*>(lw.w_k.data), lw.w_k.row_scales,
                 static_cast<const uint8_t*>(lw.w_v.data), lw.w_v.row_scales,
@@ -2319,17 +2320,17 @@ static void dispatch_qkvrg_b(
         return;
     }
     if constexpr (B_CONST == 1) {
-        constexpr int N_TOT = (Q_DIM + R_DIM + Q_DIM + NUM_HEADS) + 2 * KV_DIM; // 8600
+        constexpr int N_TOT = (IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS) + 2 * IFN_CUDA_KV_DIM; // 8600
         int grid = (N_TOT + 7) / 8; // 1075 half-warp blocks!
-        launch_pdl(qkvrg_fused_nvfp4_b1_pdl_kernel, dim3(grid), 128, stream,
+        ifn_cuda_launch_pdl(ifn_cuda_qkvrg_fused_nvfp4_b1_pdl_kernel, dim3(grid), 128, stream,
             static_cast<const uint8_t*>(lw.w_qrgs.data), lw.w_qrgs.scales, lw.w_qrgs.global_scale,
             static_cast<const uint8_t*>(lw.w_k.data), lw.w_k.scales, lw.w_k.global_scale,
             static_cast<const uint8_t*>(lw.w_v.data), lw.w_v.scales, lw.w_v.global_scale,
             xq, xk, xv, y_qrgs, y_k, y_v, 0u);
     } else {
-        constexpr int N_Q = Q_DIM + R_DIM + Q_DIM + NUM_HEADS; // 6552 -> 410 tiles
-        constexpr int GRID = ((N_Q + 15) / 16) + (KV_DIM / 16) + (KV_DIM / 16); // 538 CTAs
-        launch_pdl(qkvrg_fused_nvfp4_mma_kernel<B_CONST>, dim3(GRID), 192, stream,
+        constexpr int N_Q = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS; // 6552 -> 410 tiles
+        constexpr int GRID = ((N_Q + 15) / 16) + (IFN_CUDA_KV_DIM / 16) + (IFN_CUDA_KV_DIM / 16); // 538 CTAs
+        ifn_cuda_launch_pdl(ifn_cuda_qkvrg_fused_nvfp4_mma_kernel<B_CONST>, dim3(GRID), 192, stream,
             static_cast<const uint8_t*>(lw.w_qrgs.data), lw.w_qrgs.scales, lw.w_qrgs.global_scale,
             static_cast<const uint8_t*>(lw.w_k.data), lw.w_k.scales, lw.w_k.global_scale,
             static_cast<const uint8_t*>(lw.w_v.data), lw.w_v.scales, lw.w_v.global_scale,
@@ -2337,86 +2338,86 @@ static void dispatch_qkvrg_b(
     }
 }
 
-void launch_qkvrg_fused(
-    const LayerWeights& lw, const __half* in_q_h, const __half* in_k_h, const __half* in_v_h,
+void ifn_cuda_launch_qkvrg_fused(
+    const ifn_cuda_layer_weights& lw, const __half* in_q_h, const __half* in_k_h, const __half* in_v_h,
     float* qrgs_out, float* k_out, float* v_out, int B, cudaStream_t stream) {
     switch (B) {
-        case 1: dispatch_qkvrg_b<1>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 2: dispatch_qkvrg_b<2>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 3: dispatch_qkvrg_b<3>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 4: dispatch_qkvrg_b<4>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 5: dispatch_qkvrg_b<5>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 6: dispatch_qkvrg_b<6>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 7: dispatch_qkvrg_b<7>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
-        case 8: dispatch_qkvrg_b<8>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 1: ifn_cuda_dispatch_qkvrg_b<1>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 2: ifn_cuda_dispatch_qkvrg_b<2>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 3: ifn_cuda_dispatch_qkvrg_b<3>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 4: ifn_cuda_dispatch_qkvrg_b<4>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 5: ifn_cuda_dispatch_qkvrg_b<5>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 6: ifn_cuda_dispatch_qkvrg_b<6>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 7: ifn_cuda_dispatch_qkvrg_b<7>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
+        case 8: ifn_cuda_dispatch_qkvrg_b<8>(lw, in_q_h, in_k_h, in_v_h, qrgs_out, k_out, v_out, stream); break;
     }
 }
 
-void launch_bf16_linear(
+void ifn_cuda_launch_bf16_linear(
     const __nv_bfloat16* w, const float* x, float* y, int B, int N, int K, cudaStream_t stream) {
-    LinearWeight lw;
-    lw.kind = WeightKind::BF16;
+    ifn_cuda_linear_weight lw;
+    lw.kind = ifn_cuda_weight_kind::IFN_CUDA_BF16;
     lw.rows = N;
     lw.cols = K;
     lw.data = const_cast<__nv_bfloat16*>(w);
-    launch_linear(lw, x, y, B, false, stream);
+    ifn_cuda_launch_linear(lw, x, y, B, false, stream);
 }
 
 template <int B_CONST>
-static void dispatch_lm_head(
-    const LinearWeight& u, const float* x, int32_t* out_toks, float* out_logits,
-    float* s_val, int32_t* s_idx, const SampleConfig* sample_cfg, const int32_t* d_pos,
+static void ifn_cuda_dispatch_lm_head(
+    const ifn_cuda_linear_weight& u, const float* x, int32_t* out_toks, float* out_logits,
+    float* s_val, int32_t* s_idx, const ifn_cuda_sample_config* sample_cfg, const int32_t* d_pos,
     const int32_t* d_draft_tokens, const float* d_draft_probs, const float* d_draft_q_sel,
     const int32_t* d_draft_is_delta, const int32_t* inv_draft_vocab, int draft_vocab_size,
     cudaStream_t stream) {
-    if (u.kind == WeightKind::NVFP4) {
+    if (u.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) {
         if constexpr (B_CONST >= 2) {
-            launch_pdl(lm_head_nvfp4_mma_stage1_kernel<B_CONST>, dim3(LM_HEAD_BLOCKS), 192, stream,
+            ifn_cuda_launch_pdl(ifn_cuda_lm_head_nvfp4_mma_stage1_kernel<B_CONST>, dim3(IFN_CUDA_LM_HEAD_BLOCKS), 192, stream,
                 static_cast<const uint8_t*>(u.data), u.scales, u.global_scale,
                 x, out_logits, s_val, s_idx, sample_cfg, u.rows, 0u);
         } else {
-            launch_pdl(lm_head_stage1_kernel<B_CONST, 2>, dim3(LM_HEAD_BLOCKS), 256, stream,
+            ifn_cuda_launch_pdl(ifn_cuda_lm_head_stage1_kernel<B_CONST, 2>, dim3(IFN_CUDA_LM_HEAD_BLOCKS), 256, stream,
                 u.data, u.scales, static_cast<const float*>(nullptr), u.global_scale,
                 x, out_logits, s_val, s_idx, sample_cfg, u.rows);
         }
-    } else if (u.kind == WeightKind::FP8) {
+    } else if (u.kind == ifn_cuda_weight_kind::IFN_CUDA_FP8) {
         if constexpr (B_CONST >= 2) {
-            launch_pdl(lm_head_fp8_mma_stage1_kernel<B_CONST>, dim3(LM_HEAD_BLOCKS), 192, stream,
+            ifn_cuda_launch_pdl(ifn_cuda_lm_head_fp8_mma_stage1_kernel<B_CONST>, dim3(IFN_CUDA_LM_HEAD_BLOCKS), 192, stream,
                 static_cast<const uint8_t*>(u.data), u.row_scales,
                 x, out_logits, s_val, s_idx, sample_cfg, u.rows, 0u);
         } else {
-            launch_pdl(lm_head_stage1_kernel<B_CONST, 1>, dim3(LM_HEAD_BLOCKS), 256, stream,
+            ifn_cuda_launch_pdl(ifn_cuda_lm_head_stage1_kernel<B_CONST, 1>, dim3(IFN_CUDA_LM_HEAD_BLOCKS), 256, stream,
                 u.data, static_cast<const uint8_t*>(nullptr), u.row_scales, 1.0f,
                 x, out_logits, s_val, s_idx, sample_cfg, u.rows);
         }
     } else {
-        lm_head_stage1_kernel<B_CONST, 0><<<LM_HEAD_BLOCKS, 256, 0, stream>>>(
+        ifn_cuda_lm_head_stage1_kernel<B_CONST, 0><<<IFN_CUDA_LM_HEAD_BLOCKS, 256, 0, stream>>>(
             u.data, nullptr, nullptr, 1.0f, x, out_logits, s_val, s_idx, sample_cfg, u.rows);
     }
-    launch_pdl(lm_head_stage2_argmax_kernel, dim3(B_CONST), 256, stream,
+    ifn_cuda_launch_pdl(ifn_cuda_lm_head_stage2_argmax_kernel, dim3(B_CONST), 256, stream,
         s_val, s_idx, out_logits, out_toks, sample_cfg, d_pos,
         d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta,
         inv_draft_vocab, draft_vocab_size, u.rows, B_CONST);
 }
 
-void launch_lm_head_argmax(
-    const LinearWeight& unembed, const float* x, int32_t* out_tokens, float* out_logits,
-    float* scratch_vals, int32_t* scratch_idxs, const SampleConfig* sample_cfg,
+void ifn_cuda_launch_lm_head_argmax(
+    const ifn_cuda_linear_weight& unembed, const float* x, int32_t* out_tokens, float* out_logits,
+    float* scratch_vals, int32_t* scratch_idxs, const ifn_cuda_sample_config* sample_cfg,
     const int32_t* d_pos, const int32_t* d_draft_tokens, const float* d_draft_probs,
     const float* d_draft_q_sel, const int32_t* d_draft_is_delta, const int32_t* inv_draft_vocab,
     int draft_vocab_size, int B, cudaStream_t stream) {
     switch (B) {
-        case 1: dispatch_lm_head<1>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 2: dispatch_lm_head<2>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 3: dispatch_lm_head<3>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 4: dispatch_lm_head<4>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 5: dispatch_lm_head<5>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 6: dispatch_lm_head<6>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 7: dispatch_lm_head<7>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
-        case 8: dispatch_lm_head<8>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 1: ifn_cuda_dispatch_lm_head<1>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 2: ifn_cuda_dispatch_lm_head<2>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 3: ifn_cuda_dispatch_lm_head<3>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 4: ifn_cuda_dispatch_lm_head<4>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 5: ifn_cuda_dispatch_lm_head<5>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 6: ifn_cuda_dispatch_lm_head<6>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 7: ifn_cuda_dispatch_lm_head<7>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
+        case 8: ifn_cuda_dispatch_lm_head<8>(unembed, x, out_tokens, out_logits, scratch_vals, scratch_idxs, sample_cfg, d_pos, d_draft_tokens, d_draft_probs, d_draft_q_sel, d_draft_is_delta, inv_draft_vocab, draft_vocab_size, stream); break;
         default:
             for (int i = 0; i < B; ++i) {
-                dispatch_lm_head<1>(unembed, x + (size_t)i * HIDDEN, out_tokens + i,
+                ifn_cuda_dispatch_lm_head<1>(unembed, x + (size_t)i * IFN_CUDA_HIDDEN, out_tokens + i,
                     out_logits ? out_logits + (size_t)i * unembed.rows : nullptr,
                     scratch_vals, scratch_idxs, sample_cfg, d_pos,
                     nullptr, nullptr, nullptr, nullptr, nullptr, 0, stream);
@@ -2425,35 +2426,35 @@ void launch_lm_head_argmax(
     }
 }
 
-void launch_build_expert_groups(
-    const int32_t* route_ids, const float* route_w, ExpertGroups* groups, int B, cudaStream_t stream) {
-    build_expert_groups_kernel<<<1, 1, 0, stream>>>(route_ids, route_w, groups, B);
+void ifn_cuda_launch_build_expert_groups(
+    const int32_t* route_ids, const float* route_w, ifn_cuda_expert_groups* groups, int B, cudaStream_t stream) {
+    ifn_cuda_build_expert_groups_kernel<<<1, 1, 0, stream>>>(route_ids, route_w, groups, B);
 }
 
-void launch_moe_gate_up_h(
-    const ExpertBank& w13, const __half* x_h, const int32_t* route_ids,
-    const ExpertGroups* /*groups*/, __half* out_act_h, int B, cudaStream_t stream) {
-    dim3 grid((2 * INTERMEDIATE) / MOE_TILE, B * TOP_K);
+void ifn_cuda_launch_moe_gate_up_h(
+    const ifn_cuda_expert_bank& w13, const __half* x_h, const int32_t* route_ids,
+    const ifn_cuda_expert_groups* /*groups*/, __half* out_act_h, int B, cudaStream_t stream) {
+    dim3 grid((2 * IFN_CUDA_INTERMEDIATE) / IFN_CUDA_MOE_TILE, B * IFN_CUDA_TOP_K);
     if (w13.is_nvfp4) {
-        launch_pdl(moe_up_tc_kernel<0>, grid, MOE_UP_WARPS * 32, stream,
+        ifn_cuda_launch_pdl(ifn_cuda_moe_up_tc_kernel<0>, grid, IFN_CUDA_MOE_UP_WARPS * 32, stream,
             x_h, route_ids, w13.data, w13.scales, w13.expert_scale, B, out_act_h);
     } else {
-        launch_pdl(moe_up_tc_kernel<1>, grid, MOE_UP_WARPS * 32, stream,
+        ifn_cuda_launch_pdl(ifn_cuda_moe_up_tc_kernel<1>, grid, IFN_CUDA_MOE_UP_WARPS * 32, stream,
             x_h, route_ids, w13.data, w13.scales, static_cast<const float*>(nullptr), B, out_act_h);
     }
 }
 
-void launch_moe_down_h(
-    const ExpertBank& w2, const __half* act_h, const int32_t* route_ids, const float* route_w,
-    const ExpertGroups* /*groups*/, float* out_down, int B, cudaStream_t stream, bool /*already_zeroed*/) {
-    dim3 grid(HIDDEN / MOE_TILE);
+void ifn_cuda_launch_moe_down_h(
+    const ifn_cuda_expert_bank& w2, const __half* act_h, const int32_t* route_ids, const float* route_w,
+    const ifn_cuda_expert_groups* /*groups*/, float* out_down, int B, cudaStream_t stream, bool /*already_zeroed*/) {
+    dim3 grid(IFN_CUDA_HIDDEN / IFN_CUDA_MOE_TILE);
     if (w2.is_nvfp4) {
-        launch_pdl(moe_down_tc_kernel<0>, grid, MOE_DOWN_WARPS * 32, stream,
+        ifn_cuda_launch_pdl(ifn_cuda_moe_down_tc_kernel<0>, grid, IFN_CUDA_MOE_DOWN_WARPS * 32, stream,
             act_h, route_ids, route_w, w2.data, w2.scales, w2.expert_scale, B, out_down);
     } else {
-        launch_pdl(moe_down_tc_kernel<1>, grid, MOE_DOWN_WARPS * 32, stream,
+        ifn_cuda_launch_pdl(ifn_cuda_moe_down_tc_kernel<1>, grid, IFN_CUDA_MOE_DOWN_WARPS * 32, stream,
             act_h, route_ids, route_w, w2.data, w2.scales, static_cast<const float*>(nullptr), B, out_down);
     }
 }
 
-} // namespace squid
+} // namespace ifn_cuda

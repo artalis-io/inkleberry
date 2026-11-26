@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static void *worker(void *context) {
+static void *ifn_concurrency_local_worker(void *context) {
     const ifn_safetensors *file = context;
     for (size_t i = 0; i < 10000; i++) {
         const ifn_tensor_info *out = NULL;
@@ -42,7 +42,7 @@ int main(void) {
     size_t created = 0;
     int failed = 0;
     for (; created < 4; created++) {
-        if (pthread_create(&threads[created], NULL, worker, file)) {
+        if (pthread_create(&threads[created], NULL, ifn_concurrency_local_worker, file)) {
             failed = 1;
             break;
         }

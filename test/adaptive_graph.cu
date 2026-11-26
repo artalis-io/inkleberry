@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-__global__ void answer(int32_t *out, int32_t *count, int width) {
+__global__ void ifn_adaptive_graph_answer(int32_t *out, int32_t *count, int width) {
     int i = threadIdx.x;
     if (i < 8)
         out[i] = width * 100 + i;
@@ -22,7 +22,7 @@ int main() {
     float *confidence = nullptr;
     cudaStream_t stream = nullptr;
     int failed = 0;
-#define REQUIRE(x)                                                                                 \
+#define IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(x)                                                        \
     do {                                                                                           \
         if (!(x)) {                                                                                \
             std::fprintf(stderr, "conditional graph:%d\n", __LINE__);                              \
@@ -30,60 +30,68 @@ int main() {
             goto done;                                                                             \
         }                                                                                          \
     } while (0)
-    REQUIRE(cudaMalloc(reinterpret_cast<void **>(&d), 32 * 4) == cudaSuccess);
-    REQUIRE(cudaMalloc(reinterpret_cast<void **>(&confidence), 7 * 4) == cudaSuccess);
-    REQUIRE(cudaMallocHost(reinterpret_cast<void **>(&host), 10 * 4) == cudaSuccess);
-    REQUIRE(cudaStreamCreate(&stream) == cudaSuccess);
+    IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaMalloc(reinterpret_cast<void **>(&d), 32 * 4) ==
+                                     cudaSuccess);
+    IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaMalloc(reinterpret_cast<void **>(&confidence), 7 * 4) ==
+                                     cudaSuccess);
+    IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaMallocHost(reinterpret_cast<void **>(&host), 10 * 4) ==
+                                     cudaSuccess);
+    IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaStreamCreate(&stream) == cudaSuccess);
     {
         int32_t input[32] = {123, 401, 402, 403, 404, 405, 406, 407};
-        REQUIRE(cudaMemcpy(d, input, sizeof input, cudaMemcpyHostToDevice) == cudaSuccess);
+        IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(
+            cudaMemcpy(d, input, sizeof input, cudaMemcpyHostToDevice) == cudaSuccess);
         const float thresholds[3] = {0.8f, 1.0f, 0.2f};
         const int widths[3] = {2, 4, 8};
         for (float threshold : thresholds) {
-            REQUIRE(!ifn_adaptive_prepare(state, d, d + 1, confidence, threshold, d + 8, d + 16,
-                                          d + 17, host, d + 25, host + 8, host + 9, stream));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(
+                !ifn_adaptive_prepare(state, d, d + 1, confidence, threshold, d + 8, d + 16, d + 17,
+                                      host, d + 25, host + 8, host + 9, stream));
             for (int branch = 0; branch < 3; branch++) {
-                REQUIRE(!ifn_adaptive_branch_begin(state, branch, stream));
-                answer<<<1, 8, 0, stream>>>(d + 17, d + 25, widths[branch]);
-                REQUIRE(cudaGetLastError() == cudaSuccess);
-                REQUIRE(!ifn_adaptive_branch_end(state));
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_branch_begin(state, branch, stream));
+                ifn_adaptive_graph_answer<<<1, 8, 0, stream>>>(d + 17, d + 25, widths[branch]);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaGetLastError() == cudaSuccess);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_branch_end(state));
             }
-            REQUIRE(!ifn_adaptive_instantiate(state));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_instantiate(state));
             for (int branch = 0; branch < 3; branch++) {
                 float conf[7] = {};
                 int n = branch == 0 ? 0 : branch == 1 ? 2 : 7;
                 for (int i = 0; i < n; i++)
                     conf[i] = 1;
-                REQUIRE(cudaMemcpy(confidence, conf, sizeof conf, cudaMemcpyHostToDevice) ==
-                        cudaSuccess);
-                REQUIRE(!ifn_adaptive_launch(state, stream));
-                REQUIRE(cudaStreamSynchronize(stream) == cudaSuccess);
-                REQUIRE(host[8] == widths[branch] && host[9] == widths[branch]);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaMemcpy(confidence, conf, sizeof conf,
+                                                            cudaMemcpyHostToDevice) == cudaSuccess);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_launch(state, stream));
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaStreamSynchronize(stream) == cudaSuccess);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(host[8] == widths[branch] &&
+                                                 host[9] == widths[branch]);
                 for (int i = 0; i < 8; i++)
-                    REQUIRE(host[i] == widths[branch] * 100 + i);
+                    IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(host[i] == widths[branch] * 100 + i);
                 int32_t assembled[8];
-                REQUIRE(cudaMemcpy(assembled, d + 8, sizeof assembled, cudaMemcpyDeviceToHost) ==
-                        cudaSuccess);
-                REQUIRE(assembled[0] == 123);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaMemcpy(assembled, d + 8, sizeof assembled,
+                                                            cudaMemcpyDeviceToHost) == cudaSuccess);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(assembled[0] == 123);
                 for (int i = 1; i < widths[branch]; i++)
-                    REQUIRE(assembled[i] == 400 + i);
+                    IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(assembled[i] == 400 + i);
             }
-            REQUIRE(ifn_adaptive_live(state));
-            REQUIRE(!ifn_adaptive_cleanup(state));
-            REQUIRE(!ifn_adaptive_live(state));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(ifn_adaptive_live(state));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_cleanup(state));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_live(state));
         }
         /* Cleanup before instantiation, and while a body is still capturing. */
         for (int partial = 0; partial < 2; partial++) {
-            REQUIRE(!ifn_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
-                                          host, d + 25, host + 8, host + 9, stream));
-            REQUIRE(ifn_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
-                                         host, d + 25, host + 8, host + 9, stream) != 0);
-            REQUIRE(ifn_adaptive_branch_begin(state, 3, stream) != 0);
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(
+                !ifn_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
+                                      host, d + 25, host + 8, host + 9, stream));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(
+                ifn_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17, host,
+                                     d + 25, host + 8, host + 9, stream) != 0);
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(ifn_adaptive_branch_begin(state, 3, stream) != 0);
             if (partial)
-                REQUIRE(!ifn_adaptive_branch_begin(state, 0, stream));
-            REQUIRE(!ifn_adaptive_cleanup(state));
-            REQUIRE(!ifn_adaptive_live(state));
-            REQUIRE(cudaStreamSynchronize(stream) == cudaSuccess);
+                IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_branch_begin(state, 0, stream));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_cleanup(state));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(!ifn_adaptive_live(state));
+            IFN_ADAPTIVE_GRAPH_LOCAL_REQUIRE(cudaStreamSynchronize(stream) == cudaSuccess);
         }
     }
 done:

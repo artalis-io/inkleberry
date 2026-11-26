@@ -4,6 +4,9 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from amalgamate import TOKEN
+from native_namespace import kernel_names
 
 root = Path(__file__).resolve().parents[1]
 headers = sorted((root / 'include').glob('*.h'))
@@ -14,6 +17,30 @@ for header in headers + [root / 'dist/ifn.h']:
     assert not re.search(r'\b(?:sq_|SQ_)[A-Za-z0-9_]*', text), header
     assert 'squid' not in text.lower(), header
 assert not list((root / 'dist').glob('sq.*'))
+# Include internal C/CUDA declarations: public headers alone cannot guard this.
+for directory in ['src', 'cuda', 'include', 'cli', 'examples', 'test', 'fuzz']:
+    for path in sorted((root / directory).rglob('*')):
+        if path.suffix not in ('.c', '.h', '.cu', '.cuh', '.hpp'):
+            continue
+        code = ''.join(t if not t.startswith(('/*', '//', '"', "'")) else ' '
+                       for t in TOKEN.findall(path.read_text()))
+        assert not re.search(r'\b(?:squid|squid_\w*|SQUID_\w*|sq_\w*|SQ_\w*|si_\w*|SI_\w*)\b', code), path
+        # CUDA attributes may separate the return type and kernel identifier.
+        for name in kernel_names(code):
+            assert name.startswith('ifn_'), (path, name)
+        for line in code.splitlines():
+            if not line or line[0].isspace() or line.startswith(('#', 'template', 'namespace', 'using', 'extern')):
+                continue
+            match = re.match(r'(?:[A-Za-z_][A-Za-z_0-9:<>,* &]*?\s+|\*+)([A-Za-z_]\w*)\s*\(', line)
+            if match and not line.startswith('typedef '):
+                name = match[1]
+                assert name.startswith(('ifn_', 'IFN_', '__')) or name in ('main', 'LLVMFuzzerTestOneInput', 'static_assert', 'alignas'), (path, name)
+        for name in re.findall(r'^#define\s+(\w+)', code, re.M):
+            assert name.startswith(('IFN_', '_')), (path, name)
+        for name in re.findall(r'^(?:struct|class|namespace)\s+(\w+)', code, re.M):
+            assert name.startswith('ifn_'), (path, name)
+        for name in re.findall(r'^}\s*(\w+)\s*;', code, re.M):
+            assert name.startswith('ifn_'), (path, name)
 for filename in sys.argv[1:]:
     output = subprocess.check_output(['nm', '-g', filename], text=True)
     defined = []
@@ -21,7 +48,7 @@ for filename in sys.argv[1:]:
         fields = line.split()
         if len(fields) >= 3 and fields[-2] not in ('U', 'w', 'v'):
             name = fields[-1].removeprefix('_')
-            assert not name.startswith(('sq_', 'SQ_', 'squid_')), name
+            assert name.startswith('ifn_') or name.startswith(('__', '.')), name
             defined.append(name)
     assert 'ifn_status_string' in defined, filename
-print('Public headers and host symbols use the ifn namespace exclusively')
+print('Public/internal C/CUDA declarations and host symbols use the ifn namespace')

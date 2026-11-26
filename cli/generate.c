@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int unsigned_value(const char *s, uint64_t *out) {
+static int ifn_generate_local_unsigned_value(const char *s, uint64_t *out) {
     if (!*s)
         return 0;
     for (const char *p = s; *p; p++)
@@ -21,7 +21,7 @@ static int unsigned_value(const char *s, uint64_t *out) {
     return 1;
 }
 
-static int print_token(void *context, int32_t token) {
+static int ifn_generate_local_print_token(void *context, int32_t token) {
     const void *bytes = NULL;
     size_t n = 0;
     if (ifn_tokenizer_decode(context, token, 1, &bytes, &n) != IFN_OK)
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         const char *value = argv[index++];
         if (position == 0) {
             uint64_t x;
-            if (!unsigned_value(value, &x) || !x || x > 4096)
+            if (!ifn_generate_local_unsigned_value(value, &x) || !x || x > 4096)
                 return 2;
             max_new = (size_t)x;
         } else if (position == 1) {
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
                     options.top_p = f;
             }
         } else {
-            if (!unsigned_value(value, &x))
+            if (!ifn_generate_local_unsigned_value(value, &x))
                 return 2;
             if (!strcmp(name, "--prefix-cache")) {
                 if (x > 1)
@@ -193,8 +193,8 @@ int main(int argc, char **argv) {
             goto cleanup;
     }
     ifn_decode_stats stats;
-    rc =
-        ifn_session_generate_ex(s, ids, n, max_new, &options, out, max_new, print_token, t, &stats);
+    rc = ifn_session_generate_ex(s, ids, n, max_new, &options, out, max_new,
+                                 ifn_generate_local_print_token, t, &stats);
     if (rc == IFN_OK)
         fprintf(stderr, "\nprompt=%u generated=%u finish=%u\n", stats.generation.prompt_tokens,
                 stats.generation.generated_tokens, stats.generation.finish_reason);

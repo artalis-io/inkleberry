@@ -9,15 +9,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-extern int ifn_test_context(ifn_gpu_weights **image, int destroy);
-static ifn_gpu_weights *image;
-static size_t checked_views, checked_spans;
-static uint64_t checked_bytes;
-static double elapsed;
-static const void *oracle_allocation;
-static unsigned char oracle_guard[64];
+extern int ifn_test_context(ifn_gpu_weights **ifn_gpu_weights_compare_local_image, int destroy);
+static ifn_gpu_weights *ifn_gpu_weights_compare_local_image;
+static size_t ifn_gpu_weights_compare_local_checked_views,
+    ifn_gpu_weights_compare_local_checked_spans;
+static uint64_t ifn_gpu_weights_compare_local_checked_bytes;
+static double ifn_gpu_weights_compare_local_elapsed;
+static const void *ifn_gpu_weights_compare_local_oracle_allocation;
+static unsigned char ifn_gpu_weights_compare_local_oracle_guard[64];
 
-static double now(void) {
+static double ifn_gpu_weights_compare_local_now(void) {
     struct timespec t;
     (void)clock_gettime(CLOCK_MONOTONIC, &t);
     return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
@@ -25,8 +26,9 @@ static double now(void) {
 
 int ifn_test_start(const char *directory, uint32_t mode, uint32_t mtp, uint64_t oracle_capacity,
                    uint64_t oracle_allocations, const void *oracle_base) {
-    oracle_allocation = oracle_base;
-    if (oracle_base && squid_cuda_memcpy_d2h(oracle_guard, oracle_base, sizeof oracle_guard))
+    ifn_gpu_weights_compare_local_oracle_allocation = oracle_base;
+    if (oracle_base && ifn_cuda_memcpy_d2h(ifn_gpu_weights_compare_local_oracle_guard, oracle_base,
+                                           sizeof ifn_gpu_weights_compare_local_oracle_guard))
         return 1;
     char main_path[1200], mtp_path[1200];
     if (snprintf(main_path, sizeof main_path, "%s/model-00001-of-00001.safetensors", directory) <
@@ -38,25 +40,25 @@ int ifn_test_start(const char *directory, uint32_t mode, uint32_t mtp, uint64_t 
     ifn_weight_config config = IFN_WEIGHT_CONFIG_INIT;
     config.mode = mode;
     config.with_mtp = mtp;
-    const char *force = getenv("SQUID_MTP_BF16");
+    const char *force = getenv("INKLEBERRY_MTP_BF16");
     config.mtp_bf16 = force && !strcmp(force, "1");
-    double start = now();
+    double start = ifn_gpu_weights_compare_local_now();
     ifn_status status =
         ifn_inkling_checkpoint_open(main_path, mtp ? mtp_path : NULL, NULL, &checkpoint);
     if (status == IFN_OK)
-        status = ifn_gpu_weights_create(&config, NULL, &image);
+        status = ifn_gpu_weights_create(&config, NULL, &ifn_gpu_weights_compare_local_image);
     if (status == IFN_OK)
-        status = ifn_gpu_weights_load(image, checkpoint);
-    elapsed = now() - start;
+        status = ifn_gpu_weights_load(ifn_gpu_weights_compare_local_image, checkpoint);
+    ifn_gpu_weights_compare_local_elapsed = ifn_gpu_weights_compare_local_now() - start;
     ifn_inkling_checkpoint_close(checkpoint);
     if (status != IFN_OK) {
         fprintf(stderr, "C weight load: %s\n", ifn_last_error());
         return 1;
     }
-    if (ifn_test_context(&image, 0))
+    if (ifn_test_context(&ifn_gpu_weights_compare_local_image, 0))
         return 1;
     ifn_weight_plan plan;
-    if (ifn_gpu_weights_get_plan(image, &plan) != IFN_OK)
+    if (ifn_gpu_weights_get_plan(ifn_gpu_weights_compare_local_image, &plan) != IFN_OK)
         return 1;
     if (oracle_base &&
         (plan.arena_bytes != oracle_capacity || plan.allocations != oracle_allocations)) {
@@ -76,21 +78,22 @@ int ifn_test_start(const char *directory, uint32_t mode, uint32_t mtp, uint64_t 
     }
     for (size_t i = 0; i < plan.allocations; i++) {
         ifn_weight_span span;
-        if (ifn_gpu_weights_get_span(image, i, &span) != IFN_OK) {
+        if (ifn_gpu_weights_get_span(ifn_gpu_weights_compare_local_image, i, &span) != IFN_OK) {
             free(a);
             free(b);
             return 1;
         }
         for (uint64_t offset = 0; offset < span.bytes;) {
             size_t bytes = span.bytes - offset > CHUNK ? CHUNK : (size_t)(span.bytes - offset);
-            if (ifn_gpu_weights_read(image, i, offset, a, bytes) != IFN_OK) {
+            if (ifn_gpu_weights_read(ifn_gpu_weights_compare_local_image, i, offset, a, bytes) !=
+                IFN_OK) {
                 fprintf(stderr, "C read: %s\n", ifn_last_error());
                 free(a);
                 free(b);
                 return 1;
             }
             if (oracle_base) {
-                if (squid_cuda_memcpy_d2h(
+                if (ifn_cuda_memcpy_d2h(
                         b, (const unsigned char *)oracle_base + span.offset + offset, bytes) ||
                     memcmp(a, b, bytes)) {
                     fprintf(stderr, "payload mismatch: %s at chunk offset %llu\n", span.label,
@@ -100,18 +103,19 @@ int ifn_test_start(const char *directory, uint32_t mode, uint32_t mtp, uint64_t 
                     return 1;
                 }
             }
-            checked_bytes += bytes;
+            ifn_gpu_weights_compare_local_checked_bytes += bytes;
             offset += bytes;
         }
-        checked_spans++;
+        ifn_gpu_weights_compare_local_checked_spans++;
     }
     free(a);
     free(b);
     if (!oracle_base)
         printf("{\"standalone_c_load\":true,\"mode\":%u,\"mtp\":%u,\"arena_bytes\":%llu,\"payload_"
                "bytes_read\":%llu,\"allocations\":%zu,\"load_seconds\":%.6f}\n",
-               mode, mtp, (unsigned long long)plan.arena_bytes, (unsigned long long)checked_bytes,
-               plan.allocations, elapsed);
+               mode, mtp, (unsigned long long)plan.arena_bytes,
+               (unsigned long long)ifn_gpu_weights_compare_local_checked_bytes, plan.allocations,
+               ifn_gpu_weights_compare_local_elapsed);
     return 0;
 }
 
@@ -119,11 +123,11 @@ int ifn_test_view(const char *label, uint32_t type, uint32_t precision, uint32_t
                   uint32_t cols, uint32_t experts, uint64_t data, uint64_t scales,
                   uint64_t row_scales, uint64_t expert_scale, float global_scale) {
     ifn_weight_plan plan;
-    if (ifn_gpu_weights_get_plan(image, &plan) != IFN_OK)
+    if (ifn_gpu_weights_get_plan(ifn_gpu_weights_compare_local_image, &plan) != IFN_OK)
         return 1;
     for (size_t i = 0; i < plan.views; i++) {
         ifn_weight_view v;
-        if (ifn_gpu_weights_get_view(image, i, &v) != IFN_OK)
+        if (ifn_gpu_weights_get_view(ifn_gpu_weights_compare_local_image, i, &v) != IFN_OK)
             return 1;
         if (strcmp(v.label, label))
             continue;
@@ -134,7 +138,7 @@ int ifn_test_view(const char *label, uint32_t type, uint32_t precision, uint32_t
             fprintf(stderr, "descriptor mismatch: %s\n", label);
             return 1;
         }
-        checked_views++;
+        ifn_gpu_weights_compare_local_checked_views++;
         return 0;
     }
     fprintf(stderr, "C view missing: %s\n", label);
@@ -144,22 +148,26 @@ int ifn_test_view(const char *label, uint32_t type, uint32_t precision, uint32_t
 int ifn_test_finish(uint32_t mode, uint32_t mtp, uint32_t oracle) {
     int failed = 0;
     ifn_weight_plan plan;
-    if (image && ifn_gpu_weights_get_plan(image, &plan) == IFN_OK && oracle &&
-        checked_views != plan.views) {
-        fprintf(stderr, "view coverage: %zu/%zu\n", checked_views, plan.views);
+    if (ifn_gpu_weights_compare_local_image &&
+        ifn_gpu_weights_get_plan(ifn_gpu_weights_compare_local_image, &plan) == IFN_OK && oracle &&
+        ifn_gpu_weights_compare_local_checked_views != plan.views) {
+        fprintf(stderr, "view coverage: %zu/%zu\n", ifn_gpu_weights_compare_local_checked_views,
+                plan.views);
         failed = 1;
     }
-    if (image && oracle && !failed && ifn_test_context(&image, 1))
+    if (ifn_gpu_weights_compare_local_image && oracle && !failed &&
+        ifn_test_context(&ifn_gpu_weights_compare_local_image, 1))
         failed = 1;
-    ifn_status status = ifn_gpu_weights_destroy(&image);
-    if (status != IFN_OK || image) {
+    ifn_status status = ifn_gpu_weights_destroy(&ifn_gpu_weights_compare_local_image);
+    if (status != IFN_OK || ifn_gpu_weights_compare_local_image) {
         fprintf(stderr, "C GPU cleanup: %s\n", ifn_last_error());
         failed = 1;
     }
-    if (oracle && oracle_allocation) {
+    if (oracle && ifn_gpu_weights_compare_local_oracle_allocation) {
         unsigned char after[64];
-        if (squid_cuda_memcpy_d2h(after, oracle_allocation, sizeof after) ||
-            memcmp(after, oracle_guard, sizeof after)) {
+        if (ifn_cuda_memcpy_d2h(after, ifn_gpu_weights_compare_local_oracle_allocation,
+                                sizeof after) ||
+            memcmp(after, ifn_gpu_weights_compare_local_oracle_guard, sizeof after)) {
             fputs("original Zig allocation did not survive C teardown\n", stderr);
             failed = 1;
         }
@@ -168,7 +176,9 @@ int ifn_test_finish(uint32_t mode, uint32_t mtp, uint32_t oracle) {
         printf("{\"oracle_parity\":true,\"mode\":%u,\"mtp\":%u,\"payload_spans\":%zu,\"payload_"
                "bytes\":%llu,\"descriptors\":%zu,\"c_load_seconds\":%.6f,\"caller_context_"
                "preserved\":true,\"oracle_allocation_survived\":true}\n",
-               mode, mtp, checked_spans, (unsigned long long)checked_bytes, checked_views, elapsed);
+               mode, mtp, ifn_gpu_weights_compare_local_checked_spans,
+               (unsigned long long)ifn_gpu_weights_compare_local_checked_bytes,
+               ifn_gpu_weights_compare_local_checked_views, ifn_gpu_weights_compare_local_elapsed);
     return failed;
 }
 #ifdef IFN_STANDALONE_WEIGHTS

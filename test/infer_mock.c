@@ -13,15 +13,15 @@ struct ifn_session {
     ifn_options allocator;
 };
 
-atomic_int si_mock_pause, si_mock_arrived, si_mock_resume;
-atomic_uint si_mock_resets, si_mock_calls, si_mock_enables;
-atomic_uint si_mock_fail, si_mock_close_fail, si_mock_upload_fail;
-const char *si_mock_tokenizer;
+atomic_int ifn_infer_mock_pause, ifn_infer_mock_arrived, ifn_infer_mock_resume;
+atomic_uint ifn_infer_mock_resets, ifn_infer_mock_calls, ifn_infer_mock_enables;
+atomic_uint ifn_infer_mock_fail, ifn_infer_mock_close_fail, ifn_infer_mock_upload_fail;
+const char *ifn_infer_mock_tokenizer;
 
 ifn_status ifn_gpu_weights_create(const ifn_weight_config *c, const ifn_options *a,
                                   ifn_gpu_weights **out) {
     (void)c;
-    *out = si_alloc(a, sizeof **out);
+    *out = ifn_infer_alloc(a, sizeof **out);
     if (!*out)
         return IFN_OUT_OF_MEMORY;
     (*out)->allocator = *a;
@@ -31,14 +31,14 @@ ifn_status ifn_gpu_weights_create(const ifn_weight_config *c, const ifn_options 
 ifn_status ifn_gpu_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *cp) {
     (void)w;
     (void)cp;
-    return atomic_load(&si_mock_upload_fail) ? IFN_GPU_ERROR : IFN_OK;
+    return atomic_load(&ifn_infer_mock_upload_fail) ? IFN_GPU_ERROR : IFN_OK;
 }
 
 ifn_status ifn_gpu_weights_destroy(ifn_gpu_weights **w) {
     if (*w) {
-        if (atomic_load(&si_mock_close_fail))
+        if (atomic_load(&ifn_infer_mock_close_fail))
             return IFN_GPU_ERROR;
-        si_free(&(*w)->allocator, *w);
+        ifn_infer_free(&(*w)->allocator, *w);
     }
     *w = NULL;
     return IFN_OK;
@@ -48,7 +48,7 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *c, c
                               ifn_session **out) {
     (void)w;
     (void)c;
-    *out = si_alloc(a, sizeof **out);
+    *out = ifn_infer_alloc(a, sizeof **out);
     if (!*out)
         return IFN_OUT_OF_MEMORY;
     (*out)->allocator = *a;
@@ -57,9 +57,9 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *c, c
 
 ifn_status ifn_session_destroy(ifn_session **s) {
     if (*s) {
-        if (atomic_load(&si_mock_close_fail))
+        if (atomic_load(&ifn_infer_mock_close_fail))
             return IFN_GPU_ERROR;
-        si_free(&(*s)->allocator, *s);
+        ifn_infer_free(&(*s)->allocator, *s);
     }
     *s = NULL;
     return IFN_OK;
@@ -77,7 +77,7 @@ ifn_status ifn_session_owned_plan(ifn_gpu_weights *w, const ifn_session_config *
 ifn_status ifn_session_prefix_cache(ifn_session *s, uint32_t enabled) {
     (void)s;
     if (enabled)
-        atomic_fetch_add(&si_mock_enables, 1);
+        atomic_fetch_add(&ifn_infer_mock_enables, 1);
     return IFN_OK;
 }
 
@@ -89,8 +89,8 @@ ifn_status ifn_session_prefix_info(ifn_session *s, ifn_prefix_info *out) {
 
 ifn_status ifn_session_reset(ifn_session *s) {
     (void)s;
-    atomic_fetch_add(&si_mock_resets, 1);
-    return atomic_load(&si_mock_fail) == 2 ? IFN_GPU_ERROR : IFN_OK;
+    atomic_fetch_add(&ifn_infer_mock_resets, 1);
+    return atomic_load(&ifn_infer_mock_fail) == 2 ? IFN_GPU_ERROR : IFN_OK;
 }
 
 ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens, size_t n,
@@ -101,16 +101,16 @@ ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens
     (void)s;
     (void)tokens;
     (void)options;
-    atomic_fetch_add(&si_mock_calls, 1);
-    if (atomic_load(&si_mock_pause) == 1) {
-        atomic_store(&si_mock_arrived, 1);
-        while (!atomic_load(&si_mock_resume))
+    atomic_fetch_add(&ifn_infer_mock_calls, 1);
+    if (atomic_load(&ifn_infer_mock_pause) == 1) {
+        atomic_store(&ifn_infer_mock_arrived, 1);
+        while (!atomic_load(&ifn_infer_mock_resume))
             sched_yield();
     }
     stats->generation.prompt_tokens = (uint32_t)n;
     if (control->cancelled(control->context))
         return IFN_CANCELLED;
-    if (atomic_load(&si_mock_fail) == 1)
+    if (atomic_load(&ifn_infer_mock_fail) == 1)
         return IFN_GPU_ERROR;
     for (size_t i = 0; i < limit; i++) {
         if (control->cancelled(control->context))
@@ -123,9 +123,9 @@ ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens
             break;
         }
     }
-    if (atomic_load(&si_mock_pause) == 2) {
-        atomic_store(&si_mock_arrived, 1);
-        while (!atomic_load(&si_mock_resume))
+    if (atomic_load(&ifn_infer_mock_pause) == 2) {
+        atomic_store(&ifn_infer_mock_arrived, 1);
+        while (!atomic_load(&ifn_infer_mock_resume))
             sched_yield();
     }
     return IFN_OK;

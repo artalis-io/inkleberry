@@ -13,6 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import generate_cuda_abi as gen
+from native_namespace import names
 
 
 class SchemaTests(unittest.TestCase):
@@ -32,6 +33,10 @@ class SchemaTests(unittest.TestCase):
             text = outputs[path].split('*/\n', 1)[1]
             self.assertNotIn('SQ_', text)
             self.assertNotIn('sq_test_', text)
+            reverse = {v:k for k,v in names().items()}
+            # Generated diagnostics contain type names in string literals too.
+            import re
+            text = re.sub(r'\b[A-Za-z_]\w*\b', lambda m:reverse.get(m[0],m[0]), text)
             payload = text.replace('IFN_', 'SQ_').replace('ifn_', 'sq_').encode()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), digest, path)
 
@@ -40,7 +45,7 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(gen.ctype('pointer<pointer<void>>', names), 'void * *')
         self.assertEqual(gen.ctype('pointer<const,pointer<const,float32>>', names), 'const float * const *')
         self.assertEqual(gen.ctype('pointer<const,pointer<float32>>', names), 'float * const *')
-        self.assertIn('CDsparkLayerWeights layers[3];', gen.generate(self.schema)['src/cuda_abi.h'])
+        self.assertIn('ifn_cuda_c_dspark_layer_weights layers[3];', gen.generate(self.schema)['src/cuda_abi.h'])
 
     def test_rejected_schema_mutations(self):
         def replace(path, value):
@@ -56,11 +61,11 @@ class SchemaTests(unittest.TestCase):
             replace(['records', 0, 'fields'], []),
             replace(['records', 0, 'name'], 'int'),
             replace(['records', 0, 'name'], 'bad;system()'),
-            replace(['records', 0, 'cpp_type'], 'squid::X;\n#error injected'),
+            replace(['records', 0, 'cpp_type'], 'ifn_cuda::X;\n#error injected'),
             replace(['records', 0, 'fields', 0, 'type'], 'double'),
             replace(['records', 0, 'fields', 0, 'type'], 'void'),
-            replace(['records', 0, 'fields', 0, 'type'], 'CDsparkWeights'),
-            replace(['records', 0, 'fields', 0, 'type'], 'pointer<CSampleConfig>'),
+            replace(['records', 0, 'fields', 0, 'type'], 'ifn_cuda_c_dspark_weights'),
+            replace(['records', 0, 'fields', 0, 'type'], 'pointer<ifn_cuda_c_sample_config>'),
             replace(['records', 0, 'fields', 0, 'type'], 'pointer<const>'),
             replace(['records', 0, 'fields', 0, 'type'], 'pointer<float32>>'),
             replace(['records', 0, 'fields', 0, 'type'], 'pointer<' * 10 + 'float32' + '>' * 10),
@@ -80,7 +85,7 @@ class SchemaTests(unittest.TestCase):
             lambda s: s['records'][0]['fields'].append(copy.deepcopy(s['records'][0]['fields'][0])),
             lambda s: s['functions'].append(copy.deepcopy(s['functions'][0])),
             lambda s: s['functions'][0]['parameters'].append(copy.deepcopy(s['functions'][0]['parameters'][0])),
-            replace(['records', 1, 'cpp_type'], 'squid::SampleConfig'),
+            replace(['records', 1, 'cpp_type'], 'ifn_cuda::ifn_cuda_sample_config'),
         ]
         for index, mutate in enumerate(mutations):
             with self.subTest(index=index):

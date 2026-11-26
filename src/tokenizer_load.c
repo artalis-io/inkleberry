@@ -51,7 +51,8 @@ int32_t ifn_vocab_lookup(const ifn_tokenizer *t, const void *bytes, size_t size)
     return -1;
 }
 
-static bool raw_token(const char *text, unsigned char *out, size_t *length) {
+static bool ifn_tokenizer_load_local_raw_token(const char *text, unsigned char *out,
+                                               size_t *length) {
     size_t n = strlen(text), p = 0, k = 0;
     while (p < n) {
         uint32_t cp;
@@ -79,12 +80,12 @@ static bool raw_token(const char *text, unsigned char *out, size_t *length) {
     return k > 0;
 }
 
-static bool equal(ifn_json value, const char *expected) {
+static bool ifn_tokenizer_load_local_equal(ifn_json value, const char *expected) {
     return ifn_json_equal(value, (ifn_json){(const unsigned char *)expected, strlen(expected), 0},
                           0);
 }
 
-static bool fields(ifn_json value, ifn_json_field *f, size_t n) {
+static bool ifn_tokenizer_load_local_fields(ifn_json value, ifn_json_field *f, size_t n) {
     if (!ifn_json_object(&value, f, n) || !ifn_json_done(&value))
         return false;
     for (size_t i = 0; i < n; i++)
@@ -93,7 +94,7 @@ static bool fields(ifn_json value, ifn_json_field *f, size_t n) {
     return true;
 }
 
-static ifn_json_field field(const char *name) {
+static ifn_json_field ifn_tokenizer_load_local_field(const char *name) {
     ifn_json_field f = {0};
     f.name = name;
     return f;
@@ -101,38 +102,51 @@ static ifn_json_field field(const char *name) {
 
 /* A supported-profile check prevents silently treating normalization, added-
  * token whitespace flags or arbitrary regexes as the pinned Inkling tokenizer. */
-static bool profile(ifn_json json, ifn_json *vocab, ifn_json *merges, ifn_json *added) {
-    ifn_json_field top[] = {field("version"),        field("truncation"), field("padding"),
-                            field("added_tokens"),   field("normalizer"), field("pre_tokenizer"),
-                            field("post_processor"), field("decoder"),    field("model")};
-    if (!fields(json, top, 9) || !ifn_json_text(top[0].value, "1.0") ||
-        !equal(top[1].value, "null") || !equal(top[2].value, "null") ||
-        !equal(top[4].value, "null"))
+static bool ifn_tokenizer_load_local_profile(ifn_json json, ifn_json *vocab, ifn_json *merges,
+                                             ifn_json *added) {
+    ifn_json_field top[] = {ifn_tokenizer_load_local_field("version"),
+                            ifn_tokenizer_load_local_field("truncation"),
+                            ifn_tokenizer_load_local_field("padding"),
+                            ifn_tokenizer_load_local_field("added_tokens"),
+                            ifn_tokenizer_load_local_field("normalizer"),
+                            ifn_tokenizer_load_local_field("pre_tokenizer"),
+                            ifn_tokenizer_load_local_field("post_processor"),
+                            ifn_tokenizer_load_local_field("decoder"),
+                            ifn_tokenizer_load_local_field("model")};
+    if (!ifn_tokenizer_load_local_fields(json, top, 9) || !ifn_json_text(top[0].value, "1.0") ||
+        !ifn_tokenizer_load_local_equal(top[1].value, "null") ||
+        !ifn_tokenizer_load_local_equal(top[2].value, "null") ||
+        !ifn_tokenizer_load_local_equal(top[4].value, "null"))
         return false;
-    const char *pre = PRETOKENIZER_PROFILE;
-    if (!equal(top[5].value, pre) ||
-        !equal(top[6].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
-                             "false,\"use_regex\":true}") ||
-        !equal(top[7].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
-                             "true,\"use_regex\":true}"))
+    const char *pre = IFN_TOKENIZER_PROFILE_LOCAL_PRETOKENIZER_PROFILE;
+    if (!ifn_tokenizer_load_local_equal(top[5].value, pre) ||
+        !ifn_tokenizer_load_local_equal(
+            top[6].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
+                          "false,\"use_regex\":true}") ||
+        !ifn_tokenizer_load_local_equal(
+            top[7].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
+                          "true,\"use_regex\":true}"))
         return false;
-    ifn_json_field model[] = {field("type"),
-                              field("dropout"),
-                              field("unk_token"),
-                              field("continuing_subword_prefix"),
-                              field("end_of_word_suffix"),
-                              field("fuse_unk"),
-                              field("byte_fallback"),
-                              field("ignore_merges"),
-                              field("vocab"),
-                              field("merges")};
-    if (!fields(top[8].value, model, 10) || !ifn_json_text(model[0].value, "BPE"))
+    ifn_json_field model[] = {ifn_tokenizer_load_local_field("type"),
+                              ifn_tokenizer_load_local_field("dropout"),
+                              ifn_tokenizer_load_local_field("unk_token"),
+                              ifn_tokenizer_load_local_field("continuing_subword_prefix"),
+                              ifn_tokenizer_load_local_field("end_of_word_suffix"),
+                              ifn_tokenizer_load_local_field("fuse_unk"),
+                              ifn_tokenizer_load_local_field("byte_fallback"),
+                              ifn_tokenizer_load_local_field("ignore_merges"),
+                              ifn_tokenizer_load_local_field("vocab"),
+                              ifn_tokenizer_load_local_field("merges")};
+    if (!ifn_tokenizer_load_local_fields(top[8].value, model, 10) ||
+        !ifn_json_text(model[0].value, "BPE"))
         return false;
     for (size_t i = 1; i < 5; i++)
-        if (!equal(model[i].value, "null"))
+        if (!ifn_tokenizer_load_local_equal(model[i].value, "null"))
             return false;
-    if (!equal(model[5].value, "false") || !equal(model[6].value, "false") ||
-        (!equal(model[7].value, "false") && !equal(model[7].value, "true")))
+    if (!ifn_tokenizer_load_local_equal(model[5].value, "false") ||
+        !ifn_tokenizer_load_local_equal(model[6].value, "false") ||
+        (!ifn_tokenizer_load_local_equal(model[7].value, "false") &&
+         !ifn_tokenizer_load_local_equal(model[7].value, "true")))
         return false;
     *vocab = model[8].value;
     *merges = model[9].value;
@@ -140,20 +154,22 @@ static bool profile(ifn_json json, ifn_json *vocab, ifn_json *merges, ifn_json *
     return true;
 }
 
-static bool added_entry(ifn_json *j, char *name, size_t *id) {
-    ifn_json_field f[] = {field("id"),     field("content"), field("single_word"),
-                          field("lstrip"), field("rstrip"),  field("normalized"),
-                          field("special")};
+static bool ifn_tokenizer_load_local_added_entry(ifn_json *j, char *name, size_t *id) {
+    ifn_json_field f[] = {
+        ifn_tokenizer_load_local_field("id"),          ifn_tokenizer_load_local_field("content"),
+        ifn_tokenizer_load_local_field("single_word"), ifn_tokenizer_load_local_field("lstrip"),
+        ifn_tokenizer_load_local_field("rstrip"),      ifn_tokenizer_load_local_field("normalized"),
+        ifn_tokenizer_load_local_field("special")};
     if (!ifn_json_object(j, f, 7))
         return false;
     for (size_t i = 0; i < 7; i++)
         if (!f[i].present)
             return false;
     for (size_t i = 2; i < 6; i++)
-        if (!equal(f[i].value, "false"))
+        if (!ifn_tokenizer_load_local_equal(f[i].value, "false"))
             return false;
     uint64_t n;
-    if (!equal(f[6].value, "true") || !ifn_json_u64(&f[0].value, &n) ||
+    if (!ifn_tokenizer_load_local_equal(f[6].value, "true") || !ifn_json_u64(&f[0].value, &n) ||
         !ifn_json_done(&f[0].value) || n >= IFN_TOK_IDS ||
         !ifn_json_string(&f[1].value, name, 4096) || !name[0])
         return false;
@@ -161,14 +177,14 @@ static bool added_entry(ifn_json *j, char *name, size_t *id) {
     return true;
 }
 
-static size_t slots(size_t count) {
+static size_t ifn_tokenizer_load_local_slots(size_t count) {
     size_t n = 16;
     while (n < count * 2 && n < 1048576)
         n *= 2;
     return n;
 }
 
-static void *owned(ifn_tokenizer *t, size_t n, size_t width) {
+static void *ifn_tokenizer_load_local_owned(ifn_tokenizer *t, size_t n, size_t width) {
     size_t bytes;
     if (!ifn_size_mul(n, width, &bytes))
         return NULL;
@@ -178,7 +194,8 @@ static void *owned(ifn_tokenizer *t, size_t n, size_t width) {
     return p;
 }
 
-static bool store(ifn_tokenizer *t, const void *bytes, size_t length, size_t id, bool special) {
+static bool ifn_tokenizer_load_local_store(ifn_tokenizer *t, const void *bytes, size_t length,
+                                           size_t id, bool special) {
     if (!length || length > 4095 || id >= t->id_count || t->entries[id].present ||
         length > t->arena_size - t->arena_used)
         return false;
@@ -237,7 +254,7 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     if (status != IFN_OK)
         return status;
     ifn_json vocab, merges, added;
-    if (!profile((ifn_json){data, bytes, 0}, &vocab, &merges, &added))
+    if (!ifn_tokenizer_load_local_profile((ifn_json){data, bytes, 0}, &vocab, &merges, &added))
         return ifn_error(IFN_FORMAT, "unsupported or malformed Inkling tokenizer profile");
     /* Count before allocation; each item is independently bounded. */
     ifn_json v = vocab, m = merges, a = added;
@@ -270,7 +287,7 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     if (!ifn_json_take(&a, ']')) {
         do {
             size_t id;
-            if (++ns > 256 || !added_entry(&a, name, &id))
+            if (++ns > 256 || !ifn_tokenizer_load_local_added_entry(&a, name, &id))
                 return ifn_error(IFN_FORMAT, "invalid added token");
             if (id > maxid)
                 maxid = id;
@@ -288,12 +305,12 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     t->allocator = allocator;
     t->arena_size = arena_size;
     t->id_count = maxid + 1;
-    t->vocab_slots = slots(nv);
-    t->merge_slots = slots(nm);
-    t->arena = owned(t, arena_size, 1);
-    t->entries = owned(t, t->id_count, sizeof *t->entries);
-    t->vocab = owned(t, t->vocab_slots, sizeof *t->vocab);
-    t->merges = owned(t, t->merge_slots, sizeof *t->merges);
+    t->vocab_slots = ifn_tokenizer_load_local_slots(nv);
+    t->merge_slots = ifn_tokenizer_load_local_slots(nm);
+    t->arena = ifn_tokenizer_load_local_owned(t, arena_size, 1);
+    t->entries = ifn_tokenizer_load_local_owned(t, t->id_count, sizeof *t->entries);
+    t->vocab = ifn_tokenizer_load_local_owned(t, t->vocab_slots, sizeof *t->vocab);
+    t->merges = ifn_tokenizer_load_local_owned(t, t->merge_slots, sizeof *t->merges);
     if (!t->arena || !t->entries || !t->vocab || !t->merges) {
         ifn_tokenizer_close(t);
         return ifn_error(IFN_OUT_OF_MEMORY, "allocate tokenizer tables");
@@ -307,8 +324,8 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
         unsigned char raw[4096];
         size_t n;
         if (!ifn_json_string(&v, name, sizeof name) || !ifn_json_take(&v, ':') ||
-            !ifn_json_u64(&v, &id) || !raw_token(name, raw, &n) ||
-            !store(t, raw, n, (size_t)id, false))
+            !ifn_json_u64(&v, &id) || !ifn_tokenizer_load_local_raw_token(name, raw, &n) ||
+            !ifn_tokenizer_load_local_store(t, raw, n, (size_t)id, false))
             goto invalid;
     } while (ifn_json_take(&v, ','));
     a = added;
@@ -316,7 +333,8 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     if (!ifn_json_take(&a, ']'))
         do {
             size_t id;
-            if (!added_entry(&a, name, &id) || !store(t, name, strlen(name), id, true))
+            if (!ifn_tokenizer_load_local_added_entry(&a, name, &id) ||
+                !ifn_tokenizer_load_local_store(t, name, strlen(name), id, true))
                 goto invalid;
         } while (ifn_json_take(&a, ','));
     for (size_t i = 0; i < 256; i++) {
@@ -354,7 +372,8 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
             memcpy(left, name, strlen(name) + 1);
             memcpy(right, space + 1, strlen(space + 1) + 1);
         }
-        if (!raw_token(left, raw, &na) || !raw_token(right, raw + na, &nb))
+        if (!ifn_tokenizer_load_local_raw_token(left, raw, &na) ||
+            !ifn_tokenizer_load_local_raw_token(right, raw + na, &nb))
             goto invalid;
         int32_t ia = ifn_vocab_lookup(t, raw, na), ib = ifn_vocab_lookup(t, raw + na, nb),
                 ic = ifn_vocab_lookup(t, raw, na + nb);

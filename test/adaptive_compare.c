@@ -1,16 +1,17 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "decode_compare.c"
-static size_t adaptive_requests, lookup_hits, branch_counts[3];
-static uint32_t adaptive_limit = 32;
-static int copy_fixture, requested_lookup;
-static int32_t adaptive_output[512];
+static size_t ifn_adaptive_compare_local_adaptive_requests, ifn_adaptive_compare_local_lookup_hits,
+    ifn_adaptive_compare_local_branch_counts[3];
+static uint32_t ifn_adaptive_compare_local_adaptive_limit = 32;
+static int ifn_adaptive_compare_local_copy_fixture, ifn_adaptive_compare_local_requested_lookup;
+static int32_t ifn_adaptive_compare_local_adaptive_output[512];
 
 int ifn_adaptive_start(const char *dir, uint32_t mode, uint32_t kv, uint32_t n, uint32_t extra) {
     return ifn_decode_start(dir, mode, kv, 1, n, 7, extra);
 }
 
 uint32_t ifn_adaptive_token_count(void) {
-    return (uint32_t)token_count;
+    return (uint32_t)ifn_ar_compare_local_token_count;
 }
 
 int ifn_adaptive_copy_fixture(const char *directory) {
@@ -37,14 +38,15 @@ int ifn_adaptive_copy_fixture(const char *directory) {
         rc = ifn_render_user_prompt(text, strlen(text), IFN_THINK_NONE, rendered, sizeof rendered,
                                     &bytes);
     if (rc == IFN_OK)
-        rc = ifn_tokenizer_encode(t, rendered, bytes, 1, scratch, tokens, token_count, &count);
+        rc = ifn_tokenizer_encode(t, rendered, bytes, 1, scratch, ifn_ar_compare_local_tokens,
+                                  ifn_ar_compare_local_token_count, &count);
     ifn_tokenizer_scratch_destroy(scratch);
     ifn_tokenizer_close(t);
     if (rc != IFN_OK || !count)
         return 1;
-    token_count = count;
-    adaptive_limit = 256;
-    copy_fixture = 1;
+    ifn_ar_compare_local_token_count = count;
+    ifn_adaptive_compare_local_adaptive_limit = 256;
+    ifn_adaptive_compare_local_copy_fixture = 1;
     return 0;
 }
 
@@ -62,13 +64,16 @@ int ifn_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed,
     options.spec_threshold = threshold;
     ifn_decode_stats stats;
     ifn_decode_info info = IFN_DECODE_INFO_INIT;
-    ifn_status rc = ifn_session_generate_ex(session, tokens, token_count, adaptive_limit, &options,
-                                            adaptive_output, 512, NULL, NULL, &stats);
-    if (rc != IFN_OK || ifn_session_decode_info(session, &info) != IFN_OK ||
+    ifn_status rc = ifn_session_generate_ex(
+        ifn_ar_compare_local_session, ifn_ar_compare_local_tokens, ifn_ar_compare_local_token_count,
+        ifn_adaptive_compare_local_adaptive_limit, &options,
+        ifn_adaptive_compare_local_adaptive_output, 512, NULL, NULL, &stats);
+    if (rc != IFN_OK || ifn_session_decode_info(ifn_ar_compare_local_session, &info) != IFN_OK ||
         stats.generation.generated_tokens != count ||
-        memcmp(adaptive_output, expected, (size_t)count * 4) || stats.speculative_steps != steps ||
-        stats.total_drafts != total || stats.accepted_drafts != accepted ||
-        info.lookup_steps != lookups || info.width2 + info.width4 + info.width8 != steps ||
+        memcmp(ifn_adaptive_compare_local_adaptive_output, expected, (size_t)count * 4) ||
+        stats.speculative_steps != steps || stats.total_drafts != total ||
+        stats.accepted_drafts != accepted || info.lookup_steps != lookups ||
+        info.width2 + info.width4 + info.width8 != steps ||
         info.width2 + 3 * info.width4 + 7 * info.width8 != total ||
         info.lookup_steps > info.width8) {
         fprintf(stderr,
@@ -79,28 +84,32 @@ int ifn_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed,
                 lookups, rc, ifn_last_error());
         return 1;
     }
-    requested_lookup = (int)lookup;
-    adaptive_requests++;
-    lookup_hits += info.lookup_steps;
-    branch_counts[0] += info.width2;
-    branch_counts[1] += info.width4;
-    branch_counts[2] += info.width8;
+    ifn_adaptive_compare_local_requested_lookup = (int)lookup;
+    ifn_adaptive_compare_local_adaptive_requests++;
+    ifn_adaptive_compare_local_lookup_hits += info.lookup_steps;
+    ifn_adaptive_compare_local_branch_counts[0] += info.width2;
+    ifn_adaptive_compare_local_branch_counts[1] += info.width4;
+    ifn_adaptive_compare_local_branch_counts[2] += info.width8;
     return 0;
 }
 
 int ifn_adaptive_finish(uint32_t success) {
-    if (success && copy_fixture && requested_lookup && !lookup_hits) {
+    if (success && ifn_adaptive_compare_local_copy_fixture &&
+        ifn_adaptive_compare_local_requested_lookup && !ifn_adaptive_compare_local_lookup_hits) {
         fputs("copy fixture did not exercise lookup\n", stderr);
         success = 0;
     }
     int rc = ifn_decode_finish(0);
-    if (copy_fixture && requested_lookup && !lookup_hits)
+    if (ifn_adaptive_compare_local_copy_fixture && ifn_adaptive_compare_local_requested_lookup &&
+        !ifn_adaptive_compare_local_lookup_hits)
         rc = 1;
     if (!rc && success)
         printf("{\"adaptive_parity\":true,\"prompt_tokens\":%zu,\"requests\":%zu,\"lookup_steps\":%"
                "zu,\"width2\":%zu,"
                "\"width4\":%zu,\"width8\":%zu}\n",
-               token_count, adaptive_requests, lookup_hits, branch_counts[0], branch_counts[1],
-               branch_counts[2]);
+               ifn_ar_compare_local_token_count, ifn_adaptive_compare_local_adaptive_requests,
+               ifn_adaptive_compare_local_lookup_hits, ifn_adaptive_compare_local_branch_counts[0],
+               ifn_adaptive_compare_local_branch_counts[1],
+               ifn_adaptive_compare_local_branch_counts[2]);
     return rc;
 }

@@ -4,17 +4,17 @@
 #include "../cuda/kernels_gemv.cu"
 #include <cstdio>
 #include <vector>
-using namespace squid;
+using namespace ifn_cuda;
 
-struct Device {
+struct ifn_sampling_kernels_device {
     void *p = nullptr;
 
-    explicit Device(size_t n) {
+    explicit ifn_sampling_kernels_device(size_t n) {
         if (cudaMalloc(&p, n) != cudaSuccess)
             throw "allocation failed";
     }
 
-    ~Device() {
+    ~ifn_sampling_kernels_device() {
         cudaFree(p);
     }
 
@@ -28,27 +28,27 @@ int main() {
     try {
         constexpr int B = 8192, V = 2;
         std::vector<float> logits(B * V), prob(B * V), qsel(B),
-            values((size_t)B * LM_HEAD_BLOCKS, -1e30f);
+            values((size_t)B * IFN_CUDA_LM_HEAD_BLOCKS, -1e30f);
         std::vector<int32_t> indices(values.size(), 0), drafts(B), output(B);
         for (int b = 0; b < B; b++) {
             logits[b * V] = logf(0.7f);
             logits[b * V + 1] = logf(0.3f);
-            values[(size_t)b * LM_HEAD_BLOCKS] = logits[b * V];
+            values[(size_t)b * IFN_CUDA_LM_HEAD_BLOCKS] = logits[b * V];
             prob[b * V] = 0.2f;
             prob[b * V + 1] = 0.8f;
             drafts[b] = b % 5 == 0 ? 0 : 1;
             qsel[b] = drafts[b] == 0 ? 0.2f : 0.8f;
         }
-        Device l(logits.size() * 4), q(prob.size() * 4), qs(qsel.size() * 4), v(values.size() * 4),
-            i(indices.size() * 4), d(drafts.size() * 4), out(output.size() * 4),
-            cfg(sizeof(SampleConfig)), delta(4), pos(4);
+        ifn_sampling_kernels_device l(logits.size() * 4), q(prob.size() * 4), qs(qsel.size() * 4),
+            v(values.size() * 4), i(indices.size() * 4), d(drafts.size() * 4),
+            out(output.size() * 4), cfg(sizeof(ifn_cuda_sample_config)), delta(4), pos(4);
         l.put(logits.data(), logits.size() * 4);
         q.put(prob.data(), prob.size() * 4);
         qs.put(qsel.data(), qsel.size() * 4);
         v.put(values.data(), values.size() * 4);
         i.put(indices.data(), indices.size() * 4);
         d.put(drafts.data(), drafts.size() * 4);
-        SampleConfig config = {};
+        ifn_cuda_sample_config config = {};
         config.inv_temp = 1;
         config.top_p = 1;
         config.seed = 0x123456789abcdef0ULL;
@@ -61,9 +61,9 @@ int main() {
             delta.put(&is_delta, 4);
             config.top_k = mode == 3 ? 1 : 0;
             cfg.put(&config, sizeof config);
-            lm_head_stage2_argmax_kernel<<<B, 256>>>(
+            ifn_cuda_lm_head_stage2_argmax_kernel<<<B, 256>>>(
                 static_cast<float *>(v.p), static_cast<int32_t *>(i.p), static_cast<float *>(l.p),
-                static_cast<int32_t *>(out.p), static_cast<SampleConfig *>(cfg.p),
+                static_cast<int32_t *>(out.p), static_cast<ifn_cuda_sample_config *>(cfg.p),
                 static_cast<int32_t *>(pos.p),
                 mode == 1 || mode == 2 ? static_cast<int32_t *>(d.p) : nullptr,
                 static_cast<float *>(q.p), static_cast<float *>(qs.p),

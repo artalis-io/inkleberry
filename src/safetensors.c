@@ -21,15 +21,16 @@ struct ifn_safetensors {
     uint16_t table[4096];
 };
 
-static uint64_t hash_name(const char *name, size_t length) {
+static uint64_t ifn_safetensors_local_hash_name(const char *name, size_t length) {
     uint64_t hash = UINT64_C(14695981039346656037);
     for (size_t i = 0; i < length; i++)
         hash = (hash ^ (unsigned char)name[i]) * UINT64_C(1099511628211);
     return hash;
 }
 
-static size_t lookup(const ifn_safetensors *file, const char *name, size_t length) {
-    size_t slot = (size_t)(hash_name(name, length) & 4095u);
+static size_t ifn_safetensors_local_lookup(const ifn_safetensors *file, const char *name,
+                                           size_t length) {
+    size_t slot = (size_t)(ifn_safetensors_local_hash_name(name, length) & 4095u);
     for (size_t probe = 0; probe < 4096; probe++, slot = (slot + 1) & 4095u) {
         uint16_t index = file->table[slot];
         if (index == UINT16_MAX)
@@ -41,7 +42,7 @@ static size_t lookup(const ifn_safetensors *file, const char *name, size_t lengt
     return SIZE_MAX;
 }
 
-static bool tensor(ifn_json *j, ifn_tensor_info *info) {
+static bool ifn_safetensors_local_tensor(ifn_json *j, ifn_tensor_info *info) {
     if (!ifn_json_take(j, '{'))
         return false;
     unsigned fields = 0;
@@ -95,7 +96,7 @@ static bool tensor(ifn_json *j, ifn_tensor_info *info) {
     return ifn_json_take(j, '}') && fields == 7;
 }
 
-static bool metadata(ifn_json *j) {
+static bool ifn_safetensors_local_metadata(ifn_json *j) {
     if (!ifn_json_take(j, '{'))
         return false;
     if (ifn_json_take(j, '}'))
@@ -107,7 +108,7 @@ static bool metadata(ifn_json *j) {
     return ifn_json_take(j, '}');
 }
 
-static ifn_status parse(ifn_safetensors *file) {
+static ifn_status ifn_safetensors_local_parse(ifn_safetensors *file) {
     if (file->size < 10)
         return ifn_error(IFN_FORMAT, "truncated safetensors file");
     uint64_t header = 0;
@@ -126,17 +127,18 @@ static ifn_status parse(ifn_safetensors *file) {
             if (!ifn_json_string(&j, name, sizeof name) || !name[0] || !ifn_json_take(&j, ':'))
                 return ifn_error(IFN_FORMAT, "invalid tensor name/key");
             if (!strcmp(name, "__metadata__")) {
-                if (seen_metadata || !metadata(&j))
+                if (seen_metadata || !ifn_safetensors_local_metadata(&j))
                     return ifn_error(IFN_FORMAT, "invalid metadata");
                 seen_metadata = true;
                 continue;
             }
-            if (file->count == IFN_MAX_TENSORS || lookup(file, name, strlen(name)) != SIZE_MAX)
+            if (file->count == IFN_MAX_TENSORS ||
+                ifn_safetensors_local_lookup(file, name, strlen(name)) != SIZE_MAX)
                 return ifn_error(IFN_FORMAT, "duplicate tensor or tensor limit exceeded");
             ifn_tensor_info *info = &file->tensors[file->count];
             memset(info, 0, sizeof *info);
             memcpy(info->name, name, strlen(name) + 1);
-            if (!tensor(&j, info))
+            if (!ifn_safetensors_local_tensor(&j, info))
                 return ifn_error(IFN_FORMAT, "invalid tensor schema/dtype/shape");
             size_t elements = 1;
             for (uint32_t i = 0; i < info->rank; i++) {
@@ -150,7 +152,7 @@ static ifn_status parse(ifn_safetensors *file) {
                 info->offset > file->size - file->base ||
                 info->bytes > file->size - file->base - info->offset)
                 return ifn_error(IFN_FORMAT, "tensor size/offset mismatch");
-            size_t slot = (size_t)(hash_name(name, strlen(name)) & 4095u);
+            size_t slot = (size_t)(ifn_safetensors_local_hash_name(name, strlen(name)) & 4095u);
             while (file->table[slot] != UINT16_MAX)
                 slot = (slot + 1) & 4095u;
             file->table[slot] = (uint16_t)file->count++;
@@ -179,7 +181,7 @@ static ifn_status parse(ifn_safetensors *file) {
     return ifn_error(IFN_OK, "");
 }
 
-static ifn_status create(const ifn_options *options, ifn_safetensors **out) {
+static ifn_status ifn_safetensors_local_create(const ifn_options *options, ifn_safetensors **out) {
     ifn_options allocator;
     ifn_status status = ifn_options_resolve(options, &allocator);
     if (status != IFN_OK)
@@ -216,12 +218,12 @@ ifn_status ifn_safetensors_open_memory(const void *data, size_t bytes, const ifn
     if (!out || !data)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing input/output");
     ifn_safetensors *file = NULL;
-    ifn_status status = create(options, &file);
+    ifn_status status = ifn_safetensors_local_create(options, &file);
     if (status != IFN_OK)
         return status;
     file->data = data;
     file->size = bytes;
-    status = parse(file);
+    status = ifn_safetensors_local_parse(file);
     if (status != IFN_OK) {
         ifn_safetensors_close(file);
         return status;
@@ -255,7 +257,7 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     if (mapping == MAP_FAILED)
         return ifn_error(IFN_IO, "cannot map tensor file");
     ifn_safetensors *file = NULL;
-    status = create(&checked, &file);
+    status = ifn_safetensors_local_create(&checked, &file);
     if (status != IFN_OK) {
         (void)munmap(mapping, size);
         return status;
@@ -263,7 +265,7 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     file->data = mapping;
     file->size = size;
     file->mapped = true;
-    status = parse(file);
+    status = ifn_safetensors_local_parse(file);
     if (status != IFN_OK) {
         ifn_safetensors_close(file);
         return status;
@@ -298,7 +300,7 @@ ifn_status ifn_safetensors_find(const ifn_safetensors *file, const char *name, s
         *out = NULL;
     if (!file || !out || !name || !length || length > IFN_MAX_NAME || memchr(name, 0, length))
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid lookup name/output");
-    return ifn_safetensors_at(file, lookup(file, name, length), out);
+    return ifn_safetensors_at(file, ifn_safetensors_local_lookup(file, name, length), out);
 }
 
 ifn_status ifn_safetensors_data(const ifn_safetensors *file, size_t index, const void **out,

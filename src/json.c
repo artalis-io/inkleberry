@@ -19,7 +19,7 @@ bool ifn_json_take(ifn_json *j, unsigned char c) {
     return true;
 }
 
-static bool hex4(ifn_json *j, uint32_t *out) {
+static bool ifn_json_local_hex4(ifn_json *j, uint32_t *out) {
     uint32_t value = 0;
     for (unsigned i = 0; i < 4; i++) {
         if (j->pos == j->size)
@@ -60,7 +60,7 @@ bool ifn_json_string(ifn_json *j, char *out, size_t capacity) {
                 return false;
             unsigned char c = j->data[j->pos++];
             if (c == 'u') {
-                if (!hex4(j, &cp))
+                if (!ifn_json_local_hex4(j, &cp))
                     return false;
                 if (cp >= 0xd800 && cp <= 0xdbff) {
                     uint32_t low;
@@ -68,7 +68,7 @@ bool ifn_json_string(ifn_json *j, char *out, size_t capacity) {
                         j->data[j->pos + 1] != 'u')
                         return false;
                     j->pos += 2;
-                    if (!hex4(j, &low) || low < 0xdc00 || low > 0xdfff)
+                    if (!ifn_json_local_hex4(j, &low) || low < 0xdc00 || low > 0xdfff)
                         return false;
                     cp = 0x10000 + (cp - 0xd800) * 1024 + low - 0xdc00;
                 } else if (cp >= 0xdc00 && cp <= 0xdfff)

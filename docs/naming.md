@@ -25,11 +25,20 @@ This is a deliberate breaking pre-release rename: no aliases for the former
 Rebuild consumers against the new headers/libraries; do not mix old objects with
 new libraries. ABI structure/version semantics otherwise remain unchanged.
 
-The pinned CUDA bridge keeps its internal upstream symbols and environment knobs
-(including `SQUID_MTP_BF16`) to preserve its verified bytes. These are not the
-public inference ABI. Legal attribution, `UPSTREAM.json`, archived reports and
-frozen reference sources preserve their historical names. Optional reference
-validation adapters use the current executable names.
+All project-owned native C/CUDA functions, internal helpers, namespaces, types,
+constants and macros use `ifn_` / `IFN_`; the native environment flag is now
+`INKLEBERRY_MTP_BF16`. Local variables/members, standard entry points (`main`,
+`LLVMFuzzerTestOneInput`) and identifiers supplied by CUDA/the standard library
+keep their external conventions.
+
+Frozen Zig sources retain historical identifiers. Optional comparison builds
+adapt only link names in disposable `.build/native-oracle-src` copies, without
+changing checked-in originals. There are no legacy C/CUDA compatibility aliases.
+
+The native namespace map records old names as provenance data, not production
+symbols. Reversing this identifier-only map (and removing each file's modification
+notice) must reproduce every original upstream CUDA hash. Legal notices, original
+hashes, upstream URLs and historical documentation retain attribution.
 
 Host qualification and numerical GPU qualification are distinct. See
 [distribution validation](distribution-validation.md) for the executed model-backed modular and amalgamated qualification.

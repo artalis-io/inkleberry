@@ -32,7 +32,7 @@ def main():
         folder=Path(tmp)
         source=checks.extract(package('source',folder/'archives'),folder/'source')
         subprocess.run(['make','-j8','CC='+a.cc,'CXX='+a.cxx,'CUDA_ROOT='+str(a.cuda_root),
-                        'generated-check','all','inkleberry-generate','libinkleberry-cuda.a','.build/infer-native-shared'],cwd=source,check=True)
+                        'generated-check','all','inkleberry-generate','libinkleberry-cuda.a','native-namespace-check','.build/infer-native-shared'],cwd=source,check=True)
         runtime=checks.extract(package('runtime',folder/'archives',gpu=True,build_root=source),folder/'runtime')
         embed=checks.extract(package('embedding',folder/'archives'),folder/'embedding')
         env=dict(os.environ,INKLEBERRY_TEST_TIMEOUT_SECONDS='600')

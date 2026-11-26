@@ -1,3 +1,4 @@
+// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
 #pragma once
 
 #include "config.hpp"
@@ -8,7 +9,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace squid {
+namespace ifn_cuda {
 
 // ============================================================================
 // Blackwell Programmatic Dependent Launch (PDL) & Streaming Weight Load Primitives
@@ -16,13 +17,13 @@ namespace squid {
 // Note: L2::cache_hint is intentionally omitted on CUDA 13.1 due to ptxas 13.1 bug.
 // ============================================================================
 
-__device__ __forceinline__ void pdl_wait() {
+__device__ __forceinline__ void ifn_cuda_pdl_wait() {
 #if __CUDA_ARCH__ >= 900
     asm volatile("griddepcontrol.wait;" ::: "memory");
 #endif
 }
 
-__device__ __forceinline__ void pdl_wait_fenced(uint32_t zero) {
+__device__ __forceinline__ void ifn_cuda_pdl_wait_fenced(uint32_t zero) {
 #if __CUDA_ARCH__ >= 900
     #pragma unroll 1
     for (uint32_t i = 0; i <= zero; ++i) {
@@ -33,14 +34,14 @@ __device__ __forceinline__ void pdl_wait_fenced(uint32_t zero) {
 #endif
 }
 
-__device__ __forceinline__ void pdl_trigger() {
+__device__ __forceinline__ void ifn_cuda_pdl_trigger() {
 #if __CUDA_ARCH__ >= 900
     asm volatile("griddepcontrol.launch_dependents;" ::: "memory");
 #endif
 }
 
 template <class... KArgs, class... Args>
-inline void launch_pdl(void (*kernel)(KArgs...), dim3 grid, int block, cudaStream_t stream, Args&&... args) {
+inline void ifn_cuda_launch_pdl(void (*kernel)(KArgs...), dim3 grid, int block, cudaStream_t stream, Args&&... args) {
     cudaLaunchConfig_t cfg = {};
     cfg.gridDim = grid;
     cfg.blockDim = dim3(block);
@@ -50,10 +51,10 @@ inline void launch_pdl(void (*kernel)(KArgs...), dim3 grid, int block, cudaStrea
     attr[0].val.programmaticStreamSerializationAllowed = 1;
     cfg.attrs = attr;
     cfg.numAttrs = 1;
-    CUDA_CHECK(cudaLaunchKernelEx(&cfg, kernel, static_cast<KArgs>(args)...));
+    IFN_CUDA_CUDA_CHECK(cudaLaunchKernelEx(&cfg, kernel, static_cast<KArgs>(args)...));
 }
 
-__device__ __forceinline__ uint4 ld_stream_u4(const void* p) {
+__device__ __forceinline__ uint4 ifn_cuda_ld_stream_u4(const void* p) {
     uint4 v;
     asm volatile("ld.global.nc.L1::no_allocate.L2::256B.v4.u32 {%0,%1,%2,%3}, [%4];"
                  : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
@@ -61,7 +62,7 @@ __device__ __forceinline__ uint4 ld_stream_u4(const void* p) {
     return v;
 }
 
-__device__ __forceinline__ uint2 ld_stream_u2(const void* p) {
+__device__ __forceinline__ uint2 ifn_cuda_ld_stream_u2(const void* p) {
     uint2 v;
     asm volatile("ld.global.nc.L1::no_allocate.L2::256B.v2.u32 {%0,%1}, [%2];"
                  : "=r"(v.x), "=r"(v.y)
@@ -69,20 +70,20 @@ __device__ __forceinline__ uint2 ld_stream_u2(const void* p) {
     return v;
 }
 
-__device__ __forceinline__ uint16_t ld_scale_u16(const void* p) {
+__device__ __forceinline__ uint16_t ifn_cuda_ld_scale_u16(const void* p) {
     uint16_t v;
     asm volatile("ld.global.nc.u16 %0, [%1];" : "=h"(v) : "l"(p));
     return v;
 }
 
-__device__ __forceinline__ uint8_t ld_scale_u8(const void* p) {
+__device__ __forceinline__ uint8_t ifn_cuda_ld_scale_u8(const void* p) {
     uint16_t v;
     asm volatile("ld.global.nc.u8 %0, [%1];" : "=h"(v) : "l"(p));
     return static_cast<uint8_t>(v);
 }
 
 // Coherent, non-hoistable loads for activations/indices produced by a PDL predecessor.
-__device__ __forceinline__ uint4 ld_dep_u4(const void* p) {
+__device__ __forceinline__ uint4 ifn_cuda_ld_dep_u4(const void* p) {
     uint4 v;
     asm volatile("ld.global.v4.u32 {%0,%1,%2,%3}, [%4];"
                  : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
@@ -91,19 +92,19 @@ __device__ __forceinline__ uint4 ld_dep_u4(const void* p) {
     return v;
 }
 
-__device__ __forceinline__ int32_t ld_dep_i32(const int32_t* p) {
+__device__ __forceinline__ int32_t ifn_cuda_ld_dep_i32(const int32_t* p) {
     int32_t v;
     asm volatile("ld.global.s32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
     return v;
 }
 
-__device__ __forceinline__ float ld_dep_f32(const float* p) {
+__device__ __forceinline__ float ifn_cuda_ld_dep_f32(const float* p) {
     float v;
     asm volatile("ld.global.f32 %0, [%1];" : "=f"(v) : "l"(p) : "memory");
     return v;
 }
 
-__device__ __forceinline__ void mma_m16n8k16_f32_bf16(
+__device__ __forceinline__ void ifn_cuda_mma_m16n8k16_f32_bf16(
     float& d0, float& d1, float& d2, float& d3,
     uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3,
     uint32_t b0, uint32_t b1,
@@ -118,7 +119,7 @@ __device__ __forceinline__ void mma_m16n8k16_f32_bf16(
 
 // Hardware Blackwell sm_120 PTX FP4 (e2m1x2) -> half2 conversion!
 // Single-instruction hardware decode on Blackwell (zero LUT / bitshift overhead).
-__device__ __forceinline__ __half2 cvt_e2m1x2_to_half2(uint32_t byte_val) {
+__device__ __forceinline__ __half2 ifn_cuda_cvt_e2m1x2_to_half2(uint32_t byte_val) {
     uint32_t out;
 #if __CUDA_ARCH__ >= 1000
     uint16_t tmp = static_cast<uint16_t>(byte_val);
@@ -138,7 +139,7 @@ __device__ __forceinline__ __half2 cvt_e2m1x2_to_half2(uint32_t byte_val) {
 }
 
 // Unpack 8 FP4 weights (1 uint32) into 4x half2 with ZERO shifts/masks on Blackwell sm_120!
-__device__ __forceinline__ void cvt_e2m1x8_to_half2x4(
+__device__ __forceinline__ void ifn_cuda_cvt_e2m1x8_to_half2x4(
     uint32_t w, __half2& h0, __half2& h1, __half2& h2, __half2& h3) {
 #if __CUDA_ARCH__ >= 1000
     uint32_t r0, r1, r2, r3;
@@ -154,15 +155,15 @@ __device__ __forceinline__ void cvt_e2m1x8_to_half2x4(
     h2 = *reinterpret_cast<__half2*>(&r2);
     h3 = *reinterpret_cast<__half2*>(&r3);
 #else
-    h0 = cvt_e2m1x2_to_half2(w & 0xFFu);
-    h1 = cvt_e2m1x2_to_half2((w >> 8) & 0xFFu);
-    h2 = cvt_e2m1x2_to_half2((w >> 16) & 0xFFu);
-    h3 = cvt_e2m1x2_to_half2((w >> 24) & 0xFFu);
+    h0 = ifn_cuda_cvt_e2m1x2_to_half2(w & 0xFFu);
+    h1 = ifn_cuda_cvt_e2m1x2_to_half2((w >> 8) & 0xFFu);
+    h2 = ifn_cuda_cvt_e2m1x2_to_half2((w >> 16) & 0xFFu);
+    h3 = ifn_cuda_cvt_e2m1x2_to_half2((w >> 24) & 0xFFu);
 #endif
 }
 
 // Hardware Blackwell/Hopper/Ada FP8 E4M3x2 -> half2 conversion
-__device__ __forceinline__ __half2 cvt_e4m3x2_to_half2(uint16_t packed) {
+__device__ __forceinline__ __half2 ifn_cuda_cvt_e4m3x2_to_half2(uint16_t packed) {
     uint32_t out;
 #if __CUDA_ARCH__ >= 890
     asm("cvt.rn.f16x2.e4m3x2 %0, %1;" : "=r"(out) : "h"(packed));
@@ -175,45 +176,45 @@ __device__ __forceinline__ __half2 cvt_e4m3x2_to_half2(uint16_t packed) {
     return *reinterpret_cast<__half2*>(&out);
 }
 
-__device__ __forceinline__ float cvt_e4m3_to_float(uint8_t code) {
+__device__ __forceinline__ float ifn_cuda_cvt_e4m3_to_float(uint8_t code) {
     __nv_fp8_e4m3 v;
     v.__x = code;
     return static_cast<float>(v);
 }
 
-__device__ __forceinline__ uint8_t float_to_e4m3(float x) {
+__device__ __forceinline__ uint8_t ifn_cuda_float_to_e4m3(float x) {
     return static_cast<uint8_t>(__nv_cvt_float_to_fp8(x, __NV_SATFINITE, __NV_E4M3));
 }
 
-__device__ __forceinline__ float cvt_ue8m0_to_float(uint8_t e) {
+__device__ __forceinline__ float ifn_cuda_cvt_ue8m0_to_float(uint8_t e) {
     uint32_t bits = (e == 0) ? 0x00400000u : (e == 255 ? 0x7fc00000u : (uint32_t(e) << 23));
     return __uint_as_float(bits);
 }
 
-__device__ __forceinline__ float bf16_to_float(uint16_t b) {
+__device__ __forceinline__ float ifn_cuda_bf16_to_float(uint16_t b) {
     return __uint_as_float(uint32_t(b) << 16);
 }
 
-__device__ __forceinline__ uint16_t float_to_bf16_bits(float f) {
+__device__ __forceinline__ uint16_t ifn_cuda_float_to_bf16_bits(float f) {
     __nv_bfloat16 b = __float2bfloat16(f);
     return *reinterpret_cast<uint16_t*>(&b);
 }
 
-__device__ __forceinline__ float round_bf16(float f) {
+__device__ __forceinline__ float ifn_cuda_round_bf16(float f) {
     return __bfloat162float(__float2bfloat16(f));
 }
 
-__device__ __forceinline__ float fast_sigmoid(float x) {
+__device__ __forceinline__ float ifn_cuda_fast_sigmoid(float x) {
     return 1.0f / (1.0f + __expf(-x));
 }
 
-__device__ __forceinline__ float fast_tanh(float x) {
+__device__ __forceinline__ float ifn_cuda_fast_tanh(float x) {
     float y;
     asm("tanh.approx.f32 %0, %1;" : "=f"(y) : "f"(x));
     return y;
 }
 
-__device__ __forceinline__ float warp_sum(float v) {
+__device__ __forceinline__ float ifn_cuda_warp_sum(float v) {
     #pragma unroll
     for (int off = 16; off > 0; off >>= 1) {
         v += __shfl_xor_sync(0xffffffffu, v, off);
@@ -221,7 +222,7 @@ __device__ __forceinline__ float warp_sum(float v) {
     return v;
 }
 
-__device__ __forceinline__ float half_warp_sum(float v) {
+__device__ __forceinline__ float ifn_cuda_half_warp_sum(float v) {
     #pragma unroll
     for (int off = 8; off > 0; off >>= 1) {
         v += __shfl_xor_sync(0xffffffffu, v, off);
@@ -229,14 +230,14 @@ __device__ __forceinline__ float half_warp_sum(float v) {
     return v;
 }
 
-__device__ __forceinline__ float quarter_warp_sum(float v) {
+__device__ __forceinline__ float ifn_cuda_quarter_warp_sum(float v) {
     v += __shfl_xor_sync(0xffffffffu, v, 4);
     v += __shfl_xor_sync(0xffffffffu, v, 2);
     v += __shfl_xor_sync(0xffffffffu, v, 1);
     return v;
 }
 
-__device__ __forceinline__ float warp_max(float v) {
+__device__ __forceinline__ float ifn_cuda_warp_max(float v) {
     #pragma unroll
     for (int off = 16; off > 0; off >>= 1) {
         v = fmaxf(v, __shfl_xor_sync(0xffffffffu, v, off));
@@ -244,7 +245,7 @@ __device__ __forceinline__ float warp_max(float v) {
     return v;
 }
 
-__device__ __forceinline__ float half2_dot_f32(__half2 a, __half2 b) {
+__device__ __forceinline__ float ifn_cuda_half2_dot_f32(__half2 a, __half2 b) {
     float2 fa = __half22float2(a);
     float2 fb = __half22float2(b);
     return fmaf(fa.x, fb.x, fa.y * fb.y);
@@ -252,10 +253,10 @@ __device__ __forceinline__ float half2_dot_f32(__half2 a, __half2 b) {
 
 // Compute dot product of 16 elements: 8 bytes (uint2) of packed e2m1 weights x 16 halfs (4x half2 pairs),
 // accumulated in half2 and returned as float (to be multiplied by E4M3 block scale).
-__device__ __forceinline__ float nvfp4_block16_dot(uint2 w8, const __half2* __restrict__ xh) {
+__device__ __forceinline__ float ifn_cuda_nvfp4_block16_dot(uint2 w8, const __half2* __restrict__ xh) {
     __half2 h0, h1, h2, h3, h4, h5, h6, h7;
-    cvt_e2m1x8_to_half2x4(w8.x, h0, h1, h2, h3);
-    cvt_e2m1x8_to_half2x4(w8.y, h4, h5, h6, h7);
+    ifn_cuda_cvt_e2m1x8_to_half2x4(w8.x, h0, h1, h2, h3);
+    ifn_cuda_cvt_e2m1x8_to_half2x4(w8.y, h4, h5, h6, h7);
     __half2 p0 = __hmul2(h0, xh[0]);
     __half2 p1 = __hmul2(h1, xh[1]);
     p0 = __hfma2(h2, xh[2], p0);
@@ -269,12 +270,12 @@ __device__ __forceinline__ float nvfp4_block16_dot(uint2 w8, const __half2* __re
 }
 
 // Pack two float values into half2
-__device__ __forceinline__ __half2 f32_pair_to_h2(float a, float b) {
+__device__ __forceinline__ __half2 ifn_cuda_f32_pair_to_h2(float a, float b) {
     return __floats2half2_rn(a, b);
 }
 
 // Hardware FP16 Tensor Core MMA: D[16,8] = A[16,16] * B[16,8] + C[16,8] (FP32 accumulate)
-__device__ __forceinline__ void mma_m16n8k16_f32_f16(
+__device__ __forceinline__ void ifn_cuda_mma_m16n8k16_f32_f16(
     float& d0, float& d1, float& d2, float& d3,
     uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3,
     uint32_t b0, uint32_t b1,
@@ -291,14 +292,14 @@ __device__ __forceinline__ void mma_m16n8k16_f32_f16(
           "f"(c0), "f"(c1), "f"(c2), "f"(c3));
 }
 
-__device__ __forceinline__ void ldmatrix_x4(
+__device__ __forceinline__ void ifn_cuda_ldmatrix_x4(
     uint32_t& r0, uint32_t& r1, uint32_t& r2, uint32_t& r3, const void* smem_ptr) {
     uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
     asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];\n"
                  : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(addr));
 }
 
-__device__ __forceinline__ void ldmatrix_x2_trans(
+__device__ __forceinline__ void ifn_cuda_ldmatrix_x2_trans(
     uint32_t& r0, uint32_t& r1, const void* smem_ptr) {
     uint32_t addr = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
     asm volatile("ldmatrix.sync.aligned.m8n8.x2.trans.shared.b16 {%0, %1}, [%2];\n"
@@ -306,44 +307,44 @@ __device__ __forceinline__ void ldmatrix_x2_trans(
 }
 
 // Split-K attention partial buffer offsets (NUM_HEADS=24, MAX_VERIFY_B=8, KV_TOTAL_SPLITS=65)
-constexpr size_t SPLIT_MD_ELEMS = (size_t)NUM_HEADS * 8 * KV_TOTAL_SPLITS; // 12480
-constexpr size_t SPLIT_M_OFF = 0;
-constexpr size_t SPLIT_D_OFF = SPLIT_MD_ELEMS;
-constexpr size_t SPLIT_O_OFF = 2 * SPLIT_MD_ELEMS; // 24960
-constexpr size_t SPLIT_BUF_FLOATS = SPLIT_O_OFF + SPLIT_MD_ELEMS * HEAD_DIM; // 1622400
+constexpr size_t IFN_CUDA_SPLIT_MD_ELEMS = (size_t)IFN_CUDA_NUM_HEADS * 8 * IFN_CUDA_KV_TOTAL_SPLITS; // 12480
+constexpr size_t IFN_CUDA_SPLIT_M_OFF = 0;
+constexpr size_t IFN_CUDA_SPLIT_D_OFF = IFN_CUDA_SPLIT_MD_ELEMS;
+constexpr size_t IFN_CUDA_SPLIT_O_OFF = 2 * IFN_CUDA_SPLIT_MD_ELEMS; // 24960
+constexpr size_t IFN_CUDA_SPLIT_BUF_FLOATS = IFN_CUDA_SPLIT_O_OFF + IFN_CUDA_SPLIT_MD_ELEMS * IFN_CUDA_HEAD_DIM; // 1622400
 
 // Store one 128-dim KV head using 128 threads (tid = 0..127, 4 warps, caller provides sm[4]).
 // KV_FMT: 0 = BF16, 1 = FP8 (E4M3 + per-head half scale), 2 = Q4 ([-7..7]+7 + group-64 half scale).
 template <int KV_FMT>
-__device__ __forceinline__ void store_kv_head_128(
+__device__ __forceinline__ void ifn_cuda_store_kv_head_128(
     float val, int slot, int h, int tid,
     void* __restrict__ cache, __half* __restrict__ scales, float* sm) {
     if constexpr (KV_FMT == 0) {
-        static_cast<__nv_bfloat16*>(cache)[(size_t)slot * KV_DIM + h * HEAD_DIM + tid] = __float2bfloat16(val);
+        static_cast<__nv_bfloat16*>(cache)[(size_t)slot * IFN_CUDA_KV_DIM + h * IFN_CUDA_HEAD_DIM + tid] = __float2bfloat16(val);
     } else if constexpr (KV_FMT == 1) {
         int warp = tid >> 5;
         int lane = tid & 31;
-        float wm = warp_max(fabsf(val));
+        float wm = ifn_cuda_warp_max(fabsf(val));
         if (lane == 0) sm[warp] = wm;
         __syncthreads();
         float amax = fmaxf(fmaxf(sm[0], sm[1]), fmaxf(sm[2], sm[3]));
         float sc = fmaxf(amax / 448.0f, 1e-7f);
-        if (tid == 0) scales[(size_t)slot * NUM_KV_HEADS + h] = __float2half(sc);
-        static_cast<uint8_t*>(cache)[(size_t)slot * KV_DIM + h * HEAD_DIM + tid] = float_to_e4m3(val / sc);
+        if (tid == 0) scales[(size_t)slot * IFN_CUDA_NUM_KV_HEADS + h] = __float2half(sc);
+        static_cast<uint8_t*>(cache)[(size_t)slot * IFN_CUDA_KV_DIM + h * IFN_CUDA_HEAD_DIM + tid] = ifn_cuda_float_to_e4m3(val / sc);
     } else {
         int warp = tid >> 5;
         int lane = tid & 31;
-        float wm = warp_max(fabsf(val));
+        float wm = ifn_cuda_warp_max(fabsf(val));
         if (lane == 0) sm[warp] = wm;
         __syncthreads();
         int g = tid >> 6; // 0 (dims 0..63) or 1 (dims 64..127)
         float gmax = fmaxf(sm[g * 2], sm[g * 2 + 1]);
         float sc = fmaxf(gmax / 7.0f, 1e-7f);
-        if ((tid & 63) == 0) scales[(size_t)slot * KV_Q4_SCALES_PER_TOK + h * 2 + g] = __float2half(sc);
+        if ((tid & 63) == 0) scales[(size_t)slot * IFN_CUDA_KV_Q4_SCALES_PER_TOK + h * 2 + g] = __float2half(sc);
         int q = max(-7, min(7, __float2int_rn(val / sc))) + 7; // 0..14
         int q_odd = __shfl_xor_sync(0xffffffffu, q, 1);
         if ((tid & 1) == 0) {
-            static_cast<uint8_t*>(cache)[(size_t)slot * (KV_DIM >> 1) + h * 64 + (tid >> 1)] =
+            static_cast<uint8_t*>(cache)[(size_t)slot * (IFN_CUDA_KV_DIM >> 1) + h * 64 + (tid >> 1)] =
                 static_cast<uint8_t>(q | (q_odd << 4));
         }
     }
@@ -351,27 +352,27 @@ __device__ __forceinline__ void store_kv_head_128(
 
 // Load 4 contiguous KV elements at (slot, kvh, d_off = lane*4) into two float2s.
 template <int KV_FMT>
-__device__ __forceinline__ void load_kv_4elems(
+__device__ __forceinline__ void ifn_cuda_load_kv_4elems(
     const void* __restrict__ cache, const __half* __restrict__ scales,
     int slot, int kvh, int d_off, float2& out0, float2& out1) {
     if constexpr (KV_FMT == 0) {
         uint2 raw = __ldg(reinterpret_cast<const uint2*>(
-            static_cast<const __nv_bfloat16*>(cache) + (size_t)slot * KV_DIM + kvh * HEAD_DIM + d_off));
+            static_cast<const __nv_bfloat16*>(cache) + (size_t)slot * IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM + d_off));
         const __nv_bfloat162* b = reinterpret_cast<const __nv_bfloat162*>(&raw);
         out0 = __bfloat1622float2(b[0]);
         out1 = __bfloat1622float2(b[1]);
     } else if constexpr (KV_FMT == 1) {
         uint32_t raw = __ldg(reinterpret_cast<const uint32_t*>(
-            static_cast<const uint8_t*>(cache) + (size_t)slot * KV_DIM + kvh * HEAD_DIM + d_off));
-        float sc = __half2float(__ldg(scales + (size_t)slot * NUM_KV_HEADS + kvh));
-        float2 f0 = __half22float2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw & 0xFFFFu)));
-        float2 f1 = __half22float2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw >> 16)));
+            static_cast<const uint8_t*>(cache) + (size_t)slot * IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM + d_off));
+        float sc = __half2float(__ldg(scales + (size_t)slot * IFN_CUDA_NUM_KV_HEADS + kvh));
+        float2 f0 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw & 0xFFFFu)));
+        float2 f1 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw >> 16)));
         out0 = make_float2(f0.x * sc, f0.y * sc);
         out1 = make_float2(f1.x * sc, f1.y * sc);
     } else {
         uint16_t raw = __ldg(reinterpret_cast<const uint16_t*>(
-            static_cast<const uint8_t*>(cache) + (size_t)slot * (KV_DIM >> 1) + kvh * 64 + (d_off >> 1)));
-        float sc = __half2float(__ldg(scales + (size_t)slot * KV_Q4_SCALES_PER_TOK + kvh * 2 + (d_off >> 6)));
+            static_cast<const uint8_t*>(cache) + (size_t)slot * (IFN_CUDA_KV_DIM >> 1) + kvh * 64 + (d_off >> 1)));
+        float sc = __half2float(__ldg(scales + (size_t)slot * IFN_CUDA_KV_Q4_SCALES_PER_TOK + kvh * 2 + (d_off >> 6)));
         out0 = make_float2((float(int(raw & 0xFu) - 7)) * sc, (float(int((raw >> 4) & 0xFu) - 7)) * sc);
         out1 = make_float2((float(int((raw >> 8) & 0xFu) - 7)) * sc, (float(int((raw >> 12) & 0xFu) - 7)) * sc);
     }
@@ -379,13 +380,13 @@ __device__ __forceinline__ void load_kv_4elems(
 
 // Cooperative loader: load 8 contiguous KV elements at (slot, kvh, sub*8) into 4x half2 (128-bit uint4)!
 template <int KV_FMT>
-__device__ __forceinline__ uint4 load_kv_8elems_h2x4(
+__device__ __forceinline__ uint4 ifn_cuda_load_kv_8elems_h2x4(
     const void* __restrict__ cache, const __half* __restrict__ scales,
     int slot, int kvh, int sub) {
     __half2 h[4];
     if constexpr (KV_FMT == 0) {
         uint4 raw = __ldg(reinterpret_cast<const uint4*>(
-            static_cast<const __nv_bfloat16*>(cache) + (size_t)slot * KV_DIM + kvh * HEAD_DIM) + sub);
+            static_cast<const __nv_bfloat16*>(cache) + (size_t)slot * IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM) + sub);
         const __nv_bfloat162* b = reinterpret_cast<const __nv_bfloat162*>(&raw);
         #pragma unroll
         for (int i = 0; i < 4; ++i) {
@@ -394,17 +395,17 @@ __device__ __forceinline__ uint4 load_kv_8elems_h2x4(
         }
     } else if constexpr (KV_FMT == 1) {
         uint2 raw = __ldg(reinterpret_cast<const uint2*>(
-            static_cast<const uint8_t*>(cache) + (size_t)slot * KV_DIM + kvh * HEAD_DIM) + sub);
-        __half sc = __ldg(scales + (size_t)slot * NUM_KV_HEADS + kvh);
+            static_cast<const uint8_t*>(cache) + (size_t)slot * IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM) + sub);
+        __half sc = __ldg(scales + (size_t)slot * IFN_CUDA_NUM_KV_HEADS + kvh);
         __half2 hsc = __half2half2(sc);
-        h[0] = __hmul2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.x & 0xFFFFu)), hsc);
-        h[1] = __hmul2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.x >> 16)), hsc);
-        h[2] = __hmul2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.y & 0xFFFFu)), hsc);
-        h[3] = __hmul2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.y >> 16)), hsc);
+        h[0] = __hmul2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.x & 0xFFFFu)), hsc);
+        h[1] = __hmul2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.x >> 16)), hsc);
+        h[2] = __hmul2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.y & 0xFFFFu)), hsc);
+        h[3] = __hmul2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(raw.y >> 16)), hsc);
     } else {
         uint32_t raw = __ldg(reinterpret_cast<const uint32_t*>(
-            static_cast<const uint8_t*>(cache) + (size_t)slot * (KV_DIM >> 1) + kvh * 64) + sub);
-        __half sc = __ldg(scales + (size_t)slot * KV_Q4_SCALES_PER_TOK + kvh * 2 + (sub >> 3));
+            static_cast<const uint8_t*>(cache) + (size_t)slot * (IFN_CUDA_KV_DIM >> 1) + kvh * 64) + sub);
+        __half sc = __ldg(scales + (size_t)slot * IFN_CUDA_KV_Q4_SCALES_PER_TOK + kvh * 2 + (sub >> 3));
         __half2 hsc = __half2half2(sc);
         __half2 h1031 = __float2half2_rn(1031.0f);
         // Fast exact FP16 magic-bias nibble unpack: (0x6400 | n) = 1024+n -> sub 1031 = n-7 -> mul sc!
@@ -422,7 +423,7 @@ __device__ __forceinline__ uint4 load_kv_8elems_h2x4(
 // TILE_T = 32 (2 slices x 16 tokens): 17.4 KB SMEM (s_k + s_v together -> ONLY 2 syncs/tile, 4-5 blocks/SM!).
 // NM = 1 (THREADS=64) for Q_CNT <= 16 (B=1..5); NM = 2 (THREADS=128) for Q_CNT <= 32 (B=6..8, DSpark).
 template <int KV_FMT, int Q_CNT, int Q_STRIDE, int THREADS>
-__device__ __forceinline__ void run_tc_bulk_splitk(
+__device__ __forceinline__ void ifn_cuda_run_tc_bulk_splitk(
     const float* __restrict__ q_base_ptr,
     const void* __restrict__ k_cache,
     const void* __restrict__ v_cache,
@@ -440,16 +441,16 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
     int slice = warp & 1;  // 0..1 (2 warps split TILE_T=32 into 16 tokens each!)
     int m_tile = warp >> 1;// 0 (or 1 when NM==2)
 
-    float* s_m_out = split_buf + SPLIT_M_OFF;
-    float* s_d_out = split_buf + SPLIT_D_OFF;
-    float* s_o_out = split_buf + SPLIT_O_OFF;
+    float* s_m_out = split_buf + IFN_CUDA_SPLIT_M_OFF;
+    float* s_d_out = split_buf + IFN_CUDA_SPLIT_D_OFF;
+    float* s_o_out = split_buf + IFN_CUDA_SPLIT_O_OFF;
 
     if (t_start >= t_end) {
         if (tid < Q_CNT) {
-            int gqa = tid % GQA_RATIO;
-            int b = tid / GQA_RATIO;
-            int h = kvh * GQA_RATIO + gqa;
-            int idx = (h * 8 + b) * KV_TOTAL_SPLITS + split_slot;
+            int gqa = tid % IFN_CUDA_GQA_RATIO;
+            int b = tid / IFN_CUDA_GQA_RATIO;
+            int h = kvh * IFN_CUDA_GQA_RATIO + gqa;
+            int idx = (h * 8 + b) * IFN_CUDA_KV_TOTAL_SPLITS + split_slot;
             s_m_out[idx] = -1e30f;
             s_d_out[idx] = 0.0f;
         }
@@ -461,14 +462,14 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
     const float* qp0 = nullptr;
     const float* qp1 = nullptr;
     if (q0 < Q_CNT) {
-        int h0 = kvh * GQA_RATIO + (q0 % GQA_RATIO);
-        int b0 = q0 / GQA_RATIO;
-        qp0 = q_base_ptr + (size_t)b0 * Q_STRIDE + h0 * HEAD_DIM;
+        int h0 = kvh * IFN_CUDA_GQA_RATIO + (q0 % IFN_CUDA_GQA_RATIO);
+        int b0 = q0 / IFN_CUDA_GQA_RATIO;
+        qp0 = q_base_ptr + (size_t)b0 * Q_STRIDE + h0 * IFN_CUDA_HEAD_DIM;
     }
     if (q1 < Q_CNT) {
-        int h1 = kvh * GQA_RATIO + (q1 % GQA_RATIO);
-        int b1 = q1 / GQA_RATIO;
-        qp1 = q_base_ptr + (size_t)b1 * Q_STRIDE + h1 * HEAD_DIM;
+        int h1 = kvh * IFN_CUDA_GQA_RATIO + (q1 % IFN_CUDA_GQA_RATIO);
+        int b1 = q1 / IFN_CUDA_GQA_RATIO;
+        qp1 = q_base_ptr + (size_t)b1 * Q_STRIDE + h1 * IFN_CUDA_HEAD_DIM;
     }
 
     uint32_t q_reg[8][4];
@@ -476,10 +477,10 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
     for (int kt = 0; kt < 8; ++kt) {
         int k_off = kt * 16;
         if (qp0) {
-            __half2 h0 = __floats2half2_rn(qp0[k_off + tid4 * 2] * INV_SQRT_HEAD_DIM,
-                                           qp0[k_off + tid4 * 2 + 1] * INV_SQRT_HEAD_DIM);
-            __half2 h2 = __floats2half2_rn(qp0[k_off + tid4 * 2 + 8] * INV_SQRT_HEAD_DIM,
-                                           qp0[k_off + tid4 * 2 + 9] * INV_SQRT_HEAD_DIM);
+            __half2 h0 = __floats2half2_rn(qp0[k_off + tid4 * 2] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                           qp0[k_off + tid4 * 2 + 1] * IFN_CUDA_INV_SQRT_HEAD_DIM);
+            __half2 h2 = __floats2half2_rn(qp0[k_off + tid4 * 2 + 8] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                           qp0[k_off + tid4 * 2 + 9] * IFN_CUDA_INV_SQRT_HEAD_DIM);
             q_reg[kt][0] = *reinterpret_cast<uint32_t*>(&h0);
             q_reg[kt][2] = *reinterpret_cast<uint32_t*>(&h2);
         } else {
@@ -487,10 +488,10 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
             q_reg[kt][2] = 0u;
         }
         if (qp1) {
-            __half2 h1 = __floats2half2_rn(qp1[k_off + tid4 * 2] * INV_SQRT_HEAD_DIM,
-                                           qp1[k_off + tid4 * 2 + 1] * INV_SQRT_HEAD_DIM);
-            __half2 h3 = __floats2half2_rn(qp1[k_off + tid4 * 2 + 8] * INV_SQRT_HEAD_DIM,
-                                           qp1[k_off + tid4 * 2 + 9] * INV_SQRT_HEAD_DIM);
+            __half2 h1 = __floats2half2_rn(qp1[k_off + tid4 * 2] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                           qp1[k_off + tid4 * 2 + 1] * IFN_CUDA_INV_SQRT_HEAD_DIM);
+            __half2 h3 = __floats2half2_rn(qp1[k_off + tid4 * 2 + 8] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                           qp1[k_off + tid4 * 2 + 9] * IFN_CUDA_INV_SQRT_HEAD_DIM);
             q_reg[kt][1] = *reinterpret_cast<uint32_t*>(&h1);
             q_reg[kt][3] = *reinterpret_cast<uint32_t*>(&h3);
         } else {
@@ -510,13 +511,13 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
     // Only 17.4 KB SMEM with BOTH s_k AND s_v resident together -> 2 syncs/tile + 4-5 blocks/SM!
     __shared__ union {
         struct {
-            __half s_k[32][HEAD_DIM + 8]; // 8,704 B
-            __half s_v[32][HEAD_DIM + 8]; // 8,704 B
+            __half s_k[32][IFN_CUDA_HEAD_DIM + 8]; // 8,704 B
+            __half s_v[32][IFN_CUDA_HEAD_DIM + 8]; // 8,704 B
         } kv;
         struct {
             float m[16][2];
             float d[16][2];
-            float o[2][16][HEAD_DIM];     // 16,384 B
+            float o[2][16][IFN_CUDA_HEAD_DIM];     // 16,384 B
         } red;
     } smem;
 
@@ -539,9 +540,9 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
             if (t_loc < tile_len) {
                 int slot = (t0 + t_loc) % kv_cap;
                 *reinterpret_cast<uint4*>(&smem.kv.s_k[t_loc][sub * 8]) =
-                    load_kv_8elems_h2x4<KV_FMT>(k_cache, k_scale, slot, kvh, sub);
+                    ifn_cuda_load_kv_8elems_h2x4<KV_FMT>(k_cache, k_scale, slot, kvh, sub);
                 *reinterpret_cast<uint4*>(&smem.kv.s_v[t_loc][sub * 8]) =
-                    load_kv_8elems_h2x4<KV_FMT>(v_cache, v_scale, slot, kvh, sub);
+                    ifn_cuda_load_kv_8elems_h2x4<KV_FMT>(v_cache, v_scale, slot, kvh, sub);
             } else {
                 *reinterpret_cast<uint4*>(&smem.kv.s_k[t_loc][sub * 8]) = make_uint4(0, 0, 0, 0);
                 *reinterpret_cast<uint4*>(&smem.kv.s_v[t_loc][sub * 8]) = make_uint4(0, 0, 0, 0);
@@ -557,11 +558,11 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
             #pragma unroll
             for (int kt = 0; kt < 8; ++kt) {
                 uint32_t kb0, kb1, kb2, kb3;
-                ldmatrix_x4(kb0, kb1, kb2, kb3, &smem.kv.s_k[k_ld_row][kt * 16 + k_ld_col]);
-                mma_m16n8k16_f32_f16(s0, s1, s2, s3,
+                ifn_cuda_ldmatrix_x4(kb0, kb1, kb2, kb3, &smem.kv.s_k[k_ld_row][kt * 16 + k_ld_col]);
+                ifn_cuda_mma_m16n8k16_f32_f16(s0, s1, s2, s3,
                                      q_reg[kt][0], q_reg[kt][1], q_reg[kt][2], q_reg[kt][3],
                                      kb0, kb1, s0, s1, s2, s3);
-                mma_m16n8k16_f32_f16(s4, s5, s6, s7,
+                ifn_cuda_mma_m16n8k16_f32_f16(s4, s5, s6, s7,
                                      q_reg[kt][0], q_reg[kt][1], q_reg[kt][2], q_reg[kt][3],
                                      kb2, kb3, s4, s5, s6, s7);
             }
@@ -624,8 +625,8 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
             #pragma unroll
             for (int nt = 0; nt < 16; ++nt) {
                 uint32_t vb0, vb1;
-                ldmatrix_x2_trans(vb0, vb1, &smem.kv.s_v[v_ld_row][nt * 8]);
-                mma_m16n8k16_f32_f16(o[nt][0], o[nt][1], o[nt][2], o[nt][3],
+                ifn_cuda_ldmatrix_x2_trans(vb0, vb1, &smem.kv.s_v[v_ld_row][nt * 8]);
+                ifn_cuda_mma_m16n8k16_f32_f16(o[nt][0], o[nt][1], o[nt][2], o[nt][3],
                                      pa0, pa1, pa2, pa3,
                                      vb0, vb1,
                                      o[nt][0], o[nt][1], o[nt][2], o[nt][3]);
@@ -653,15 +654,15 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
         }
         __syncthreads();
 
-        for (int i = tid; i < 16 * HEAD_DIM; i += THREADS) {
+        for (int i = tid; i < 16 * IFN_CUDA_HEAD_DIM; i += THREADS) {
             int qi = i >> 7;
             int dim = i & 127;
             int q_glob = mt * 16 + qi;
             if (q_glob < Q_CNT) {
-                int gqa = q_glob % GQA_RATIO;
-                int b = q_glob / GQA_RATIO;
-                int h = kvh * GQA_RATIO + gqa;
-                int idx = (h * 8 + b) * KV_TOTAL_SPLITS + split_slot;
+                int gqa = q_glob % IFN_CUDA_GQA_RATIO;
+                int b = q_glob / IFN_CUDA_GQA_RATIO;
+                int h = kvh * IFN_CUDA_GQA_RATIO + gqa;
+                int idx = (h * 8 + b) * IFN_CUDA_KV_TOTAL_SPLITS + split_slot;
                 float gm = fmaxf(smem.red.m[qi][0], smem.red.m[qi][1]);
                 float gd = 0.0f, go = 0.0f;
                 if (smem.red.d[qi][0] > 0.0f) {
@@ -675,7 +676,7 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
                     go += smem.red.o[1][qi][dim] * sc;
                 }
                 if (dim == 0) { s_m_out[idx] = gm; s_d_out[idx] = gd; }
-                s_o_out[(size_t)idx * HEAD_DIM + dim] = go;
+                s_o_out[(size_t)idx * IFN_CUDA_HEAD_DIM + dim] = go;
             }
         }
         if (mt + 1 < NM) __syncthreads();
@@ -684,7 +685,7 @@ __device__ __forceinline__ void run_tc_bulk_splitk(
 
 // Stateless SplitMix64 uniform (0, 1) and Gumbel(0, 1) noise helpers for CUDA-graph sampling.
 // Strictly inside [2^-24, 1 - 2^-24] in float32 -> never produces 0.0f, 1.0f, NaN, or Inf.
-__device__ __forceinline__ float hash_u01(uint64_t seed, int32_t pos, int32_t tok) {
+__device__ __forceinline__ float ifn_cuda_hash_u01(uint64_t seed, int32_t pos, int32_t tok) {
     uint64_t h = seed ^ ((uint64_t)(uint32_t)pos * 0x9E3779B97F4A7C15ULL)
                       ^ ((uint64_t)(uint32_t)tok * 0xBF58476D1CE4E5B9ULL);
     h ^= h >> 30;
@@ -695,8 +696,8 @@ __device__ __forceinline__ float hash_u01(uint64_t seed, int32_t pos, int32_t to
     return ((float)(h >> 41) + 0.5f) * (1.0f / 8388608.0f);
 }
 
-__device__ __forceinline__ float hash_gumbel(uint64_t seed, int32_t pos, int32_t tok) {
-    return -__logf(-__logf(hash_u01(seed, pos, tok)));
+__device__ __forceinline__ float ifn_cuda_hash_gumbel(uint64_t seed, int32_t pos, int32_t tok) {
+    return -__logf(-__logf(ifn_cuda_hash_u01(seed, pos, tok)));
 }
 
-} // namespace squid
+} // namespace ifn_cuda

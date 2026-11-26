@@ -16,11 +16,11 @@ typedef struct {
     void *k_in_norm;
     void *v_in_norm;
     void *mlp_norm;
-    CLinearWeight w_qrgs;
-    CLinearWeight w_kv;
-    CLinearWeight w_k;
-    CLinearWeight w_v;
-    CLinearWeight w_o;
+    ifn_cuda_c_linear_weight w_qrgs;
+    ifn_cuda_c_linear_weight w_kv;
+    ifn_cuda_c_linear_weight w_k;
+    ifn_cuda_c_linear_weight w_v;
+    ifn_cuda_c_linear_weight w_o;
     void *k_sconv_w;
     void *v_sconv_w;
     void *k_sconv_proj;
@@ -30,21 +30,21 @@ typedef struct {
     void *q_clip_scale;
     void *rel_clip_scale;
     void *rel_logits_proj;
-    CControllerWeights ctrl[4];
+    ifn_cuda_c_controller_weights ctrl[4];
     void *router_w;
-    CLinearWeight router_nvfp4;
+    ifn_cuda_c_linear_weight router_nvfp4;
     void *router_bias;
-    CExpertBank w13;
-    CExpertBank w2;
+    ifn_cuda_c_expert_bank w13;
+    ifn_cuda_c_expert_bank w2;
 } ifn_layer;
 
 typedef struct {
     void *embed, *embed_norm, *final_norm;
-    CLinearWeight unembed;
+    ifn_cuda_c_linear_weight unembed;
     float *attn_queries[23], *mlp_queries[24], *output_query;
     float *cross_pass_queries, *cross_pass_kv_queries;
     ifn_layer layers[24];
-    CDsparkWeights dspark;
+    ifn_cuda_c_dspark_weights dspark;
 } ifn_ar_model;
 
 typedef struct {
@@ -101,8 +101,8 @@ struct ifn_session {
     float *lm_blk_val;
     int32_t *lm_blk_idx;
     float *lm_logits;
-    CSampleConfig *d_sample_cfg;
-    CLoopCDConfig *d_loopcd_cfg;
+    ifn_cuda_c_sample_config *d_sample_cfg;
+    ifn_cuda_c_loop_cd_config *d_loopcd_cfg;
     float *loopcd_h1, *loopcd_h2;
     int32_t *p_tokens, *p_pos_vec;
     float *p_taps;

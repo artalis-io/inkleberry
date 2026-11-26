@@ -8,24 +8,24 @@
 #include "internal.h"
 #include <stdatomic.h>
 #include <string.h>
-#define SI_FEATURES                                                                                \
+#define IFN_INFER_FEATURES                                                                         \
     (IFN_INFER_CAP_TEXT_CHAT | IFN_INFER_CAP_RAW_TEXT | IFN_INFER_CAP_RAW_TOKEN_IO |               \
      IFN_INFER_CAP_REASONING_OUTPUT | IFN_INFER_CAP_REASONING_HISTORY |                            \
      IFN_INFER_CAP_PREFIX_CACHE | IFN_INFER_CAP_SPECULATION | IFN_INFER_CAP_MEMORY_PLAN)
-#define SI_CANCEL 1u
-#define SI_SEALED 2u
-#define SI_MAX_INPUT (32u * 1024u * 1024u)
-#define SI_UNKNOWN_VENDOR UINT64_C(16)
+#define IFN_INFER_CANCEL 1u
+#define IFN_INFER_SEALED 2u
+#define IFN_INFER_MAX_INPUT (32u * 1024u * 1024u)
+#define IFN_INFER_UNKNOWN_VENDOR UINT64_C(16)
 
 typedef struct {
     ifn_options upstream;
     atomic_uint_fast64_t live;
     uint64_t limit;
-} si_budget;
+} ifn_infer_budget;
 
 struct ifn_infer_model {
     ifn_options allocator;
-    si_budget budget;
+    ifn_infer_budget budget;
     atomic_flag busy;
     uint32_t state, children;
     ifn_weight_config weights_config;
@@ -40,7 +40,7 @@ struct ifn_infer_model {
 struct ifn_infer_session {
     ifn_infer_model *model;
     ifn_options allocator;
-    si_budget budget;
+    ifn_infer_budget budget;
     atomic_flag busy;
     uint32_t state, children;
     ifn_session_config config;
@@ -73,44 +73,48 @@ struct ifn_infer_request {
     ifn_infer_error_v1 terminal_error;
 };
 
-ifn_status si_input(const void *, size_t);
-ifn_status si_output(void *, const void *, size_t);
-ifn_status si_error(ifn_infer_error_v1 *, ifn_status, uint32_t, const char *);
-ifn_status si_native_error(ifn_infer_error_v1 *, ifn_status, uint32_t);
-bool si_span(ifn_infer_bytes, size_t);
-bool si_equal(ifn_infer_bytes, const char *);
-ifn_infer_bytes si_text(const char *);
-void si_budget_init(si_budget *, const ifn_options *, uint64_t, ifn_options *);
-void si_free(const ifn_options *, void *);
-void *si_alloc(const ifn_options *, size_t);
-bool si_lock(atomic_flag *);
-void si_unlock(atomic_flag *);
-ifn_status si_no_extensions(ifn_infer_array);
-uint64_t si_now(void);
-ifn_status si_defaults(uint32_t, void *, ifn_infer_error_v1 *);
-ifn_status si_backend_info(ifn_infer_backend_info_v1 *, ifn_infer_error_v1 *);
-ifn_status si_model_create(const ifn_infer_model_config_v1 *, ifn_infer_model **,
-                           ifn_infer_error_v1 *);
-ifn_status si_model_plan(ifn_infer_model *, const ifn_infer_source_v1 *, ifn_infer_memory_plan_v1 *,
-                         ifn_infer_error_v1 *);
-ifn_status si_model_load(ifn_infer_model *, const ifn_infer_source_v1 *, ifn_infer_error_v1 *);
-ifn_status si_model_info(ifn_infer_model *, ifn_infer_model_info_v1 *, ifn_infer_error_v1 *);
-ifn_status si_model_close(ifn_infer_model **, ifn_infer_error_v1 *);
-ifn_status si_session_create(ifn_infer_model *, const ifn_infer_session_config_v1 *,
-                             ifn_infer_session **, ifn_infer_error_v1 *);
-ifn_status si_session_plan(ifn_infer_session *, ifn_infer_memory_plan_v1 *, ifn_infer_error_v1 *);
-ifn_status si_session_prepare(ifn_infer_session *, ifn_infer_error_v1 *);
-ifn_status si_session_info(ifn_infer_session *, ifn_infer_session_info_v1 *, ifn_infer_error_v1 *);
-ifn_status si_session_clear(ifn_infer_session *, ifn_infer_error_v1 *);
-ifn_status si_session_close(ifn_infer_session **, ifn_infer_error_v1 *);
-ifn_status si_request_create(ifn_infer_session *, const ifn_infer_input_v1 *,
-                             const ifn_infer_request_config_v1 *, ifn_infer_request **,
-                             ifn_infer_error_v1 *);
-ifn_status si_request_run(ifn_infer_request *, ifn_infer_emit_fn, void *, ifn_infer_error_v1 *);
-ifn_status si_request_cancel(ifn_infer_request *, uint32_t *, ifn_infer_error_v1 *);
-ifn_status si_request_progress(const ifn_infer_request *, ifn_infer_progress_v1 *,
-                               ifn_infer_error_v1 *);
-ifn_status si_request_result(const ifn_infer_request *, ifn_infer_result_v1 *,
-                             ifn_infer_error_v1 *);
-ifn_status si_request_close(ifn_infer_request **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_input(const void *, size_t);
+ifn_status ifn_infer_output(void *, const void *, size_t);
+ifn_status ifn_infer_error(ifn_infer_error_v1 *, ifn_status, uint32_t, const char *);
+ifn_status ifn_infer_native_error(ifn_infer_error_v1 *, ifn_status, uint32_t);
+bool ifn_infer_span(ifn_infer_bytes, size_t);
+bool ifn_infer_equal(ifn_infer_bytes, const char *);
+ifn_infer_bytes ifn_infer_text(const char *);
+void ifn_infer_budget_init(ifn_infer_budget *, const ifn_options *, uint64_t, ifn_options *);
+void ifn_infer_free(const ifn_options *, void *);
+void *ifn_infer_alloc(const ifn_options *, size_t);
+bool ifn_infer_lock(atomic_flag *);
+void ifn_infer_unlock(atomic_flag *);
+ifn_status ifn_infer_no_extensions(ifn_infer_array);
+uint64_t ifn_infer_now(void);
+ifn_status ifn_infer_defaults(uint32_t, void *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_backend_info(ifn_infer_backend_info_v1 *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *, ifn_infer_model **,
+                                  ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_plan(ifn_infer_model *, const ifn_infer_source_v1 *,
+                                ifn_infer_memory_plan_v1 *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_load(ifn_infer_model *, const ifn_infer_source_v1 *,
+                                ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_info(ifn_infer_model *, ifn_infer_model_info_v1 *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_close(ifn_infer_model **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_create(ifn_infer_model *, const ifn_infer_session_config_v1 *,
+                                    ifn_infer_session **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_plan(ifn_infer_session *, ifn_infer_memory_plan_v1 *,
+                                  ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_prepare(ifn_infer_session *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_info(ifn_infer_session *, ifn_infer_session_info_v1 *,
+                                  ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_clear(ifn_infer_session *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_close(ifn_infer_session **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_create(ifn_infer_session *, const ifn_infer_input_v1 *,
+                                    const ifn_infer_request_config_v1 *, ifn_infer_request **,
+                                    ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_run(ifn_infer_request *, ifn_infer_emit_fn, void *,
+                                 ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_cancel(ifn_infer_request *, uint32_t *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_progress(const ifn_infer_request *, ifn_infer_progress_v1 *,
+                                      ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_result(const ifn_infer_request *, ifn_infer_result_v1 *,
+                                    ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_close(ifn_infer_request **, ifn_infer_error_v1 *);
 #endif

@@ -5,7 +5,7 @@
 #include "tokenizer.h"
 #include <string.h>
 
-static bool utf8(const char *p, size_t n) {
+static bool ifn_chat_local_utf8(const char *p, size_t n) {
     size_t at = 0;
     uint32_t cp;
     while (at < n)
@@ -14,7 +14,7 @@ static bool utf8(const char *p, size_t n) {
     return true;
 }
 
-static bool marker(const ifn_tokenizer *t, const char *p) {
+static bool ifn_chat_local_marker(const ifn_tokenizer *t, const char *p) {
     int32_t id = ifn_special_lookup(t, p, strlen(p));
     return id >= 0 && t->entries[id].special;
 }
@@ -25,9 +25,10 @@ typedef struct {
     int32_t *out;
     size_t capacity, count;
     ifn_status status;
-} encoder;
+} ifn_chat_local_encoder;
 
-static void append(encoder *e, const char *p, size_t n, uint32_t special) {
+static void ifn_chat_local_append(ifn_chat_local_encoder *e, const char *p, size_t n,
+                                  uint32_t special) {
     if (e->status != IFN_OK || !n)
         return;
     size_t count = 0;
@@ -42,57 +43,58 @@ static void append(encoder *e, const char *p, size_t n, uint32_t special) {
         e->status = IFN_LIMIT;
 }
 
-static void tag(encoder *e, const char *p) {
-    append(e, p, strlen(p), 1);
+static void ifn_chat_local_tag(ifn_chat_local_encoder *e, const char *p) {
+    ifn_chat_local_append(e, p, strlen(p), 1);
 }
 
-static void effort(encoder *e, uint32_t value) {
+static void ifn_chat_local_effort(ifn_chat_local_encoder *e, uint32_t value) {
     static const char *levels[] = {"0", "0.1", "0.2", "0.7", "0.9", "0.99"};
-    tag(e, "<|message_system|><|content_text|>Thinking effort level: ");
-    tag(e, levels[value]);
-    tag(e, "<|end_message|>");
+    ifn_chat_local_tag(e, "<|message_system|><|content_text|>Thinking effort level: ");
+    ifn_chat_local_tag(e, levels[value]);
+    ifn_chat_local_tag(e, "<|end_message|>");
 }
 
-static void block(encoder *e, const ifn_chat_message *m, const char *kind, const char *p,
-                  size_t n) {
+static void ifn_chat_local_block(ifn_chat_local_encoder *e, const ifn_chat_message *m,
+                                 const char *kind, const char *p, size_t n) {
     static const char *roles[] = {"<|message_system|>", "<|message_system|>", "<|message_user|>",
                                   "<|message_model|>"};
-    tag(e, roles[m->role]);
-    append(e, m->name, m->name_bytes, 0);
-    tag(e, kind);
-    append(e, p, n, 0);
-    tag(e, "<|end_message|>");
+    ifn_chat_local_tag(e, roles[m->role]);
+    ifn_chat_local_append(e, m->name, m->name_bytes, 0);
+    ifn_chat_local_tag(e, kind);
+    ifn_chat_local_append(e, p, n, 0);
+    ifn_chat_local_tag(e, "<|end_message|>");
 }
 
-static uint32_t pass(encoder *e, const ifn_chat_message *m, size_t count,
-                     const ifn_chat_options *o) {
+static uint32_t ifn_chat_local_pass(ifn_chat_local_encoder *e, const ifn_chat_message *m,
+                                    size_t count, const ifn_chat_options *o) {
     bool emitted = false;
     uint32_t prefix = 0;
     for (size_t i = 0; i < count && e->status == IFN_OK; i++) {
         bool sys = m[i].role <= IFN_CHAT_DEVELOPER;
         if (!emitted && !sys) {
-            effort(e, o->effort);
+            ifn_chat_local_effort(e, o->effort);
             emitted = true;
             prefix = (uint32_t)e->count;
         }
         bool reasoning =
             m[i].role == IFN_CHAT_ASSISTANT && o->keep_history_thinking && m[i].reasoning_bytes;
         if (reasoning)
-            block(e, m + i, "<|content_thinking|>", m[i].reasoning, m[i].reasoning_bytes);
+            ifn_chat_local_block(e, m + i, "<|content_thinking|>", m[i].reasoning,
+                                 m[i].reasoning_bytes);
         bool text = m[i].content && (m[i].content_bytes || !reasoning);
         if (text)
-            block(e, m + i, "<|content_text|>", m[i].content, m[i].content_bytes);
+            ifn_chat_local_block(e, m + i, "<|content_text|>", m[i].content, m[i].content_bytes);
         if (m[i].role == IFN_CHAT_ASSISTANT && (reasoning || text))
-            tag(e, "<|content_model_end_sampling|>");
+            ifn_chat_local_tag(e, "<|content_model_end_sampling|>");
         if (sys && !emitted)
             prefix = (uint32_t)e->count;
     }
     if (!emitted) {
-        effort(e, o->effort);
+        ifn_chat_local_effort(e, o->effort);
         prefix = (uint32_t)e->count;
     }
     if (!o->enable_thinking)
-        tag(e, "<|message_model|><|content_text|>");
+        ifn_chat_local_tag(e, "<|message_model|><|content_text|>");
     return prefix;
 }
 
@@ -127,8 +129,9 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
             !ifn_size_add(bytes, m[i].reasoning_bytes, &bytes) ||
             !ifn_size_add(bytes, m[i].name_bytes, &bytes) || bytes > 32u * 1024u * 1024u)
             return ifn_error(IFN_LIMIT, "chat text/name limit exceeded");
-        if (!utf8(m[i].content, m[i].content_bytes) ||
-            !utf8(m[i].reasoning, m[i].reasoning_bytes) || !utf8(m[i].name, m[i].name_bytes))
+        if (!ifn_chat_local_utf8(m[i].content, m[i].content_bytes) ||
+            !ifn_chat_local_utf8(m[i].reasoning, m[i].reasoning_bytes) ||
+            !ifn_chat_local_utf8(m[i].name, m[i].name_bytes))
             return ifn_error(IFN_FORMAT, "chat text is not UTF-8");
     }
     const char *tags[] = {"<|message_system|>",
@@ -139,10 +142,10 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
                           "<|end_message|>",
                           "<|content_model_end_sampling|>"};
     for (size_t i = 0; i < sizeof tags / sizeof *tags; i++)
-        if (!marker(t, tags[i]))
+        if (!ifn_chat_local_marker(t, tags[i]))
             return ifn_error(IFN_UNSUPPORTED, "chat protocol marker missing");
-    encoder e = {t, scratch, NULL, 0, 0, IFN_OK};
-    uint32_t system = pass(&e, m, count, &o);
+    ifn_chat_local_encoder e = {t, scratch, NULL, 0, 0, IFN_OK};
+    uint32_t system = ifn_chat_local_pass(&e, m, count, &o);
     if (e.status != IFN_OK)
         return ifn_error(e.status, "chat sizing failed");
     *needed = e.count;
@@ -152,6 +155,6 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
     e.out = out;
     e.capacity = capacity;
     e.count = 0;
-    (void)pass(&e, m, count, &o);
+    (void)ifn_chat_local_pass(&e, m, count, &o);
     return ifn_error(e.status, e.status == IFN_OK ? "" : "chat encoding failed");
 }

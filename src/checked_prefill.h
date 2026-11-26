@@ -7,12 +7,12 @@ extern "C" {
 #endif
 int ifn_blas_create(void **out, void *stream);
 int ifn_blas_destroy(void *handle);
-int ifn_prefill_gemm_h(void *handle, const CLinearWeight *w, const void *x_h, float *y,
+int ifn_prefill_gemm_h(void *handle, const ifn_cuda_c_linear_weight *w, const void *x_h, float *y,
                        void *w_f16_scratch, int32_t batch_size, void *stream);
 int ifn_prefill_controller_one(void *handle, const float *x, const float *saved,
                                const float *prior_last, const float *cp_q,
-                               const CControllerWeights *cw, const void *post_norm, float *out,
-                               void *out_h, float *scratch_msg, void *scratch_cat_h,
+                               const ifn_cuda_c_controller_weights *cw, const void *post_norm,
+                               float *out, void *out_h, float *scratch_msg, void *scratch_cat_h,
                                float *scratch_d, void *scratch_d_h, float *scratch_f,
                                float *scratch_g, void *w_f16_scratch, int32_t batch_size,
                                void *stream);

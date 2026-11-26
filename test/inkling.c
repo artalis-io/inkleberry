@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define CHECK(x)                                                                                   \
+#define IFN_INKLING_LOCAL_CHECK(x)                                                                 \
     do {                                                                                           \
         if (!(x)) {                                                                                \
             fprintf(stderr, "inkling:%d: %s (%s)\n", __LINE__, #x, ifn_last_error());              \
@@ -15,10 +15,10 @@ typedef struct {
     size_t main, mtp;
     bool dump;
     bool first;
-} state;
+} ifn_inkling_local_state;
 
-static ifn_status check_spec(void *context, const ifn_inkling_spec *s) {
-    state *st = context;
+static ifn_status ifn_inkling_local_check_spec(void *context, const ifn_inkling_spec *s) {
+    ifn_inkling_local_state *st = context;
     if (s->source)
         st->mtp++;
     else
@@ -55,10 +55,10 @@ static ifn_status check_spec(void *context, const ifn_inkling_spec *s) {
 
 typedef struct {
     size_t calls, fail, live;
-} faults;
+} ifn_inkling_local_faults;
 
-static void *alloc(void *context, size_t bytes) {
-    faults *f = context;
+static void *ifn_inkling_local_alloc(void *context, size_t bytes) {
+    ifn_inkling_local_faults *f = context;
     if (f->calls++ == f->fail)
         return NULL;
     void *p = malloc(bytes);
@@ -67,63 +67,68 @@ static void *alloc(void *context, size_t bytes) {
     return p;
 }
 
-static void release(void *context, void *p) {
-    faults *f = context;
+static void ifn_inkling_local_release(void *context, void *p) {
+    ifn_inkling_local_faults *f = context;
     if (p)
         f->live--;
     free(p);
 }
 
 int main(int argc, char **argv) {
-    state st = {0, 0, argc == 2 && !strcmp(argv[1], "--schema"), true};
+    ifn_inkling_local_state st = {0, 0, argc == 2 && !strcmp(argv[1], "--schema"), true};
     if (st.dump)
         fputs("[", stdout);
-    CHECK(ifn_inkling_visit_specs(1, check_spec, &st) == IFN_OK && st.main == 822 && st.mtp == 54);
+    IFN_INKLING_LOCAL_CHECK(ifn_inkling_visit_specs(1, ifn_inkling_local_check_spec, &st) ==
+                                IFN_OK &&
+                            st.main == 822 && st.mtp == 54);
     if (st.dump) {
         puts("]");
         return 0;
     }
-    CHECK(ifn_inkling_visit_specs(2, check_spec, &st) == IFN_INVALID_ARGUMENT);
+    IFN_INKLING_LOCAL_CHECK(ifn_inkling_visit_specs(2, ifn_inkling_local_check_spec, &st) ==
+                            IFN_INVALID_ARGUMENT);
     if (argc == 1) {
         puts("876 Inkling roles: dtype/rank/shape rejection passed");
         return 0;
     }
     bool invalid = argc == 4 && !strcmp(argv[1], "--invalid");
-    CHECK(invalid || argc == 3);
+    IFN_INKLING_LOCAL_CHECK(invalid || argc == 3);
     const char *main_path = argv[invalid ? 2 : 1], *mtp = argv[invalid ? 3 : 2];
     for (size_t fail = invalid ? 5 : 0; fail <= 5; fail++) {
-        faults f = {0, fail, 0};
+        ifn_inkling_local_faults f = {0, fail, 0};
         ifn_options o = IFN_OPTIONS_INIT;
-        o.allocate = alloc;
-        o.release = release;
+        o.allocate = ifn_inkling_local_alloc;
+        o.release = ifn_inkling_local_release;
         o.context = &f;
         ifn_inkling_checkpoint *c = (ifn_inkling_checkpoint *)(uintptr_t)1;
         ifn_status status = ifn_inkling_checkpoint_open(main_path, mtp, &o, &c);
         if (invalid) {
-            CHECK(status != IFN_OK && !c && !f.live);
+            IFN_INKLING_LOCAL_CHECK(status != IFN_OK && !c && !f.live);
             break;
         }
-        CHECK(status == (fail < 5 ? IFN_OUT_OF_MEMORY : IFN_OK));
-        CHECK(status == IFN_OK ? c != NULL : c == NULL);
+        IFN_INKLING_LOCAL_CHECK(status == (fail < 5 ? IFN_OUT_OF_MEMORY : IFN_OK));
+        IFN_INKLING_LOCAL_CHECK(status == IFN_OK ? c != NULL : c == NULL);
         if (c) {
-            CHECK(ifn_inkling_checkpoint_count(c) == 876);
+            IFN_INKLING_LOCAL_CHECK(ifn_inkling_checkpoint_count(c) == 876);
             for (size_t i = 0; i < 876; i++) {
                 uint32_t source;
                 const ifn_tensor_info *info = NULL;
                 const void *data = NULL;
                 size_t bytes = 0;
-                CHECK(ifn_inkling_checkpoint_at(c, i, &source, &info) == IFN_OK &&
-                      source == (i < 822 ? 0u : 1u));
-                CHECK(ifn_inkling_checkpoint_data(c, i, &data, &bytes) == IFN_OK && data &&
-                      bytes == info->bytes);
+                IFN_INKLING_LOCAL_CHECK(ifn_inkling_checkpoint_at(c, i, &source, &info) == IFN_OK &&
+                                        source == (i < 822 ? 0u : 1u));
+                IFN_INKLING_LOCAL_CHECK(ifn_inkling_checkpoint_data(c, i, &data, &bytes) ==
+                                            IFN_OK &&
+                                        data && bytes == info->bytes);
             }
             uint32_t source = 99;
             const ifn_tensor_info *info = (const ifn_tensor_info *)(uintptr_t)1;
-            CHECK(ifn_inkling_checkpoint_at(c, 876, &source, &info) == IFN_NOT_FOUND && !source &&
-                  !info);
+            IFN_INKLING_LOCAL_CHECK(ifn_inkling_checkpoint_at(c, 876, &source, &info) ==
+                                        IFN_NOT_FOUND &&
+                                    !source && !info);
         }
         ifn_inkling_checkpoint_close(c);
-        CHECK(!f.live);
+        IFN_INKLING_LOCAL_CHECK(!f.live);
     }
     puts(invalid ? "invalid checkpoint rejected and released"
                  : "bound data/metadata and all checkpoint allocation failure sites passed");

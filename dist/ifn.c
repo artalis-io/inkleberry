@@ -58,18 +58,18 @@ int ifn_adaptive_live(const void *);
 #include <stddef.h>
 #include <stdint.h>
 #ifndef IFN_CUDA_ABI_NO_TYPES
-typedef struct CSampleConfig {
+typedef struct ifn_cuda_c_sample_config {
     float inv_temp;
     float top_p;
     int32_t top_k;
     uint32_t pad;
     uint64_t seed;
-} CSampleConfig;
-typedef struct CLoopCDConfig {
+} ifn_cuda_c_sample_config;
+typedef struct ifn_cuda_c_loop_cd_config {
     float omega;
     int32_t ref_pass;
-} CLoopCDConfig;
-typedef struct CLinearWeight {
+} ifn_cuda_c_loop_cd_config;
+typedef struct ifn_cuda_c_linear_weight {
     uint8_t kind;
     int32_t rows;
     int32_t cols;
@@ -77,8 +77,8 @@ typedef struct CLinearWeight {
     uint8_t * scales;
     float * row_scales;
     float global_scale;
-} CLinearWeight;
-typedef struct CExpertBank {
+} ifn_cuda_c_linear_weight;
+typedef struct ifn_cuda_c_expert_bank {
     uint8_t is_nvfp4;
     int32_t n_experts;
     int32_t rows;
@@ -86,16 +86,16 @@ typedef struct CExpertBank {
     uint8_t * data;
     uint8_t * scales;
     float * expert_scale;
-} CExpertBank;
-typedef struct CControllerWeights {
+} ifn_cuda_c_expert_bank;
+typedef struct ifn_cuda_c_controller_weights {
     void * down_w;
     void * forget_w;
     void * gain_w;
-    CLinearWeight down_nvfp4;
-    CLinearWeight forget_nvfp4;
-    CLinearWeight gain_nvfp4;
-} CControllerWeights;
-typedef struct CDsparkLayerWeights {
+    ifn_cuda_c_linear_weight down_nvfp4;
+    ifn_cuda_c_linear_weight forget_nvfp4;
+    ifn_cuda_c_linear_weight gain_nvfp4;
+} ifn_cuda_c_controller_weights;
+typedef struct ifn_cuda_c_dspark_layer_weights {
     uint8_t is_local;
     void * input_norm;
     void * post_norm;
@@ -103,13 +103,13 @@ typedef struct CDsparkLayerWeights {
     void * q_norm;
     void * k_norm;
     void * k_norm_ctx;
-    CLinearWeight w_qkv;
-    CLinearWeight w_o;
-    CLinearWeight w_gu;
-    CLinearWeight w_down;
-    CLinearWeight w_kv_ctx;
-} CDsparkLayerWeights;
-typedef struct CDsparkWeights {
+    ifn_cuda_c_linear_weight w_qkv;
+    ifn_cuda_c_linear_weight w_o;
+    ifn_cuda_c_linear_weight w_gu;
+    ifn_cuda_c_linear_weight w_down;
+    ifn_cuda_c_linear_weight w_kv_ctx;
+} ifn_cuda_c_dspark_layer_weights;
+typedef struct ifn_cuda_c_dspark_weights {
     uint8_t loaded;
     float * fuse_alpha;
     void * mask_embed;
@@ -125,91 +125,91 @@ typedef struct CDsparkWeights {
     int32_t draft_vocab_size;
     int32_t * draft_vocab_ids;
     int32_t * inv_draft_vocab_ids;
-    CLinearWeight unembed_draft;
-    CLinearWeight fold_w;
+    ifn_cuda_c_linear_weight unembed_draft;
+    ifn_cuda_c_linear_weight fold_w;
     float * fold_b;
-    CDsparkLayerWeights layers[3];
-} CDsparkWeights;
+    ifn_cuda_c_dspark_layer_weights layers[3];
+} ifn_cuda_c_dspark_weights;
 #endif
 #ifdef __cplusplus
 extern "C" {
 #endif
-int32_t squid_cuda_malloc(void * * ptr, size_t bytes);
-int32_t squid_cuda_free(void * ptr);
-int32_t squid_cuda_malloc_host_pinned(void * * ptr, size_t bytes, uint8_t mapped);
-int32_t squid_cuda_free_host(void * ptr);
-int32_t squid_cuda_host_get_device_pointer(void * * dev_ptr, void * host_ptr);
-int32_t squid_cuda_memcpy_h2d(void * dst, const void * src, size_t bytes);
-int32_t squid_cuda_memcpy_d2h(void * dst, const void * src, size_t bytes);
-int32_t squid_cuda_memcpy_h2d_async(void * dst, const void * src, size_t bytes, void * stream);
-int32_t squid_cuda_memcpy_d2h_async(void * dst, const void * src, size_t bytes, void * stream);
-int32_t squid_cuda_memcpy_d2d_async(void * dst, const void * src, size_t bytes, void * stream);
-int32_t squid_cuda_memset_async(void * dst, int32_t value, size_t bytes, void * stream);
-int32_t squid_cuda_device_sync(void);
-int32_t squid_cuda_stream_create(void * * out_stream);
-int32_t squid_cuda_stream_destroy(void * stream);
-int32_t squid_cuda_stream_sync(void * stream);
-int32_t squid_cuda_event_create(void * * out_event, uint8_t disable_timing);
-int32_t squid_cuda_event_destroy(void * ev);
-int32_t squid_cuda_event_record(void * ev, void * stream);
-int32_t squid_cuda_event_sync(void * ev);
-int32_t squid_cuda_event_elapsed_ms(float * out_ms, void * ev0, void * ev1);
-int32_t squid_cuda_stream_wait_event(void * stream, void * ev);
-int32_t squid_cuda_graph_begin(void * stream);
-int32_t squid_cuda_graph_end_instantiate(void * stream, void * * out_exec);
-int32_t squid_cuda_graph_launch(void * exec, void * stream);
-int32_t squid_cuda_graph_destroy(void * exec);
-float squid_pack_bf16_to_nvfp4(const void * src_bf16_dev, void * dst_data, uint8_t * dst_scales, float * d_amax_scratch, int32_t rows, int32_t cols);
-void squid_pack_bf16_to_fp8(const void * src_bf16_dev, void * dst_data, float * dst_row_scales, int32_t rows, int32_t cols);
-void squid_convert_mxfp8_to_nvfp4_experts(const uint8_t * src_w, const uint8_t * src_s, uint8_t * dst_w, uint8_t * dst_s, float * dst_expert_scale, int32_t n_experts, int32_t rows, int32_t cols);
-void squid_split_dspark_rnn(const void * src_bf16, void * w_sp, void * w_h, void * w_f);
-void squid_compute_dspark_fold(const void * unembed_bf16, const void * hidden_out_w, const void * hidden_out_b, float * fold_b, void * fold_bf16_out, int32_t vocab_count, int32_t hidden_cols, int32_t markov_rank);
-void squid_launch_embed_norm(const void * embed, const void * embed_norm, const int32_t * tokens, float * out, int32_t batch_size, void * stream);
-void squid_launch_rmsnorm(const float * x, const void * weight, float * out, int32_t batch_size, int32_t width, int32_t group_size, float eps, void * stream);
-void squid_launch_extract_block(const float * blocks, int32_t max_blocks, int32_t slot_idx, float * dst, int32_t batch_size, void * stream);
-void squid_launch_fused_depth_norm(const float * hidden, float * partial_out, const float * blocks, int32_t n_blocks, const float * queries, const void * n0, const void * n1, const void * n2, float * o0, float * o1, float * o2, void * oh0, void * oh1, void * oh2, int32_t n_out, int32_t batch_size, void * stream);
-void squid_launch_controller_mega_nvfp4(float * const * xs, const float * saved, const float * prior_last, const float * const * cp_queries, const CControllerWeights * const * cws_in, const void * const * post_norms, float * const * outs, void * const * outs_h, int32_t n_streams, int32_t batch_size, void * stream);
-void squid_launch_controller_merge_batched(float * const * xs, const float * saved, const float * prior_last, const float * const * cp_queries, const CControllerWeights * const * cws_in, const void * const * post_norms, float * const * outs, void * const * outs_h, int32_t n_streams, float * scratch_msg, float * scratch_cat, float * scratch_d, int32_t batch_size, void * stream);
-void squid_launch_qkvrg_fused(const CLinearWeight * w_qrgs, const CLinearWeight * w_k, const CLinearWeight * w_v, const void * in_qh, const void * in_kh, const void * in_vh, float * qrgs_out, float * k_out, float * v_out, int32_t batch_size, void * stream);
-void squid_launch_linear(const CLinearWeight * w, const float * x, float * y, int32_t batch_size, uint8_t add_res, void * stream);
-void squid_launch_linear_h(const CLinearWeight * w, const void * x_h, float * y, int32_t batch_size, uint8_t add_res, void * stream);
-void squid_launch_mega_global_sconv_prep_store(float * qrgs, const float * k_proj, const float * v_proj, const float * in_k, const float * in_v, const void * k_sw, const void * v_sw, const void * k_sp, const void * v_sp, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, void * k_scale, void * v_scale, uint8_t kv_fmt, int32_t kv_cap, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_mega_local_sconv_prep_store(float * qrgs, const float * k_proj, const float * v_proj, const void * k_sw, const void * v_sw, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, int32_t kv_cap, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_relative_attention_gated(const float * qrgs, const void * rel_proj, const void * k_cache, const void * v_cache, const void * k_scale, const void * v_scale, uint8_t kv_fmt, float * split_buf, float * out_gated, void * out_gated_h, int32_t kv_cap, int32_t window, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_mega_attn_post_mlp_in(const float * o_proj, const void * attn_sw, float * attn_ring, const float * hidden, const float * partial_prev, float * blocks, int32_t block_count_before, uint8_t is_boundary, float * residual_out, const float * mlp_query, const void * mlp_norm_w, float * mlp_out, void * mlp_out_h, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, void * stream);
-void squid_launch_route_topk_nvfp4(const void * m_h, const CLinearWeight * router_nvfp4, const float * router_bias, float * scratch_logits, int32_t * out_ids, float * out_weights, void * groups, int32_t batch_size, void * stream);
-void squid_launch_route_topk(const float * m, const void * router_w, const float * router_bias, float * scratch_logits, int32_t * out_ids, float * out_weights, void * groups, int32_t batch_size, void * stream);
-void squid_launch_moe_gate_up_h(const CExpertBank * w13, const void * x_h, const int32_t * route_ids, const void * groups, void * out_act_h, int32_t batch_size, void * stream);
-void squid_launch_moe_down_h(const CExpertBank * w2, const void * act_h, const int32_t * route_ids, const float * route_w, const void * groups, float * out_down, int32_t batch_size, void * stream);
-void squid_launch_mega_mlp_post_res(const float * moe_down_or_slots, uint8_t moe_is_slotted, const void * mlp_sw, float * mlp_ring, const float * residual, float * hidden_out, float * loopcd_save_out, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, void * stream);
-void squid_launch_loopcd_hidden_apply(float * hidden, const float * ref_hidden, float omega, int32_t batch_size, void * stream);
-void squid_launch_mega_mlp_post_next_depth_norm(const float * moe_down_or_slots, uint8_t moe_is_slotted, const void * prev_mlp_sw, float * prev_mlp_ring, const float * residual, float * hidden_out, float * pre_tap_out, float * post_tap_out, float * partial_out, const float * blocks, int32_t n_blocks, const float * queries, const void * n0, const void * n1, const void * n2, float * o0, float * o1, float * o2, void * oh0, void * oh1, void * oh2, int32_t n_out, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, const float * loopcd_h1, const float * loopcd_h2, const CLoopCDConfig * loopcd_cfg, void * stream);
-void squid_launch_lm_head_argmax(const CLinearWeight * unembed, const float * x, int32_t * out_tokens, float * out_logits, float * scratch_vals, int32_t * scratch_idxs, const CSampleConfig * sample_cfg, const int32_t * d_pos, const int32_t * d_draft_tokens, const float * d_draft_probs, const float * d_draft_q_sel, const int32_t * d_draft_is_delta, const int32_t * inv_draft_vocab, int32_t draft_vocab_size, int32_t batch_size, void * stream);
-void squid_launch_dspark_commit(const CDsparkWeights * dw_in, const float * taps, void * const * ctx_k, void * const * ctx_v, void * const * ctx_ks, void * const * ctx_vs, const int32_t * ctx_cap, uint8_t global_kv_fmt, float * f_ring, float * scratch_mix, float * scratch_kv, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_dspark_draft(const void * embed, const void * embed_norm, const CDsparkWeights * dw_in, const int32_t * d_anchor_token, const int32_t * d_pos, int32_t num_drafts, void * const * ctx_k, void * const * ctx_v, const void * const * ctx_ks, const void * const * ctx_vs, const int32_t * ctx_cap, uint8_t global_kv_fmt, float * split_buf, const float * f_ring, float * workspace, int32_t * out_draft_tokens, float * out_draft_conf, const CSampleConfig * sample_cfg, float * out_draft_probs, float * out_draft_q_sel, int32_t * out_draft_is_delta, void * stream);
-int32_t squid_adaptive_graph_create(const int32_t * d_anchor, const int32_t * d_drafts, const float * d_draft_conf, float threshold, int32_t * d_tokens, int32_t * d_chosen_width, const int32_t * d_accepted, int32_t * h_accepted, const int32_t * d_num_acc, int32_t * h_num_acc, int32_t * h_chosen_width, void * stream, void * * out_graph);
-int32_t squid_adaptive_graph_branch_begin(void * graph, int32_t branch_idx, void * stream);
-int32_t squid_adaptive_graph_branch_end(void * stream);
-int32_t squid_adaptive_graph_instantiate(void * graph);
-int32_t squid_adaptive_graph_launch(void * graph, void * stream);
-int32_t squid_adaptive_graph_destroy(void * graph);
-void squid_launch_spec_verify(const int32_t * target_preds, const int32_t * draft_tokens, int32_t batch_size, int32_t * out_accepted, int32_t * out_num_accepted, int32_t * d_pos, int32_t * d_next_anchor, void * stream);
-void squid_launch_inc_pos_and_copy_tok(int32_t * d_pos, int32_t * d_tok_in, const int32_t * d_tok_out, void * stream);
-void squid_launch_inc_pos_by(int32_t * d_pos, int32_t delta, void * stream);
-void squid_launch_assemble_verify_tokens(const int32_t * d_anchor, const int32_t * d_drafts, int32_t * d_tokens, int32_t num_drafts, void * stream);
-size_t squid_sizeof_expert_groups(void);
-void squid_launch_prefill_warmup_cublas(void * stream);
-void squid_launch_prefill_f32_to_f16(const float * src, void * dst_h, int32_t count, void * stream);
-void squid_launch_prefill_gemm_h(const CLinearWeight * w, const void * x_h, float * y, void * w_f16_scratch, int32_t batch_size, void * stream);
-void squid_launch_prefill_sconv_post_res(const float * src_or_slots, int32_t is_slotted, const void * sconv_w, float * ring, const float * residual, float * out_res, float * pre_tap_out, float * blocks, const float * partial, int32_t block_idx, int32_t is_boundary, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, void * stream);
-void squid_launch_prefill_copy_taps(const float * src, float * dst_taps, int32_t tap_slot, int32_t batch_size, void * stream);
-void squid_launch_prefill_local_sconv_prep_store(float * qrgs, float * k_proj, float * v_proj, const void * k_sw, const void * v_sw, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, int32_t kv_cap, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_prefill_global_sconv_prep_store(float * qrgs, float * k_proj, float * v_proj, const void * in_k_h, const void * in_v_h, const void * k_sw, const void * v_sw, const void * k_sp, const void * v_sp, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, void * k_scale, void * v_scale, uint8_t kv_fmt, int32_t kv_cap, float * scratch_taps, void * w_f16_scratch, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_prefill_flash_attn_tc(const float * qrgs, const void * rel_proj, const void * k_cache, const void * v_cache, const void * k_scale, const void * v_scale, uint8_t kv_fmt, void * out_gated_h, int32_t kv_cap, int32_t window, int32_t batch_size, const int32_t * d_pos, void * stream);
-void squid_launch_prefill_controller_one(const float * x, const float * saved, const float * prior_last, const float * cp_q, const CControllerWeights * cw, const void * post_norm, float * out, void * out_h, float * scratch_msg, void * scratch_cat_h, float * scratch_d, void * scratch_d_h, float * scratch_f, float * scratch_g, void * w_f16_scratch, int32_t batch_size, void * stream);
-void squid_launch_prefill_route_and_sort(const float * router_logits, const float * router_bias, int32_t * route_ids, float * route_w, int32_t * expert_offsets, int32_t * sorted_tok, int32_t * sorted_slot, float * sorted_w, int32_t batch_size, void * stream);
-void squid_launch_prefill_moe_gate_up_h(const CExpertBank * w13, const void * x_h, const int32_t * expert_offsets, const int32_t * sorted_tok, const int32_t * sorted_slot, void * out_act_h, int32_t batch_size, void * stream);
-void squid_launch_prefill_moe_down_h(const CExpertBank * w2, const void * act_h, const int32_t * expert_offsets, const int32_t * sorted_tok, const int32_t * sorted_slot, const float * sorted_w, float * out_slots, int32_t batch_size, void * stream);
+int32_t ifn_cuda_malloc(void * * ptr, size_t bytes);
+int32_t ifn_cuda_free(void * ptr);
+int32_t ifn_cuda_malloc_host_pinned(void * * ptr, size_t bytes, uint8_t mapped);
+int32_t ifn_cuda_free_host(void * ptr);
+int32_t ifn_cuda_host_get_device_pointer(void * * dev_ptr, void * host_ptr);
+int32_t ifn_cuda_memcpy_h2d(void * dst, const void * src, size_t bytes);
+int32_t ifn_cuda_memcpy_d2h(void * dst, const void * src, size_t bytes);
+int32_t ifn_cuda_memcpy_h2d_async(void * dst, const void * src, size_t bytes, void * stream);
+int32_t ifn_cuda_memcpy_d2h_async(void * dst, const void * src, size_t bytes, void * stream);
+int32_t ifn_cuda_memcpy_d2d_async(void * dst, const void * src, size_t bytes, void * stream);
+int32_t ifn_cuda_memset_async(void * dst, int32_t value, size_t bytes, void * stream);
+int32_t ifn_cuda_device_sync(void);
+int32_t ifn_cuda_stream_create(void * * out_stream);
+int32_t ifn_cuda_stream_destroy(void * stream);
+int32_t ifn_cuda_stream_sync(void * stream);
+int32_t ifn_cuda_event_create(void * * out_event, uint8_t disable_timing);
+int32_t ifn_cuda_event_destroy(void * ev);
+int32_t ifn_cuda_event_record(void * ev, void * stream);
+int32_t ifn_cuda_event_sync(void * ev);
+int32_t ifn_cuda_event_elapsed_ms(float * out_ms, void * ev0, void * ev1);
+int32_t ifn_cuda_stream_wait_event(void * stream, void * ev);
+int32_t ifn_cuda_graph_begin(void * stream);
+int32_t ifn_cuda_graph_end_instantiate(void * stream, void * * out_exec);
+int32_t ifn_cuda_graph_launch(void * exec, void * stream);
+int32_t ifn_cuda_graph_destroy(void * exec);
+float ifn_pack_bf16_to_nvfp4(const void * src_bf16_dev, void * dst_data, uint8_t * dst_scales, float * d_amax_scratch, int32_t rows, int32_t cols);
+void ifn_pack_bf16_to_fp8(const void * src_bf16_dev, void * dst_data, float * dst_row_scales, int32_t rows, int32_t cols);
+void ifn_convert_mxfp8_to_nvfp4_experts(const uint8_t * src_w, const uint8_t * src_s, uint8_t * dst_w, uint8_t * dst_s, float * dst_expert_scale, int32_t n_experts, int32_t rows, int32_t cols);
+void ifn_split_dspark_rnn(const void * src_bf16, void * w_sp, void * w_h, void * w_f);
+void ifn_compute_dspark_fold(const void * unembed_bf16, const void * hidden_out_w, const void * hidden_out_b, float * fold_b, void * fold_bf16_out, int32_t vocab_count, int32_t hidden_cols, int32_t markov_rank);
+void ifn_launch_embed_norm(const void * embed, const void * embed_norm, const int32_t * tokens, float * out, int32_t batch_size, void * stream);
+void ifn_launch_rmsnorm(const float * x, const void * weight, float * out, int32_t batch_size, int32_t width, int32_t group_size, float eps, void * stream);
+void ifn_launch_extract_block(const float * blocks, int32_t max_blocks, int32_t slot_idx, float * dst, int32_t batch_size, void * stream);
+void ifn_launch_fused_depth_norm(const float * hidden, float * partial_out, const float * blocks, int32_t n_blocks, const float * queries, const void * n0, const void * n1, const void * n2, float * o0, float * o1, float * o2, void * oh0, void * oh1, void * oh2, int32_t n_out, int32_t batch_size, void * stream);
+void ifn_launch_controller_mega_nvfp4(float * const * xs, const float * saved, const float * prior_last, const float * const * cp_queries, const ifn_cuda_c_controller_weights * const * cws_in, const void * const * post_norms, float * const * outs, void * const * outs_h, int32_t n_streams, int32_t batch_size, void * stream);
+void ifn_launch_controller_merge_batched(float * const * xs, const float * saved, const float * prior_last, const float * const * cp_queries, const ifn_cuda_c_controller_weights * const * cws_in, const void * const * post_norms, float * const * outs, void * const * outs_h, int32_t n_streams, float * scratch_msg, float * scratch_cat, float * scratch_d, int32_t batch_size, void * stream);
+void ifn_launch_qkvrg_fused(const ifn_cuda_c_linear_weight * w_qrgs, const ifn_cuda_c_linear_weight * w_k, const ifn_cuda_c_linear_weight * w_v, const void * in_qh, const void * in_kh, const void * in_vh, float * qrgs_out, float * k_out, float * v_out, int32_t batch_size, void * stream);
+void ifn_launch_linear(const ifn_cuda_c_linear_weight * w, const float * x, float * y, int32_t batch_size, uint8_t add_res, void * stream);
+void ifn_launch_linear_h(const ifn_cuda_c_linear_weight * w, const void * x_h, float * y, int32_t batch_size, uint8_t add_res, void * stream);
+void ifn_launch_mega_global_sconv_prep_store(float * qrgs, const float * k_proj, const float * v_proj, const float * in_k, const float * in_v, const void * k_sw, const void * v_sw, const void * k_sp, const void * v_sp, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, void * k_scale, void * v_scale, uint8_t kv_fmt, int32_t kv_cap, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_mega_local_sconv_prep_store(float * qrgs, const float * k_proj, const float * v_proj, const void * k_sw, const void * v_sw, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, int32_t kv_cap, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_relative_attention_gated(const float * qrgs, const void * rel_proj, const void * k_cache, const void * v_cache, const void * k_scale, const void * v_scale, uint8_t kv_fmt, float * split_buf, float * out_gated, void * out_gated_h, int32_t kv_cap, int32_t window, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_mega_attn_post_mlp_in(const float * o_proj, const void * attn_sw, float * attn_ring, const float * hidden, const float * partial_prev, float * blocks, int32_t block_count_before, uint8_t is_boundary, float * residual_out, const float * mlp_query, const void * mlp_norm_w, float * mlp_out, void * mlp_out_h, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, void * stream);
+void ifn_launch_route_topk_nvfp4(const void * m_h, const ifn_cuda_c_linear_weight * router_nvfp4, const float * router_bias, float * scratch_logits, int32_t * out_ids, float * out_weights, void * groups, int32_t batch_size, void * stream);
+void ifn_launch_route_topk(const float * m, const void * router_w, const float * router_bias, float * scratch_logits, int32_t * out_ids, float * out_weights, void * groups, int32_t batch_size, void * stream);
+void ifn_launch_moe_gate_up_h(const ifn_cuda_c_expert_bank * w13, const void * x_h, const int32_t * route_ids, const void * groups, void * out_act_h, int32_t batch_size, void * stream);
+void ifn_launch_moe_down_h(const ifn_cuda_c_expert_bank * w2, const void * act_h, const int32_t * route_ids, const float * route_w, const void * groups, float * out_down, int32_t batch_size, void * stream);
+void ifn_launch_mega_mlp_post_res(const float * moe_down_or_slots, uint8_t moe_is_slotted, const void * mlp_sw, float * mlp_ring, const float * residual, float * hidden_out, float * loopcd_save_out, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, void * stream);
+void ifn_launch_loopcd_hidden_apply(float * hidden, const float * ref_hidden, float omega, int32_t batch_size, void * stream);
+void ifn_launch_mega_mlp_post_next_depth_norm(const float * moe_down_or_slots, uint8_t moe_is_slotted, const void * prev_mlp_sw, float * prev_mlp_ring, const float * residual, float * hidden_out, float * pre_tap_out, float * post_tap_out, float * partial_out, const float * blocks, int32_t n_blocks, const float * queries, const void * n0, const void * n1, const void * n2, float * o0, float * o1, float * o2, void * oh0, void * oh1, void * oh2, int32_t n_out, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, const float * loopcd_h1, const float * loopcd_h2, const ifn_cuda_c_loop_cd_config * loopcd_cfg, void * stream);
+void ifn_launch_lm_head_argmax(const ifn_cuda_c_linear_weight * unembed, const float * x, int32_t * out_tokens, float * out_logits, float * scratch_vals, int32_t * scratch_idxs, const ifn_cuda_c_sample_config * sample_cfg, const int32_t * d_pos, const int32_t * d_draft_tokens, const float * d_draft_probs, const float * d_draft_q_sel, const int32_t * d_draft_is_delta, const int32_t * inv_draft_vocab, int32_t draft_vocab_size, int32_t batch_size, void * stream);
+void ifn_launch_dspark_commit(const ifn_cuda_c_dspark_weights * dw_in, const float * taps, void * const * ctx_k, void * const * ctx_v, void * const * ctx_ks, void * const * ctx_vs, const int32_t * ctx_cap, uint8_t global_kv_fmt, float * f_ring, float * scratch_mix, float * scratch_kv, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_dspark_draft(const void * embed, const void * embed_norm, const ifn_cuda_c_dspark_weights * dw_in, const int32_t * d_anchor_token, const int32_t * d_pos, int32_t num_drafts, void * const * ctx_k, void * const * ctx_v, const void * const * ctx_ks, const void * const * ctx_vs, const int32_t * ctx_cap, uint8_t global_kv_fmt, float * split_buf, const float * f_ring, float * workspace, int32_t * out_draft_tokens, float * out_draft_conf, const ifn_cuda_c_sample_config * sample_cfg, float * out_draft_probs, float * out_draft_q_sel, int32_t * out_draft_is_delta, void * stream);
+int32_t ifn_adaptive_graph_create(const int32_t * d_anchor, const int32_t * d_drafts, const float * d_draft_conf, float threshold, int32_t * d_tokens, int32_t * d_chosen_width, const int32_t * d_accepted, int32_t * h_accepted, const int32_t * d_num_acc, int32_t * h_num_acc, int32_t * h_chosen_width, void * stream, void * * out_graph);
+int32_t ifn_adaptive_graph_branch_begin(void * graph, int32_t branch_idx, void * stream);
+int32_t ifn_adaptive_graph_branch_end(void * stream);
+int32_t ifn_adaptive_graph_instantiate(void * graph);
+int32_t ifn_adaptive_graph_launch(void * graph, void * stream);
+int32_t ifn_adaptive_graph_destroy(void * graph);
+void ifn_launch_spec_verify(const int32_t * target_preds, const int32_t * draft_tokens, int32_t batch_size, int32_t * out_accepted, int32_t * out_num_accepted, int32_t * d_pos, int32_t * d_next_anchor, void * stream);
+void ifn_launch_inc_pos_and_copy_tok(int32_t * d_pos, int32_t * d_tok_in, const int32_t * d_tok_out, void * stream);
+void ifn_launch_inc_pos_by(int32_t * d_pos, int32_t delta, void * stream);
+void ifn_launch_assemble_verify_tokens(const int32_t * d_anchor, const int32_t * d_drafts, int32_t * d_tokens, int32_t num_drafts, void * stream);
+size_t ifn_sizeof_expert_groups(void);
+void ifn_launch_prefill_warmup_cublas(void * stream);
+void ifn_launch_prefill_f32_to_f16(const float * src, void * dst_h, int32_t count, void * stream);
+void ifn_launch_prefill_gemm_h(const ifn_cuda_c_linear_weight * w, const void * x_h, float * y, void * w_f16_scratch, int32_t batch_size, void * stream);
+void ifn_launch_prefill_sconv_post_res(const float * src_or_slots, int32_t is_slotted, const void * sconv_w, float * ring, const float * residual, float * out_res, float * pre_tap_out, float * blocks, const float * partial, int32_t block_idx, int32_t is_boundary, int32_t batch_size, const int32_t * d_pos, const float * abl_r, const float * abl_d, const float * abl_p, void * stream);
+void ifn_launch_prefill_copy_taps(const float * src, float * dst_taps, int32_t tap_slot, int32_t batch_size, void * stream);
+void ifn_launch_prefill_local_sconv_prep_store(float * qrgs, float * k_proj, float * v_proj, const void * k_sw, const void * v_sw, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, int32_t kv_cap, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_prefill_global_sconv_prep_store(float * qrgs, float * k_proj, float * v_proj, const void * in_k_h, const void * in_v_h, const void * k_sw, const void * v_sw, const void * k_sp, const void * v_sp, float * k_ring, float * v_ring, const void * q_cs, const void * r_cs, void * k_cache, void * v_cache, void * k_scale, void * v_scale, uint8_t kv_fmt, int32_t kv_cap, float * scratch_taps, void * w_f16_scratch, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_prefill_flash_attn_tc(const float * qrgs, const void * rel_proj, const void * k_cache, const void * v_cache, const void * k_scale, const void * v_scale, uint8_t kv_fmt, void * out_gated_h, int32_t kv_cap, int32_t window, int32_t batch_size, const int32_t * d_pos, void * stream);
+void ifn_launch_prefill_controller_one(const float * x, const float * saved, const float * prior_last, const float * cp_q, const ifn_cuda_c_controller_weights * cw, const void * post_norm, float * out, void * out_h, float * scratch_msg, void * scratch_cat_h, float * scratch_d, void * scratch_d_h, float * scratch_f, float * scratch_g, void * w_f16_scratch, int32_t batch_size, void * stream);
+void ifn_launch_prefill_route_and_sort(const float * router_logits, const float * router_bias, int32_t * route_ids, float * route_w, int32_t * expert_offsets, int32_t * sorted_tok, int32_t * sorted_slot, float * sorted_w, int32_t batch_size, void * stream);
+void ifn_launch_prefill_moe_gate_up_h(const ifn_cuda_c_expert_bank * w13, const void * x_h, const int32_t * expert_offsets, const int32_t * sorted_tok, const int32_t * sorted_slot, void * out_act_h, int32_t batch_size, void * stream);
+void ifn_launch_prefill_moe_down_h(const ifn_cuda_c_expert_bank * w2, const void * act_h, const int32_t * expert_offsets, const int32_t * sorted_tok, const int32_t * sorted_slot, const float * sorted_w, float * out_slots, int32_t batch_size, void * stream);
 #ifdef __cplusplus
 }
 #endif
@@ -221,12 +221,12 @@ extern "C" {
 #endif
 int ifn_blas_create(void **out, void *stream);
 int ifn_blas_destroy(void *handle);
-int ifn_prefill_gemm_h(void *handle, const CLinearWeight *w, const void *x_h, float *y,
+int ifn_prefill_gemm_h(void *handle, const ifn_cuda_c_linear_weight *w, const void *x_h, float *y,
                        void *w_f16_scratch, int32_t batch_size, void *stream);
 int ifn_prefill_controller_one(void *handle, const float *x, const float *saved,
                                const float *prior_last, const float *cp_q,
-                               const CControllerWeights *cw, const void *post_norm, float *out,
-                               void *out_h, float *scratch_msg, void *scratch_cat_h,
+                               const ifn_cuda_c_controller_weights *cw, const void *post_norm,
+                               float *out, void *out_h, float *scratch_msg, void *scratch_cat_h,
                                float *scratch_d, void *scratch_d_h, float *scratch_f,
                                float *scratch_g, void *w_f16_scratch, int32_t batch_size,
                                void *stream);
@@ -413,11 +413,11 @@ typedef struct {
     void *k_in_norm;
     void *v_in_norm;
     void *mlp_norm;
-    CLinearWeight w_qrgs;
-    CLinearWeight w_kv;
-    CLinearWeight w_k;
-    CLinearWeight w_v;
-    CLinearWeight w_o;
+    ifn_cuda_c_linear_weight w_qrgs;
+    ifn_cuda_c_linear_weight w_kv;
+    ifn_cuda_c_linear_weight w_k;
+    ifn_cuda_c_linear_weight w_v;
+    ifn_cuda_c_linear_weight w_o;
     void *k_sconv_w;
     void *v_sconv_w;
     void *k_sconv_proj;
@@ -427,21 +427,21 @@ typedef struct {
     void *q_clip_scale;
     void *rel_clip_scale;
     void *rel_logits_proj;
-    CControllerWeights ctrl[4];
+    ifn_cuda_c_controller_weights ctrl[4];
     void *router_w;
-    CLinearWeight router_nvfp4;
+    ifn_cuda_c_linear_weight router_nvfp4;
     void *router_bias;
-    CExpertBank w13;
-    CExpertBank w2;
+    ifn_cuda_c_expert_bank w13;
+    ifn_cuda_c_expert_bank w2;
 } ifn_layer;
 
 typedef struct {
     void *embed, *embed_norm, *final_norm;
-    CLinearWeight unembed;
+    ifn_cuda_c_linear_weight unembed;
     float *attn_queries[23], *mlp_queries[24], *output_query;
     float *cross_pass_queries, *cross_pass_kv_queries;
     ifn_layer layers[24];
-    CDsparkWeights dspark;
+    ifn_cuda_c_dspark_weights dspark;
 } ifn_ar_model;
 
 typedef struct {
@@ -498,8 +498,8 @@ struct ifn_session {
     float *lm_blk_val;
     int32_t *lm_blk_idx;
     float *lm_logits;
-    CSampleConfig *d_sample_cfg;
-    CLoopCDConfig *d_loopcd_cfg;
+    ifn_cuda_c_sample_config *d_sample_cfg;
+    ifn_cuda_c_loop_cd_config *d_loopcd_cfg;
     float *loopcd_h1, *loopcd_h2;
     int32_t *p_tokens, *p_pos_vec;
     float *p_taps;
@@ -563,24 +563,24 @@ void ifn_ar_check(ifn_session *, int, const char *);
 
 #include <stdatomic.h>
 #include <string.h>
-#define SI_FEATURES                                                                                \
+#define IFN_INFER_FEATURES                                                                         \
     (IFN_INFER_CAP_TEXT_CHAT | IFN_INFER_CAP_RAW_TEXT | IFN_INFER_CAP_RAW_TOKEN_IO |               \
      IFN_INFER_CAP_REASONING_OUTPUT | IFN_INFER_CAP_REASONING_HISTORY |                            \
      IFN_INFER_CAP_PREFIX_CACHE | IFN_INFER_CAP_SPECULATION | IFN_INFER_CAP_MEMORY_PLAN)
-#define SI_CANCEL 1u
-#define SI_SEALED 2u
-#define SI_MAX_INPUT (32u * 1024u * 1024u)
-#define SI_UNKNOWN_VENDOR UINT64_C(16)
+#define IFN_INFER_CANCEL 1u
+#define IFN_INFER_SEALED 2u
+#define IFN_INFER_MAX_INPUT (32u * 1024u * 1024u)
+#define IFN_INFER_UNKNOWN_VENDOR UINT64_C(16)
 
 typedef struct {
     ifn_options upstream;
     atomic_uint_fast64_t live;
     uint64_t limit;
-} si_budget;
+} ifn_infer_budget;
 
 struct ifn_infer_model {
     ifn_options allocator;
-    si_budget budget;
+    ifn_infer_budget budget;
     atomic_flag busy;
     uint32_t state, children;
     ifn_weight_config weights_config;
@@ -595,7 +595,7 @@ struct ifn_infer_model {
 struct ifn_infer_session {
     ifn_infer_model *model;
     ifn_options allocator;
-    si_budget budget;
+    ifn_infer_budget budget;
     atomic_flag busy;
     uint32_t state, children;
     ifn_session_config config;
@@ -628,46 +628,50 @@ struct ifn_infer_request {
     ifn_infer_error_v1 terminal_error;
 };
 
-ifn_status si_input(const void *, size_t);
-ifn_status si_output(void *, const void *, size_t);
-ifn_status si_error(ifn_infer_error_v1 *, ifn_status, uint32_t, const char *);
-ifn_status si_native_error(ifn_infer_error_v1 *, ifn_status, uint32_t);
-bool si_span(ifn_infer_bytes, size_t);
-bool si_equal(ifn_infer_bytes, const char *);
-ifn_infer_bytes si_text(const char *);
-void si_budget_init(si_budget *, const ifn_options *, uint64_t, ifn_options *);
-void si_free(const ifn_options *, void *);
-void *si_alloc(const ifn_options *, size_t);
-bool si_lock(atomic_flag *);
-void si_unlock(atomic_flag *);
-ifn_status si_no_extensions(ifn_infer_array);
-uint64_t si_now(void);
-ifn_status si_defaults(uint32_t, void *, ifn_infer_error_v1 *);
-ifn_status si_backend_info(ifn_infer_backend_info_v1 *, ifn_infer_error_v1 *);
-ifn_status si_model_create(const ifn_infer_model_config_v1 *, ifn_infer_model **,
-                           ifn_infer_error_v1 *);
-ifn_status si_model_plan(ifn_infer_model *, const ifn_infer_source_v1 *, ifn_infer_memory_plan_v1 *,
-                         ifn_infer_error_v1 *);
-ifn_status si_model_load(ifn_infer_model *, const ifn_infer_source_v1 *, ifn_infer_error_v1 *);
-ifn_status si_model_info(ifn_infer_model *, ifn_infer_model_info_v1 *, ifn_infer_error_v1 *);
-ifn_status si_model_close(ifn_infer_model **, ifn_infer_error_v1 *);
-ifn_status si_session_create(ifn_infer_model *, const ifn_infer_session_config_v1 *,
-                             ifn_infer_session **, ifn_infer_error_v1 *);
-ifn_status si_session_plan(ifn_infer_session *, ifn_infer_memory_plan_v1 *, ifn_infer_error_v1 *);
-ifn_status si_session_prepare(ifn_infer_session *, ifn_infer_error_v1 *);
-ifn_status si_session_info(ifn_infer_session *, ifn_infer_session_info_v1 *, ifn_infer_error_v1 *);
-ifn_status si_session_clear(ifn_infer_session *, ifn_infer_error_v1 *);
-ifn_status si_session_close(ifn_infer_session **, ifn_infer_error_v1 *);
-ifn_status si_request_create(ifn_infer_session *, const ifn_infer_input_v1 *,
-                             const ifn_infer_request_config_v1 *, ifn_infer_request **,
-                             ifn_infer_error_v1 *);
-ifn_status si_request_run(ifn_infer_request *, ifn_infer_emit_fn, void *, ifn_infer_error_v1 *);
-ifn_status si_request_cancel(ifn_infer_request *, uint32_t *, ifn_infer_error_v1 *);
-ifn_status si_request_progress(const ifn_infer_request *, ifn_infer_progress_v1 *,
-                               ifn_infer_error_v1 *);
-ifn_status si_request_result(const ifn_infer_request *, ifn_infer_result_v1 *,
-                             ifn_infer_error_v1 *);
-ifn_status si_request_close(ifn_infer_request **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_input(const void *, size_t);
+ifn_status ifn_infer_output(void *, const void *, size_t);
+ifn_status ifn_infer_error(ifn_infer_error_v1 *, ifn_status, uint32_t, const char *);
+ifn_status ifn_infer_native_error(ifn_infer_error_v1 *, ifn_status, uint32_t);
+bool ifn_infer_span(ifn_infer_bytes, size_t);
+bool ifn_infer_equal(ifn_infer_bytes, const char *);
+ifn_infer_bytes ifn_infer_text(const char *);
+void ifn_infer_budget_init(ifn_infer_budget *, const ifn_options *, uint64_t, ifn_options *);
+void ifn_infer_free(const ifn_options *, void *);
+void *ifn_infer_alloc(const ifn_options *, size_t);
+bool ifn_infer_lock(atomic_flag *);
+void ifn_infer_unlock(atomic_flag *);
+ifn_status ifn_infer_no_extensions(ifn_infer_array);
+uint64_t ifn_infer_now(void);
+ifn_status ifn_infer_defaults(uint32_t, void *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_backend_info(ifn_infer_backend_info_v1 *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *, ifn_infer_model **,
+                                  ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_plan(ifn_infer_model *, const ifn_infer_source_v1 *,
+                                ifn_infer_memory_plan_v1 *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_load(ifn_infer_model *, const ifn_infer_source_v1 *,
+                                ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_info(ifn_infer_model *, ifn_infer_model_info_v1 *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_close(ifn_infer_model **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_create(ifn_infer_model *, const ifn_infer_session_config_v1 *,
+                                    ifn_infer_session **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_plan(ifn_infer_session *, ifn_infer_memory_plan_v1 *,
+                                  ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_prepare(ifn_infer_session *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_info(ifn_infer_session *, ifn_infer_session_info_v1 *,
+                                  ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_clear(ifn_infer_session *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_session_close(ifn_infer_session **, ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_create(ifn_infer_session *, const ifn_infer_input_v1 *,
+                                    const ifn_infer_request_config_v1 *, ifn_infer_request **,
+                                    ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_run(ifn_infer_request *, ifn_infer_emit_fn, void *,
+                                 ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_cancel(ifn_infer_request *, uint32_t *, ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_progress(const ifn_infer_request *, ifn_infer_progress_v1 *,
+                                      ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_result(const ifn_infer_request *, ifn_infer_result_v1 *,
+                                    ifn_infer_error_v1 *);
+ifn_status ifn_infer_request_close(ifn_infer_request **, ifn_infer_error_v1 *);
 #endif
 
 
@@ -773,7 +777,7 @@ bool ifn_utf8_next(const unsigned char *text, size_t bytes, size_t *pos, uint32_
  * Supported public Inkling ByteLevel profile; model/tokenizer data stay external. */
 #ifndef IFN_TOKENIZER_PROFILE_H
 #define IFN_TOKENIZER_PROFILE_H
-#define PRETOKENIZER_PROFILE                                                                       \
+#define IFN_TOKENIZER_PROFILE_LOCAL_PRETOKENIZER_PROFILE                                           \
     "{\"type\":\"Sequence\",\"pretokenizers\":[{\"type\":\"Split\",\"pattern\":{\"Regex\":\"[^"    \
     "\\\\r\\\\n\\\\p{L}\\\\p{N}]?[\\\\p{Lu}\\\\p{Lt}\\\\p{Lm}\\\\p{Lo}\\\\p{M}]*[\\\\p{Ll}\\\\p{"  \
     "Lm}\\\\p{Lo}\\\\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|[^\\\\r\\\\n\\\\p{L}\\\\p{N}]?[\\\\p{Lu}" \
@@ -838,12 +842,12 @@ bool ifn_size_align(size_t value, size_t alignment, size_t *out) {
     return true;
 }
 
-static void *ifn_am_foundation_default_allocate(void *context, size_t bytes) {
+static void *ifn_am_foundation_ifn_foundation_local_default_allocate(void *context, size_t bytes) {
     (void)context;
     return malloc(bytes);
 }
 
-static void ifn_am_foundation_default_release(void *context, void *allocation) {
+static void ifn_am_foundation_ifn_foundation_local_default_release(void *context, void *allocation) {
     (void)context;
     free(allocation);
 }
@@ -858,8 +862,8 @@ ifn_status ifn_options_resolve(const ifn_options *input, ifn_options *out) {
             return ifn_error(IFN_INVALID_ARGUMENT, "allocator callbacks must be paired");
     }
     if (!out->allocate) {
-        out->allocate = ifn_am_foundation_default_allocate;
-        out->release = ifn_am_foundation_default_release;
+        out->allocate = ifn_am_foundation_ifn_foundation_local_default_allocate;
+        out->release = ifn_am_foundation_ifn_foundation_local_default_release;
     }
     return IFN_OK;
 }
@@ -887,7 +891,7 @@ bool ifn_json_take(ifn_json *j, unsigned char c) {
     return true;
 }
 
-static bool ifn_am_json_hex4(ifn_json *j, uint32_t *out) {
+static bool ifn_am_json_ifn_json_local_hex4(ifn_json *j, uint32_t *out) {
     uint32_t value = 0;
     for (unsigned i = 0; i < 4; i++) {
         if (j->pos == j->size)
@@ -928,7 +932,7 @@ bool ifn_json_string(ifn_json *j, char *out, size_t capacity) {
                 return false;
             unsigned char c = j->data[j->pos++];
             if (c == 'u') {
-                if (!ifn_am_json_hex4(j, &cp))
+                if (!ifn_am_json_ifn_json_local_hex4(j, &cp))
                     return false;
                 if (cp >= 0xd800 && cp <= 0xdbff) {
                     uint32_t low;
@@ -936,7 +940,7 @@ bool ifn_json_string(ifn_json *j, char *out, size_t capacity) {
                         j->data[j->pos + 1] != 'u')
                         return false;
                     j->pos += 2;
-                    if (!ifn_am_json_hex4(j, &low) || low < 0xdc00 || low > 0xdfff)
+                    if (!ifn_am_json_ifn_json_local_hex4(j, &low) || low < 0xdc00 || low > 0xdfff)
                         return false;
                     cp = 0x10000 + (cp - 0xd800) * 1024 + low - 0xdc00;
                 } else if (cp >= 0xdc00 && cp <= 0xdfff)
@@ -1236,15 +1240,16 @@ struct ifn_safetensors {
     uint16_t table[4096];
 };
 
-static uint64_t ifn_am_safetensors_hash_name(const char *name, size_t length) {
+static uint64_t ifn_am_safetensors_ifn_safetensors_local_hash_name(const char *name, size_t length) {
     uint64_t hash = UINT64_C(14695981039346656037);
     for (size_t i = 0; i < length; i++)
         hash = (hash ^ (unsigned char)name[i]) * UINT64_C(1099511628211);
     return hash;
 }
 
-static size_t ifn_am_safetensors_lookup(const ifn_safetensors *file, const char *name, size_t length) {
-    size_t slot = (size_t)(ifn_am_safetensors_hash_name(name, length) & 4095u);
+static size_t ifn_am_safetensors_ifn_safetensors_local_lookup(const ifn_safetensors *file, const char *name,
+                                           size_t length) {
+    size_t slot = (size_t)(ifn_am_safetensors_ifn_safetensors_local_hash_name(name, length) & 4095u);
     for (size_t probe = 0; probe < 4096; probe++, slot = (slot + 1) & 4095u) {
         uint16_t index = file->table[slot];
         if (index == UINT16_MAX)
@@ -1256,7 +1261,7 @@ static size_t ifn_am_safetensors_lookup(const ifn_safetensors *file, const char 
     return SIZE_MAX;
 }
 
-static bool ifn_am_safetensors_tensor(ifn_json *j, ifn_tensor_info *info) {
+static bool ifn_am_safetensors_ifn_safetensors_local_tensor(ifn_json *j, ifn_tensor_info *info) {
     if (!ifn_json_take(j, '{'))
         return false;
     unsigned fields = 0;
@@ -1310,7 +1315,7 @@ static bool ifn_am_safetensors_tensor(ifn_json *j, ifn_tensor_info *info) {
     return ifn_json_take(j, '}') && fields == 7;
 }
 
-static bool ifn_am_safetensors_metadata(ifn_json *j) {
+static bool ifn_am_safetensors_ifn_safetensors_local_metadata(ifn_json *j) {
     if (!ifn_json_take(j, '{'))
         return false;
     if (ifn_json_take(j, '}'))
@@ -1322,7 +1327,7 @@ static bool ifn_am_safetensors_metadata(ifn_json *j) {
     return ifn_json_take(j, '}');
 }
 
-static ifn_status ifn_am_safetensors_parse(ifn_safetensors *file) {
+static ifn_status ifn_am_safetensors_ifn_safetensors_local_parse(ifn_safetensors *file) {
     if (file->size < 10)
         return ifn_error(IFN_FORMAT, "truncated safetensors file");
     uint64_t header = 0;
@@ -1341,17 +1346,18 @@ static ifn_status ifn_am_safetensors_parse(ifn_safetensors *file) {
             if (!ifn_json_string(&j, name, sizeof name) || !name[0] || !ifn_json_take(&j, ':'))
                 return ifn_error(IFN_FORMAT, "invalid tensor name/key");
             if (!strcmp(name, "__metadata__")) {
-                if (seen_metadata || !ifn_am_safetensors_metadata(&j))
+                if (seen_metadata || !ifn_am_safetensors_ifn_safetensors_local_metadata(&j))
                     return ifn_error(IFN_FORMAT, "invalid metadata");
                 seen_metadata = true;
                 continue;
             }
-            if (file->count == IFN_MAX_TENSORS || ifn_am_safetensors_lookup(file, name, strlen(name)) != SIZE_MAX)
+            if (file->count == IFN_MAX_TENSORS ||
+                ifn_am_safetensors_ifn_safetensors_local_lookup(file, name, strlen(name)) != SIZE_MAX)
                 return ifn_error(IFN_FORMAT, "duplicate tensor or tensor limit exceeded");
             ifn_tensor_info *info = &file->tensors[file->count];
             memset(info, 0, sizeof *info);
             memcpy(info->name, name, strlen(name) + 1);
-            if (!ifn_am_safetensors_tensor(&j, info))
+            if (!ifn_am_safetensors_ifn_safetensors_local_tensor(&j, info))
                 return ifn_error(IFN_FORMAT, "invalid tensor schema/dtype/shape");
             size_t elements = 1;
             for (uint32_t i = 0; i < info->rank; i++) {
@@ -1365,7 +1371,7 @@ static ifn_status ifn_am_safetensors_parse(ifn_safetensors *file) {
                 info->offset > file->size - file->base ||
                 info->bytes > file->size - file->base - info->offset)
                 return ifn_error(IFN_FORMAT, "tensor size/offset mismatch");
-            size_t slot = (size_t)(ifn_am_safetensors_hash_name(name, strlen(name)) & 4095u);
+            size_t slot = (size_t)(ifn_am_safetensors_ifn_safetensors_local_hash_name(name, strlen(name)) & 4095u);
             while (file->table[slot] != UINT16_MAX)
                 slot = (slot + 1) & 4095u;
             file->table[slot] = (uint16_t)file->count++;
@@ -1394,7 +1400,7 @@ static ifn_status ifn_am_safetensors_parse(ifn_safetensors *file) {
     return ifn_error(IFN_OK, "");
 }
 
-static ifn_status ifn_am_safetensors_create(const ifn_options *options, ifn_safetensors **out) {
+static ifn_status ifn_am_safetensors_ifn_safetensors_local_create(const ifn_options *options, ifn_safetensors **out) {
     ifn_options allocator;
     ifn_status status = ifn_options_resolve(options, &allocator);
     if (status != IFN_OK)
@@ -1431,12 +1437,12 @@ ifn_status ifn_safetensors_open_memory(const void *data, size_t bytes, const ifn
     if (!out || !data)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing input/output");
     ifn_safetensors *file = NULL;
-    ifn_status status = ifn_am_safetensors_create(options, &file);
+    ifn_status status = ifn_am_safetensors_ifn_safetensors_local_create(options, &file);
     if (status != IFN_OK)
         return status;
     file->data = data;
     file->size = bytes;
-    status = ifn_am_safetensors_parse(file);
+    status = ifn_am_safetensors_ifn_safetensors_local_parse(file);
     if (status != IFN_OK) {
         ifn_safetensors_close(file);
         return status;
@@ -1470,7 +1476,7 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     if (mapping == MAP_FAILED)
         return ifn_error(IFN_IO, "cannot map tensor file");
     ifn_safetensors *file = NULL;
-    status = ifn_am_safetensors_create(&checked, &file);
+    status = ifn_am_safetensors_ifn_safetensors_local_create(&checked, &file);
     if (status != IFN_OK) {
         (void)munmap(mapping, size);
         return status;
@@ -1478,7 +1484,7 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     file->data = mapping;
     file->size = size;
     file->mapped = true;
-    status = ifn_am_safetensors_parse(file);
+    status = ifn_am_safetensors_ifn_safetensors_local_parse(file);
     if (status != IFN_OK) {
         ifn_safetensors_close(file);
         return status;
@@ -1513,7 +1519,7 @@ ifn_status ifn_safetensors_find(const ifn_safetensors *file, const char *name, s
         *out = NULL;
     if (!file || !out || !name || !length || length > IFN_MAX_NAME || memchr(name, 0, length))
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid lookup name/output");
-    return ifn_safetensors_at(file, ifn_am_safetensors_lookup(file, name, length), out);
+    return ifn_safetensors_at(file, ifn_am_safetensors_ifn_safetensors_local_lookup(file, name, length), out);
 }
 
 ifn_status ifn_safetensors_data(const ifn_safetensors *file, size_t index, const void **out,
@@ -1602,7 +1608,8 @@ int32_t ifn_vocab_lookup(const ifn_tokenizer *t, const void *bytes, size_t size)
     return -1;
 }
 
-static bool ifn_am_tokenizer_load_raw_token(const char *text, unsigned char *out, size_t *length) {
+static bool ifn_am_tokenizer_load_ifn_tokenizer_load_local_raw_token(const char *text, unsigned char *out,
+                                               size_t *length) {
     size_t n = strlen(text), p = 0, k = 0;
     while (p < n) {
         uint32_t cp;
@@ -1630,12 +1637,12 @@ static bool ifn_am_tokenizer_load_raw_token(const char *text, unsigned char *out
     return k > 0;
 }
 
-static bool ifn_am_tokenizer_load_equal(ifn_json value, const char *expected) {
+static bool ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(ifn_json value, const char *expected) {
     return ifn_json_equal(value, (ifn_json){(const unsigned char *)expected, strlen(expected), 0},
                           0);
 }
 
-static bool ifn_am_tokenizer_load_fields(ifn_json value, ifn_json_field *f, size_t n) {
+static bool ifn_am_tokenizer_load_ifn_tokenizer_load_local_fields(ifn_json value, ifn_json_field *f, size_t n) {
     if (!ifn_json_object(&value, f, n) || !ifn_json_done(&value))
         return false;
     for (size_t i = 0; i < n; i++)
@@ -1644,7 +1651,7 @@ static bool ifn_am_tokenizer_load_fields(ifn_json value, ifn_json_field *f, size
     return true;
 }
 
-static ifn_json_field ifn_am_tokenizer_load_field(const char *name) {
+static ifn_json_field ifn_am_tokenizer_load_ifn_tokenizer_load_local_field(const char *name) {
     ifn_json_field f = {0};
     f.name = name;
     return f;
@@ -1652,38 +1659,51 @@ static ifn_json_field ifn_am_tokenizer_load_field(const char *name) {
 
 /* A supported-profile check prevents silently treating normalization, added-
  * token whitespace flags or arbitrary regexes as the pinned Inkling tokenizer. */
-static bool ifn_am_tokenizer_load_profile(ifn_json json, ifn_json *vocab, ifn_json *merges, ifn_json *added) {
-    ifn_json_field top[] = {ifn_am_tokenizer_load_field("version"),        ifn_am_tokenizer_load_field("truncation"), ifn_am_tokenizer_load_field("padding"),
-                            ifn_am_tokenizer_load_field("added_tokens"),   ifn_am_tokenizer_load_field("normalizer"), ifn_am_tokenizer_load_field("pre_tokenizer"),
-                            ifn_am_tokenizer_load_field("post_processor"), ifn_am_tokenizer_load_field("decoder"),    ifn_am_tokenizer_load_field("model")};
-    if (!ifn_am_tokenizer_load_fields(json, top, 9) || !ifn_json_text(top[0].value, "1.0") ||
-        !ifn_am_tokenizer_load_equal(top[1].value, "null") || !ifn_am_tokenizer_load_equal(top[2].value, "null") ||
-        !ifn_am_tokenizer_load_equal(top[4].value, "null"))
+static bool ifn_am_tokenizer_load_ifn_tokenizer_load_local_profile(ifn_json json, ifn_json *vocab, ifn_json *merges,
+                                             ifn_json *added) {
+    ifn_json_field top[] = {ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("version"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("truncation"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("padding"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("added_tokens"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("normalizer"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("pre_tokenizer"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("post_processor"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("decoder"),
+                            ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("model")};
+    if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_fields(json, top, 9) || !ifn_json_text(top[0].value, "1.0") ||
+        !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(top[1].value, "null") ||
+        !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(top[2].value, "null") ||
+        !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(top[4].value, "null"))
         return false;
-    const char *pre = PRETOKENIZER_PROFILE;
-    if (!ifn_am_tokenizer_load_equal(top[5].value, pre) ||
-        !ifn_am_tokenizer_load_equal(top[6].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
-                             "false,\"use_regex\":true}") ||
-        !ifn_am_tokenizer_load_equal(top[7].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
-                             "true,\"use_regex\":true}"))
+    const char *pre = IFN_TOKENIZER_PROFILE_LOCAL_PRETOKENIZER_PROFILE;
+    if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(top[5].value, pre) ||
+        !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(
+            top[6].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
+                          "false,\"use_regex\":true}") ||
+        !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(
+            top[7].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
+                          "true,\"use_regex\":true}"))
         return false;
-    ifn_json_field model[] = {ifn_am_tokenizer_load_field("type"),
-                              ifn_am_tokenizer_load_field("dropout"),
-                              ifn_am_tokenizer_load_field("unk_token"),
-                              ifn_am_tokenizer_load_field("continuing_subword_prefix"),
-                              ifn_am_tokenizer_load_field("end_of_word_suffix"),
-                              ifn_am_tokenizer_load_field("fuse_unk"),
-                              ifn_am_tokenizer_load_field("byte_fallback"),
-                              ifn_am_tokenizer_load_field("ignore_merges"),
-                              ifn_am_tokenizer_load_field("vocab"),
-                              ifn_am_tokenizer_load_field("merges")};
-    if (!ifn_am_tokenizer_load_fields(top[8].value, model, 10) || !ifn_json_text(model[0].value, "BPE"))
+    ifn_json_field model[] = {ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("type"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("dropout"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("unk_token"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("continuing_subword_prefix"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("end_of_word_suffix"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("fuse_unk"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("byte_fallback"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("ignore_merges"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("vocab"),
+                              ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("merges")};
+    if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_fields(top[8].value, model, 10) ||
+        !ifn_json_text(model[0].value, "BPE"))
         return false;
     for (size_t i = 1; i < 5; i++)
-        if (!ifn_am_tokenizer_load_equal(model[i].value, "null"))
+        if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(model[i].value, "null"))
             return false;
-    if (!ifn_am_tokenizer_load_equal(model[5].value, "false") || !ifn_am_tokenizer_load_equal(model[6].value, "false") ||
-        (!ifn_am_tokenizer_load_equal(model[7].value, "false") && !ifn_am_tokenizer_load_equal(model[7].value, "true")))
+    if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(model[5].value, "false") ||
+        !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(model[6].value, "false") ||
+        (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(model[7].value, "false") &&
+         !ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(model[7].value, "true")))
         return false;
     *vocab = model[8].value;
     *merges = model[9].value;
@@ -1691,20 +1711,22 @@ static bool ifn_am_tokenizer_load_profile(ifn_json json, ifn_json *vocab, ifn_js
     return true;
 }
 
-static bool ifn_am_tokenizer_load_added_entry(ifn_json *j, char *name, size_t *id) {
-    ifn_json_field f[] = {ifn_am_tokenizer_load_field("id"),     ifn_am_tokenizer_load_field("content"), ifn_am_tokenizer_load_field("single_word"),
-                          ifn_am_tokenizer_load_field("lstrip"), ifn_am_tokenizer_load_field("rstrip"),  ifn_am_tokenizer_load_field("normalized"),
-                          ifn_am_tokenizer_load_field("special")};
+static bool ifn_am_tokenizer_load_ifn_tokenizer_load_local_added_entry(ifn_json *j, char *name, size_t *id) {
+    ifn_json_field f[] = {
+        ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("id"),          ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("content"),
+        ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("single_word"), ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("lstrip"),
+        ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("rstrip"),      ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("normalized"),
+        ifn_am_tokenizer_load_ifn_tokenizer_load_local_field("special")};
     if (!ifn_json_object(j, f, 7))
         return false;
     for (size_t i = 0; i < 7; i++)
         if (!f[i].present)
             return false;
     for (size_t i = 2; i < 6; i++)
-        if (!ifn_am_tokenizer_load_equal(f[i].value, "false"))
+        if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(f[i].value, "false"))
             return false;
     uint64_t n;
-    if (!ifn_am_tokenizer_load_equal(f[6].value, "true") || !ifn_json_u64(&f[0].value, &n) ||
+    if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_equal(f[6].value, "true") || !ifn_json_u64(&f[0].value, &n) ||
         !ifn_json_done(&f[0].value) || n >= IFN_TOK_IDS ||
         !ifn_json_string(&f[1].value, name, 4096) || !name[0])
         return false;
@@ -1712,14 +1734,14 @@ static bool ifn_am_tokenizer_load_added_entry(ifn_json *j, char *name, size_t *i
     return true;
 }
 
-static size_t ifn_am_tokenizer_load_slots(size_t count) {
+static size_t ifn_am_tokenizer_load_ifn_tokenizer_load_local_slots(size_t count) {
     size_t n = 16;
     while (n < count * 2 && n < 1048576)
         n *= 2;
     return n;
 }
 
-static void *ifn_am_tokenizer_load_owned(ifn_tokenizer *t, size_t n, size_t width) {
+static void *ifn_am_tokenizer_load_ifn_tokenizer_load_local_owned(ifn_tokenizer *t, size_t n, size_t width) {
     size_t bytes;
     if (!ifn_size_mul(n, width, &bytes))
         return NULL;
@@ -1729,7 +1751,8 @@ static void *ifn_am_tokenizer_load_owned(ifn_tokenizer *t, size_t n, size_t widt
     return p;
 }
 
-static bool ifn_am_tokenizer_load_store(ifn_tokenizer *t, const void *bytes, size_t length, size_t id, bool special) {
+static bool ifn_am_tokenizer_load_ifn_tokenizer_load_local_store(ifn_tokenizer *t, const void *bytes, size_t length,
+                                           size_t id, bool special) {
     if (!length || length > 4095 || id >= t->id_count || t->entries[id].present ||
         length > t->arena_size - t->arena_used)
         return false;
@@ -1788,7 +1811,7 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     if (status != IFN_OK)
         return status;
     ifn_json vocab, merges, added;
-    if (!ifn_am_tokenizer_load_profile((ifn_json){data, bytes, 0}, &vocab, &merges, &added))
+    if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_profile((ifn_json){data, bytes, 0}, &vocab, &merges, &added))
         return ifn_error(IFN_FORMAT, "unsupported or malformed Inkling tokenizer profile");
     /* Count before allocation; each item is independently bounded. */
     ifn_json v = vocab, m = merges, a = added;
@@ -1821,7 +1844,7 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     if (!ifn_json_take(&a, ']')) {
         do {
             size_t id;
-            if (++ns > 256 || !ifn_am_tokenizer_load_added_entry(&a, name, &id))
+            if (++ns > 256 || !ifn_am_tokenizer_load_ifn_tokenizer_load_local_added_entry(&a, name, &id))
                 return ifn_error(IFN_FORMAT, "invalid added token");
             if (id > maxid)
                 maxid = id;
@@ -1839,12 +1862,12 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     t->allocator = allocator;
     t->arena_size = arena_size;
     t->id_count = maxid + 1;
-    t->vocab_slots = ifn_am_tokenizer_load_slots(nv);
-    t->merge_slots = ifn_am_tokenizer_load_slots(nm);
-    t->arena = ifn_am_tokenizer_load_owned(t, arena_size, 1);
-    t->entries = ifn_am_tokenizer_load_owned(t, t->id_count, sizeof *t->entries);
-    t->vocab = ifn_am_tokenizer_load_owned(t, t->vocab_slots, sizeof *t->vocab);
-    t->merges = ifn_am_tokenizer_load_owned(t, t->merge_slots, sizeof *t->merges);
+    t->vocab_slots = ifn_am_tokenizer_load_ifn_tokenizer_load_local_slots(nv);
+    t->merge_slots = ifn_am_tokenizer_load_ifn_tokenizer_load_local_slots(nm);
+    t->arena = ifn_am_tokenizer_load_ifn_tokenizer_load_local_owned(t, arena_size, 1);
+    t->entries = ifn_am_tokenizer_load_ifn_tokenizer_load_local_owned(t, t->id_count, sizeof *t->entries);
+    t->vocab = ifn_am_tokenizer_load_ifn_tokenizer_load_local_owned(t, t->vocab_slots, sizeof *t->vocab);
+    t->merges = ifn_am_tokenizer_load_ifn_tokenizer_load_local_owned(t, t->merge_slots, sizeof *t->merges);
     if (!t->arena || !t->entries || !t->vocab || !t->merges) {
         ifn_tokenizer_close(t);
         return ifn_error(IFN_OUT_OF_MEMORY, "allocate tokenizer tables");
@@ -1858,8 +1881,8 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
         unsigned char raw[4096];
         size_t n;
         if (!ifn_json_string(&v, name, sizeof name) || !ifn_json_take(&v, ':') ||
-            !ifn_json_u64(&v, &id) || !ifn_am_tokenizer_load_raw_token(name, raw, &n) ||
-            !ifn_am_tokenizer_load_store(t, raw, n, (size_t)id, false))
+            !ifn_json_u64(&v, &id) || !ifn_am_tokenizer_load_ifn_tokenizer_load_local_raw_token(name, raw, &n) ||
+            !ifn_am_tokenizer_load_ifn_tokenizer_load_local_store(t, raw, n, (size_t)id, false))
             goto invalid;
     } while (ifn_json_take(&v, ','));
     a = added;
@@ -1867,7 +1890,8 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
     if (!ifn_json_take(&a, ']'))
         do {
             size_t id;
-            if (!ifn_am_tokenizer_load_added_entry(&a, name, &id) || !ifn_am_tokenizer_load_store(t, name, strlen(name), id, true))
+            if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_added_entry(&a, name, &id) ||
+                !ifn_am_tokenizer_load_ifn_tokenizer_load_local_store(t, name, strlen(name), id, true))
                 goto invalid;
         } while (ifn_json_take(&a, ','));
     for (size_t i = 0; i < 256; i++) {
@@ -1905,7 +1929,8 @@ ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_o
             memcpy(left, name, strlen(name) + 1);
             memcpy(right, space + 1, strlen(space + 1) + 1);
         }
-        if (!ifn_am_tokenizer_load_raw_token(left, raw, &na) || !ifn_am_tokenizer_load_raw_token(right, raw + na, &nb))
+        if (!ifn_am_tokenizer_load_ifn_tokenizer_load_local_raw_token(left, raw, &na) ||
+            !ifn_am_tokenizer_load_ifn_tokenizer_load_local_raw_token(right, raw + na, &nb))
             goto invalid;
         int32_t ia = ifn_vocab_lookup(t, raw, na), ib = ifn_vocab_lookup(t, raw + na, nb),
                 ic = ifn_vocab_lookup(t, raw, na + nb);
@@ -1965,17 +1990,17 @@ ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_
 
 #include <string.h>
 
-static bool ifn_am_tokenizer_cp_is_newline(uint32_t cp) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_newline(uint32_t cp) {
     return cp == '\r' || cp == '\n';
 }
 
-static bool ifn_am_tokenizer_cp_is_space(uint32_t cp) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_space(uint32_t cp) {
     return cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' || cp == 0x0B || cp == 0x0C ||
            cp == 0x0085 || cp == 0x00A0 || cp == 0x1680 || (cp >= 0x2000 && cp <= 0x200A) ||
            cp == 0x2028 || cp == 0x2029 || cp == 0x202F || cp == 0x205F || cp == 0x3000;
 }
 
-static bool ifn_am_tokenizer_cp_is_digit(uint32_t cp) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(uint32_t cp) {
     if (cp >= '0' && cp <= '9')
         return true;
     if (cp < 0x80)
@@ -1984,7 +2009,7 @@ static bool ifn_am_tokenizer_cp_is_digit(uint32_t cp) {
            (cp >= 0x0966 && cp <= 0x096F) || (cp >= 0xFF10 && cp <= 0xFF19);
 }
 
-static bool ifn_am_tokenizer_cp_is_upper(uint32_t cp) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_upper(uint32_t cp) {
     if (cp >= 'A' && cp <= 'Z')
         return true;
     if (cp < 0x80)
@@ -1994,7 +2019,7 @@ static bool ifn_am_tokenizer_cp_is_upper(uint32_t cp) {
            (cp >= 0xFF21 && cp <= 0xFF3A);
 }
 
-static bool ifn_am_tokenizer_cp_is_lower(uint32_t cp) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_lower(uint32_t cp) {
     if (cp >= 'a' && cp <= 'z')
         return true;
     if (cp < 0x80)
@@ -2004,7 +2029,7 @@ static bool ifn_am_tokenizer_cp_is_lower(uint32_t cp) {
            (cp >= 0xFF41 && cp <= 0xFF5A);
 }
 
-static bool ifn_am_tokenizer_cp_is_other_letter_or_mark(uint32_t cp) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_other_letter_or_mark(uint32_t cp) {
     if (cp < 0x80)
         return false;
     return (cp >= 0x0100 && cp <= 0x024F) || (cp >= 0x0300 && cp <= 0x036F) ||
@@ -2013,16 +2038,19 @@ static bool ifn_am_tokenizer_cp_is_other_letter_or_mark(uint32_t cp) {
            (cp >= 0xAC00 && cp <= 0xD7AF) || (cp >= 0xF900 && cp <= 0xFAFF);
 }
 
-static bool ifn_am_tokenizer_cp_is_letter(uint32_t cp) {
-    return ifn_am_tokenizer_cp_is_upper(cp) || ifn_am_tokenizer_cp_is_lower(cp) || ifn_am_tokenizer_cp_is_other_letter_or_mark(cp);
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(uint32_t cp) {
+    return ifn_am_tokenizer_ifn_tokenizer_local_cp_is_upper(cp) || ifn_am_tokenizer_ifn_tokenizer_local_cp_is_lower(cp) ||
+           ifn_am_tokenizer_ifn_tokenizer_local_cp_is_other_letter_or_mark(cp);
 }
 
-static bool ifn_am_tokenizer_cp_is_cat_U(uint32_t cp) {
-    return ifn_am_tokenizer_cp_is_upper(cp) || ifn_am_tokenizer_cp_is_other_letter_or_mark(cp);
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_U(uint32_t cp) {
+    return ifn_am_tokenizer_ifn_tokenizer_local_cp_is_upper(cp) ||
+           ifn_am_tokenizer_ifn_tokenizer_local_cp_is_other_letter_or_mark(cp);
 }
 
-static bool ifn_am_tokenizer_cp_is_cat_L(uint32_t cp) {
-    return ifn_am_tokenizer_cp_is_lower(cp) || ifn_am_tokenizer_cp_is_other_letter_or_mark(cp);
+static bool ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_L(uint32_t cp) {
+    return ifn_am_tokenizer_ifn_tokenizer_local_cp_is_lower(cp) ||
+           ifn_am_tokenizer_ifn_tokenizer_local_cp_is_other_letter_or_mark(cp);
 }
 
 bool ifn_utf8_next(const unsigned char *s, size_t n, size_t *pos, uint32_t *out) {
@@ -2059,7 +2087,7 @@ bool ifn_utf8_next(const unsigned char *s, size_t n, size_t *pos, uint32_t *out)
     return true;
 }
 
-static bool ifn_am_tokenizer_valid_utf8(const char *text, size_t bytes) {
+static bool ifn_am_tokenizer_ifn_tokenizer_local_valid_utf8(const char *text, size_t bytes) {
     size_t p = 0;
     uint32_t cp;
     while (p < bytes)
@@ -2068,7 +2096,7 @@ static bool ifn_am_tokenizer_valid_utf8(const char *text, size_t bytes) {
     return true;
 }
 
-static size_t ifn_am_tokenizer_contraction(const uint32_t *c, size_t n, size_t i) {
+static size_t ifn_am_tokenizer_ifn_tokenizer_local_contraction(const uint32_t *c, size_t n, size_t i) {
     if (i + 1 >= n || c[i] != '\'')
         return 0;
     uint32_t a = c[i + 1];
@@ -2086,37 +2114,39 @@ static size_t ifn_am_tokenizer_contraction(const uint32_t *c, size_t n, size_t i
     return 0;
 }
 
-static size_t ifn_am_tokenizer_branch1(const uint32_t *c, size_t n, size_t start) {
+static size_t ifn_am_tokenizer_ifn_tokenizer_local_branch1(const uint32_t *c, size_t n, size_t start) {
     size_t j = start;
-    if (j < n && !ifn_am_tokenizer_cp_is_newline(c[j]) && !ifn_am_tokenizer_cp_is_letter(c[j]) && !ifn_am_tokenizer_cp_is_digit(c[j]))
+    if (j < n && !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_newline(c[j]) &&
+        !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(c[j]) && !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[j]))
         j++;
     size_t run = j;
-    while (j < n && ifn_am_tokenizer_cp_is_letter(c[j]))
+    while (j < n && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(c[j]))
         j++;
     size_t u = run;
-    while (u < j && ifn_am_tokenizer_cp_is_cat_U(c[u]))
+    while (u < j && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_U(c[u]))
         u++;
     size_t l = u;
-    if (l == j && u > run && ifn_am_tokenizer_cp_is_cat_L(c[u - 1]))
+    if (l == j && u > run && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_L(c[u - 1]))
         l = u - 1;
     size_t end = l;
-    while (end < j && ifn_am_tokenizer_cp_is_cat_L(c[end]))
+    while (end < j && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_L(c[end]))
         end++;
-    return end > l ? end + ifn_am_tokenizer_contraction(c, n, end) : 0;
+    return end > l ? end + ifn_am_tokenizer_ifn_tokenizer_local_contraction(c, n, end) : 0;
 }
 
-static size_t ifn_am_tokenizer_branch2(const uint32_t *c, size_t n, size_t start) {
+static size_t ifn_am_tokenizer_ifn_tokenizer_local_branch2(const uint32_t *c, size_t n, size_t start) {
     size_t j = start;
-    if (j < n && !ifn_am_tokenizer_cp_is_newline(c[j]) && !ifn_am_tokenizer_cp_is_letter(c[j]) && !ifn_am_tokenizer_cp_is_digit(c[j]))
+    if (j < n && !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_newline(c[j]) &&
+        !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(c[j]) && !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[j]))
         j++;
     size_t u = j;
-    while (j < n && ifn_am_tokenizer_cp_is_cat_U(c[j]))
+    while (j < n && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_U(c[j]))
         j++;
     if (j == u)
         return 0;
-    while (j < n && ifn_am_tokenizer_cp_is_cat_L(c[j]))
+    while (j < n && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_cat_L(c[j]))
         j++;
-    return j + ifn_am_tokenizer_contraction(c, n, j);
+    return j + ifn_am_tokenizer_ifn_tokenizer_local_contraction(c, n, j);
 }
 
 void ifn_tokenizer_scratch_destroy(ifn_tokenizer_scratch *s) {
@@ -2160,15 +2190,15 @@ ifn_status ifn_tokenizer_scratch_create(const ifn_options *options, ifn_tokenize
 typedef struct {
     int32_t *ids;
     size_t capacity, count;
-} sink;
+} ifn_tokenizer_local_sink;
 
-static void ifn_am_tokenizer_emit(sink *out, int32_t id) {
+static void ifn_am_tokenizer_ifn_tokenizer_local_emit(ifn_tokenizer_local_sink *out, int32_t id) {
     if (out->count < out->capacity)
         out->ids[out->count] = id;
     out->count++;
 }
 
-static const ifn_merge *ifn_am_tokenizer_merge(const ifn_tokenizer *t, int32_t a, int32_t b) {
+static const ifn_merge *ifn_am_tokenizer_ifn_tokenizer_local_merge(const ifn_tokenizer *t, int32_t a, int32_t b) {
     uint64_t pair = ((uint64_t)(uint32_t)a << 32) | (uint32_t)b;
     size_t slot = (size_t)ifn_pair_hash(pair) & (t->merge_slots - 1);
     for (size_t i = 0; i < t->merge_slots; i++, slot = (slot + 1) & (t->merge_slots - 1)) {
@@ -2180,8 +2210,8 @@ static const ifn_merge *ifn_am_tokenizer_merge(const ifn_tokenizer *t, int32_t a
     return NULL;
 }
 
-static void ifn_am_tokenizer_piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
-                  ifn_tokenizer_scratch *s, sink *out) {
+static void ifn_am_tokenizer_ifn_tokenizer_local_piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
+                                      ifn_tokenizer_scratch *s, ifn_tokenizer_local_sink *out) {
     size_t offset = 0;
     while (offset < n) {
         size_t end = n - offset > IFN_TOK_PIECE ? offset + IFN_TOK_PIECE : n;
@@ -2199,7 +2229,7 @@ static void ifn_am_tokenizer_piece(const ifn_tokenizer *t, const unsigned char *
             const ifn_merge *best = NULL;
             size_t index = 0;
             for (size_t i = 0; i + 1 < count; i++) {
-                const ifn_merge *candidate = ifn_am_tokenizer_merge(t, s->bpe[i], s->bpe[i + 1]);
+                const ifn_merge *candidate = ifn_am_tokenizer_ifn_tokenizer_local_merge(t, s->bpe[i], s->bpe[i + 1]);
                 if (candidate && (!best || candidate->rank < best->rank)) {
                     best = candidate;
                     index = i;
@@ -2219,13 +2249,14 @@ static void ifn_am_tokenizer_piece(const ifn_tokenizer *t, const unsigned char *
             count = write;
         }
         for (size_t i = 0; i < count; i++)
-            ifn_am_tokenizer_emit(out, s->bpe[i]);
+            ifn_am_tokenizer_ifn_tokenizer_local_emit(out, s->bpe[i]);
         offset = end;
     }
 }
 
-static void ifn_am_tokenizer_chunk(const ifn_tokenizer *t, const unsigned char *text, size_t bytes,
-                  ifn_tokenizer_scratch *s, sink *out) {
+static void ifn_am_tokenizer_ifn_tokenizer_local_chunk(const ifn_tokenizer *t, const unsigned char *text,
+                                      size_t bytes, ifn_tokenizer_scratch *s,
+                                      ifn_tokenizer_local_sink *out) {
     size_t n = 0, p = 0;
     while (p < bytes) {
         s->offsets[n] = (uint32_t)p;
@@ -2235,31 +2266,36 @@ static void ifn_am_tokenizer_chunk(const ifn_tokenizer *t, const unsigned char *
     s->offsets[n] = (uint32_t)bytes;
     const uint32_t *c = s->codepoints;
     for (size_t i = 0; i < n;) {
-        size_t end = ifn_am_tokenizer_branch1(c, n, i);
+        size_t end = ifn_am_tokenizer_ifn_tokenizer_local_branch1(c, n, i);
         if (end <= i)
-            end = ifn_am_tokenizer_branch2(c, n, i);
+            end = ifn_am_tokenizer_ifn_tokenizer_local_branch2(c, n, i);
         if (end <= i) {
-            if (ifn_am_tokenizer_cp_is_digit(c[i])) {
+            if (ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[i])) {
                 end = i + 1;
-                if (end < n && ifn_am_tokenizer_cp_is_digit(c[end]))
+                if (end < n && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[end]))
                     end++;
-                if (end < n && ifn_am_tokenizer_cp_is_digit(c[end]))
+                if (end < n && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[end]))
                     end++;
             } else {
                 size_t j = i;
-                if (c[j] == ' ' && j + 1 < n && !ifn_am_tokenizer_cp_is_space(c[j + 1]) && !ifn_am_tokenizer_cp_is_letter(c[j + 1]) &&
-                    !ifn_am_tokenizer_cp_is_digit(c[j + 1]))
+                if (c[j] == ' ' && j + 1 < n && !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_space(c[j + 1]) &&
+                    !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(c[j + 1]) &&
+                    !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[j + 1]))
                     j++;
-                if (!ifn_am_tokenizer_cp_is_space(c[j]) && !ifn_am_tokenizer_cp_is_letter(c[j]) && !ifn_am_tokenizer_cp_is_digit(c[j])) {
-                    while (j < n && !ifn_am_tokenizer_cp_is_space(c[j]) && !ifn_am_tokenizer_cp_is_letter(c[j]) && !ifn_am_tokenizer_cp_is_digit(c[j]))
+                if (!ifn_am_tokenizer_ifn_tokenizer_local_cp_is_space(c[j]) &&
+                    !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(c[j]) &&
+                    !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[j])) {
+                    while (j < n && !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_space(c[j]) &&
+                           !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_letter(c[j]) &&
+                           !ifn_am_tokenizer_ifn_tokenizer_local_cp_is_digit(c[j]))
                         j++;
                     while (j < n && (c[j] == '\r' || c[j] == '\n' || c[j] == '/'))
                         j++;
                     end = j;
-                } else if (ifn_am_tokenizer_cp_is_space(c[i])) {
+                } else if (ifn_am_tokenizer_ifn_tokenizer_local_cp_is_space(c[i])) {
                     size_t ws = i, last = SIZE_MAX;
-                    while (ws < n && ifn_am_tokenizer_cp_is_space(c[ws])) {
-                        if (ifn_am_tokenizer_cp_is_newline(c[ws]))
+                    while (ws < n && ifn_am_tokenizer_ifn_tokenizer_local_cp_is_space(c[ws])) {
+                        if (ifn_am_tokenizer_ifn_tokenizer_local_cp_is_newline(c[ws]))
                             last = ws;
                         ws++;
                     }
@@ -2275,13 +2311,14 @@ static void ifn_am_tokenizer_chunk(const ifn_tokenizer *t, const unsigned char *
                     end = i + 1;
             }
         }
-        ifn_am_tokenizer_piece(t, text + s->offsets[i], s->offsets[end] - s->offsets[i], s, out);
+        ifn_am_tokenizer_ifn_tokenizer_local_piece(t, text + s->offsets[i], s->offsets[end] - s->offsets[i], s, out);
         i = end;
     }
 }
 
-static void ifn_am_tokenizer_ordinary(const ifn_tokenizer *t, const unsigned char *text, size_t bytes,
-                     ifn_tokenizer_scratch *s, sink *out) {
+static void ifn_am_tokenizer_ifn_tokenizer_local_ordinary(const ifn_tokenizer *t, const unsigned char *text,
+                                         size_t bytes, ifn_tokenizer_scratch *s,
+                                         ifn_tokenizer_local_sink *out) {
     size_t off = 0;
     while (off < bytes) {
         size_t end = bytes - off > IFN_TOK_CHUNK ? off + IFN_TOK_CHUNK : bytes;
@@ -2314,7 +2351,7 @@ static void ifn_am_tokenizer_ordinary(const ifn_tokenizer *t, const unsigned cha
                 }
             }
         }
-        ifn_am_tokenizer_chunk(t, text + off, end - off, s, out);
+        ifn_am_tokenizer_ifn_tokenizer_local_chunk(t, text + off, end - off, s, out);
         off = end;
     }
 }
@@ -2326,9 +2363,9 @@ ifn_status ifn_tokenizer_encode(const ifn_tokenizer *t, const char *text, size_t
         *needed = 0;
     if (!t || !s || !needed || (!text && bytes) || (!ids && capacity) || parse_special > 1)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid encode arguments");
-    if (!ifn_am_tokenizer_valid_utf8(text, bytes))
+    if (!ifn_am_tokenizer_ifn_tokenizer_local_valid_utf8(text, bytes))
         return ifn_error(IFN_FORMAT, "tokenizer input is not valid UTF-8");
-    sink out = {ids, capacity, 0};
+    ifn_tokenizer_local_sink out = {ids, capacity, 0};
     const unsigned char *input = (const unsigned char *)text;
     size_t segment = 0, p = 0;
     if (parse_special)
@@ -2345,15 +2382,15 @@ ifn_status ifn_tokenizer_encode(const ifn_tokenizer *t, const char *text, size_t
                 i++;
             }
             if (i < t->special_count) {
-                ifn_am_tokenizer_ordinary(t, input + segment, p - segment, s, &out);
-                ifn_am_tokenizer_emit(&out, t->specials[i]);
+                ifn_am_tokenizer_ifn_tokenizer_local_ordinary(t, input + segment, p - segment, s, &out);
+                ifn_am_tokenizer_ifn_tokenizer_local_emit(&out, t->specials[i]);
                 p += t->entries[t->specials[i]].length;
                 segment = p;
             } else
                 p += 2;
         }
     if (segment < bytes)
-        ifn_am_tokenizer_ordinary(t, input + segment, bytes - segment, s, &out);
+        ifn_am_tokenizer_ifn_tokenizer_local_ordinary(t, input + segment, bytes - segment, s, &out);
     *needed = out.count;
     return ifn_error(out.count > capacity ? IFN_BUFFER_TOO_SMALL : IFN_OK,
                      out.count > capacity ? "token buffer too small" : "");
@@ -2381,7 +2418,7 @@ ifn_status ifn_render_user_prompt(const char *text, size_t bytes, ifn_thinking_e
         *needed = 0;
     if (!needed || (!text && bytes) || (!out && capacity) || effort > IFN_THINK_MAX)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid prompt arguments");
-    if (!ifn_am_tokenizer_valid_utf8(text, bytes))
+    if (!ifn_am_tokenizer_ifn_tokenizer_local_valid_utf8(text, bytes))
         return ifn_error(IFN_FORMAT, "prompt is not valid UTF-8");
     const char *levels[] = {"0", "0.1", "0.2", "0.7", "0.9", "0.99"};
     const char *prefix = "<|message_system|><|content_text|>Thinking effort level: ";
@@ -2395,23 +2432,23 @@ ifn_status ifn_render_user_prompt(const char *text, size_t bytes, ifn_thinking_e
     if (capacity < n)
         return ifn_error(IFN_BUFFER_TOO_SMALL, "prompt buffer too small");
     size_t at = 0;
-#define APPEND(p, k)                                                                               \
+#define IFN_TOKENIZER_LOCAL_APPEND(p, k)                                                           \
     do {                                                                                           \
         size_t z = (k);                                                                            \
         if (z)                                                                                     \
             memcpy(out + at, (p), z);                                                              \
         at += z;                                                                                   \
     } while (0)
-    APPEND(prefix, strlen(prefix));
-    APPEND(levels[effort], strlen(levels[effort]));
-    APPEND(middle, strlen(middle));
-    APPEND(text, bytes);
-    APPEND(suffix, strlen(suffix));
-#undef APPEND
+    IFN_TOKENIZER_LOCAL_APPEND(prefix, strlen(prefix));
+    IFN_TOKENIZER_LOCAL_APPEND(levels[effort], strlen(levels[effort]));
+    IFN_TOKENIZER_LOCAL_APPEND(middle, strlen(middle));
+    IFN_TOKENIZER_LOCAL_APPEND(text, bytes);
+    IFN_TOKENIZER_LOCAL_APPEND(suffix, strlen(suffix));
+#undef IFN_TOKENIZER_LOCAL_APPEND
     return ifn_error(IFN_OK, "");
 }
 
-#undef APPEND
+#undef IFN_TOKENIZER_LOCAL_APPEND
 
 /* Module: src/inkling.c */
 /* SPDX-License-Identifier: Apache-2.0
@@ -2422,7 +2459,16 @@ ifn_status ifn_render_user_prompt(const char *text, size_t bytes, ifn_thinking_e
 #include <stdio.h>
 #include <string.h>
 
-enum { ifn_am_inkling_H = 2304, ifn_am_inkling_Q = 3072, ifn_am_inkling_KV = 1024, ifn_am_inkling_R = 384, ifn_am_inkling_E = 128, ifn_am_inkling_I = 1152, ifn_am_inkling_V = 201024, ifn_am_inkling_M = 9216 };
+enum {
+    ifn_am_inkling_IFN_INKLING_LOCAL_H = 2304,
+    ifn_am_inkling_IFN_INKLING_LOCAL_Q = 3072,
+    ifn_am_inkling_IFN_INKLING_LOCAL_KV = 1024,
+    ifn_am_inkling_IFN_INKLING_LOCAL_R = 384,
+    ifn_am_inkling_IFN_INKLING_LOCAL_E = 128,
+    ifn_am_inkling_IFN_INKLING_LOCAL_I = 1152,
+    ifn_am_inkling_IFN_INKLING_LOCAL_V = 201024,
+    ifn_am_inkling_IFN_INKLING_LOCAL_M = 9216
+};
 
 struct ifn_inkling_checkpoint {
     ifn_options allocator;
@@ -2432,8 +2478,9 @@ struct ifn_inkling_checkpoint {
     size_t count;
 };
 
-static ifn_status ifn_am_inkling_spec(ifn_spec_fn visit, void *context, uint32_t source, const char *prefix,
-                       const char *suffix, ifn_dtype dtype, uint64_t a, uint64_t b, uint64_t c) {
+static ifn_status ifn_am_inkling_ifn_inkling_local_spec(ifn_spec_fn visit, void *context, uint32_t source,
+                                         const char *prefix, const char *suffix, ifn_dtype dtype,
+                                         uint64_t a, uint64_t b, uint64_t c) {
     ifn_inkling_spec s = {0};
     int n = snprintf(s.name, sizeof s.name, "%s%s", prefix, suffix);
     if (n < 0 || (size_t)n >= sizeof s.name)
@@ -2447,9 +2494,9 @@ static ifn_status ifn_am_inkling_spec(ifn_spec_fn visit, void *context, uint32_t
     return visit(context, &s);
 }
 
-#define S(src, pre, suf, type, a, b, c)                                                            \
+#define IFN_INKLING_LOCAL_S(src, pre, suf, type, a, b, c)                                          \
     do {                                                                                           \
-        ifn_status st = ifn_am_inkling_spec(visit, context, src, pre, suf, type, a, b, c);                        \
+        ifn_status st = ifn_am_inkling_ifn_inkling_local_spec(visit, context, src, pre, suf, type, a, b, c);      \
         if (st != IFN_OK)                                                                          \
             return st;                                                                             \
     } while (0)
@@ -2458,113 +2505,146 @@ ifn_status ifn_inkling_visit_specs(uint32_t include_mtp, ifn_spec_fn visit, void
     if (!visit || include_mtp > 1)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid schema visitor");
     const char *base = "model.llm.";
-    S(0, base, "embed.weight", IFN_BF16, ifn_am_inkling_V, ifn_am_inkling_H, 0);
-    S(0, base, "embed_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-    S(0, base, "norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-    S(0, base, "unembed.weight", IFN_BF16, ifn_am_inkling_V, ifn_am_inkling_H, 0);
+    IFN_INKLING_LOCAL_S(0, base, "embed.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_V, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                        0);
+    IFN_INKLING_LOCAL_S(0, base, "embed_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+    IFN_INKLING_LOCAL_S(0, base, "norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+    IFN_INKLING_LOCAL_S(0, base, "unembed.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_V,
+                        ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
     char p[96];
     for (unsigned l = 0; l < 23; l++) {
         (void)snprintf(p, sizeof p, "model.llm.attn_res.attn_queries.%u", l);
         bool global = (l + 2) % 6 == 0;
-        S(0, p, "", IFN_F32, global ? 3 : ifn_am_inkling_H, global ? ifn_am_inkling_H : 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "", IFN_F32, global ? 3 : ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                            global ? ifn_am_inkling_IFN_INKLING_LOCAL_H : 0, 0);
     }
     for (unsigned l = 0; l < 24; l++) {
         (void)snprintf(p, sizeof p, "model.llm.attn_res.mlp_queries.%u", l);
-        S(0, p, "", IFN_F32, ifn_am_inkling_H, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "", IFN_F32, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
     }
-    S(0, base, "attn_res.output_query", IFN_F32, ifn_am_inkling_H, 0, 0);
-    S(0, base, "middle_cycle_cross_pass_queries", IFN_F32, 24, ifn_am_inkling_H, 0);
-    S(0, base, "middle_cycle_cross_pass_kv_queries", IFN_F32, 24, ifn_am_inkling_H, 0);
+    IFN_INKLING_LOCAL_S(0, base, "attn_res.output_query", IFN_F32, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+    IFN_INKLING_LOCAL_S(0, base, "middle_cycle_cross_pass_queries", IFN_F32, 24,
+                        ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+    IFN_INKLING_LOCAL_S(0, base, "middle_cycle_cross_pass_kv_queries", IFN_F32, 24,
+                        ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
     for (unsigned l = 0; l < 24; l++) {
         (void)snprintf(p, sizeof p, "model.llm.layers.%u.", l);
         bool global = (l + 1) % 6 == 0;
         if (global) {
-            S(0, p, "q_input_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-            S(0, p, "k_input_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-            S(0, p, "v_input_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
+            IFN_INKLING_LOCAL_S(0, p, "q_input_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+            IFN_INKLING_LOCAL_S(0, p, "k_input_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+            IFN_INKLING_LOCAL_S(0, p, "v_input_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
         } else
-            S(0, p, "attn_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-        S(0, p, "mlp_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-        S(0, p, "attn.wq_du.weight", IFN_BF16, ifn_am_inkling_Q, ifn_am_inkling_H, 0);
-        S(0, p, "attn.wr_du.weight", IFN_BF16, ifn_am_inkling_R, ifn_am_inkling_H, 0);
-        S(0, p, "attn.gate_attn.weight", IFN_BF16, ifn_am_inkling_Q, ifn_am_inkling_H, 0);
-        S(0, p, "attn.attn_sink_proj.weight", IFN_BF16, 24, ifn_am_inkling_H, 0);
-        S(0, p, "attn.wk_dv.weight", IFN_BF16, ifn_am_inkling_KV, ifn_am_inkling_H, 0);
-        S(0, p, "attn.wv_dv.weight", IFN_BF16, ifn_am_inkling_KV, ifn_am_inkling_H, 0);
-        S(0, p, "attn.wo_ud.weight", IFN_BF16, ifn_am_inkling_H, ifn_am_inkling_Q, 0);
+            IFN_INKLING_LOCAL_S(0, p, "attn_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "mlp_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wq_du.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_Q,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wr_du.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_R,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.gate_attn.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_Q,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.attn_sink_proj.weight", IFN_BF16, 24, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                            0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wk_dv.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wv_dv.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wo_ud.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_Q, 0);
         if (global) {
-            S(0, p, "attn.k_sconv.static_w", IFN_BF16, 4, ifn_am_inkling_KV, 0);
-            S(0, p, "attn.v_sconv.static_w", IFN_BF16, 4, ifn_am_inkling_KV, 0);
-            S(0, p, "attn.k_sconv.weight_proj", IFN_BF16, 32, ifn_am_inkling_H, 0);
-            S(0, p, "attn.v_sconv.weight_proj", IFN_BF16, 32, ifn_am_inkling_H, 0);
+            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.static_w", IFN_BF16, 4, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                                0);
+            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.static_w", IFN_BF16, 4, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                                0);
+            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.weight_proj", IFN_BF16, 32, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                                0);
+            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.weight_proj", IFN_BF16, 32, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                                0);
         } else {
-            S(0, p, "attn.k_sconv.weight", IFN_BF16, ifn_am_inkling_KV, 1, 4);
-            S(0, p, "attn.v_sconv.weight", IFN_BF16, ifn_am_inkling_KV, 1, 4);
+            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV, 1, 4);
+            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV, 1, 4);
         }
-        S(0, p, "attn_sconv.weight", IFN_BF16, ifn_am_inkling_H, 1, 4);
-        S(0, p, "mlp_sconv.weight", IFN_BF16, ifn_am_inkling_H, 1, 4);
-        S(0, p, "attn.q_l2_clip.scale", IFN_BF16, 24, 128, 0);
-        S(0, p, "attn.rel_l2_clip.scale", IFN_BF16, 24, 16, 0);
-        S(0, p, "attn.rel_logits_proj.proj", IFN_BF16, 16, 1024, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn_sconv.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 1, 4);
+        IFN_INKLING_LOCAL_S(0, p, "mlp_sconv.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 1, 4);
+        IFN_INKLING_LOCAL_S(0, p, "attn.q_l2_clip.scale", IFN_BF16, 24, 128, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.rel_l2_clip.scale", IFN_BF16, 24, 16, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.rel_logits_proj.proj", IFN_BF16, 16, 1024, 0);
         if (l >= 6 && l < 18) {
             const char *stems[] = {"attn", "k", "v", "mlp"};
             char cpre[112];
             for (size_t j = 0; j < 4; j++) {
                 (void)snprintf(cpre, sizeof cpre, "%scontrollers.%s.", p, stems[j]);
-                S(0, cpre, "down_weight", IFN_BF16, 64, 2 * ifn_am_inkling_H, 0);
-                S(0, cpre, "forget_weight", IFN_BF16, ifn_am_inkling_H, 64, 0);
-                S(0, cpre, "gain_weight", IFN_BF16, ifn_am_inkling_H, 64, 0);
+                IFN_INKLING_LOCAL_S(0, cpre, "down_weight", IFN_BF16, 64, 2 * ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                                    0);
+                IFN_INKLING_LOCAL_S(0, cpre, "forget_weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 64, 0);
+                IFN_INKLING_LOCAL_S(0, cpre, "gain_weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 64, 0);
             }
         }
-        S(0, p, "mlp.gate.weight", IFN_BF16, ifn_am_inkling_E, ifn_am_inkling_H, 0);
-        S(0, p, "mlp.gate.bias", IFN_F32, ifn_am_inkling_E, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "mlp.gate.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_E,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(0, p, "mlp.gate.bias", IFN_F32, ifn_am_inkling_IFN_INKLING_LOCAL_E, 0, 0);
         const char *banks[] = {"w13", "w2"};
         for (size_t j = 0; j < 2; j++) {
-            unsigned rows = j ? ifn_am_inkling_H : 2 * ifn_am_inkling_I, cols = j ? ifn_am_inkling_I : ifn_am_inkling_H;
+            unsigned rows = j ? ifn_am_inkling_IFN_INKLING_LOCAL_H : 2 * ifn_am_inkling_IFN_INKLING_LOCAL_I,
+                     cols = j ? ifn_am_inkling_IFN_INKLING_LOCAL_I : ifn_am_inkling_IFN_INKLING_LOCAL_H;
             char n[128];
             (void)snprintf(n, sizeof n, "%smlp.experts.%s_weight", p, banks[j]);
-            S(0, n, "", l < 20 ? IFN_U8 : IFN_F8_E4M3, ifn_am_inkling_E, rows, l < 20 ? cols / 2 : cols);
-            S(0, n, "_scale", l < 20 ? IFN_F8_E4M3 : IFN_U8, ifn_am_inkling_E, rows,
-              l < 20 ? cols / 16 : cols / 32);
+            IFN_INKLING_LOCAL_S(0, n, "", l < 20 ? IFN_U8 : IFN_F8_E4M3, ifn_am_inkling_IFN_INKLING_LOCAL_E, rows,
+                                l < 20 ? cols / 2 : cols);
+            IFN_INKLING_LOCAL_S(0, n, "_scale", l < 20 ? IFN_F8_E4M3 : IFN_U8, ifn_am_inkling_IFN_INKLING_LOCAL_E,
+                                rows, l < 20 ? cols / 16 : cols / 32);
             if (l < 20) {
-                S(0, n, "_amax", IFN_F32, ifn_am_inkling_E, 0, 0);
-                S(0, n, "_outer_scale_denominator", IFN_F32, 1, 0, 0);
+                IFN_INKLING_LOCAL_S(0, n, "_amax", IFN_F32, ifn_am_inkling_IFN_INKLING_LOCAL_E, 0, 0);
+                IFN_INKLING_LOCAL_S(0, n, "_outer_scale_denominator", IFN_F32, 1, 0, 0);
             }
         }
     }
     if (!include_mtp)
         return IFN_OK;
-    S(1, "", "fuse_weight", IFN_BF16, 4, 4, 0);
-    S(1, "", "mask_embed", IFN_BF16, ifn_am_inkling_H, 0, 0);
-    S(1, "", "norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-    S(1, "", "markov_head.dflare_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-    S(1, "", "markov_head.markov_w1.weight", IFN_BF16, ifn_am_inkling_V, 256, 0);
-    S(1, "", "markov_head.rnn_proj.bias", IFN_BF16, 768, 0, 0);
-    S(1, "", "markov_head.rnn_proj.weight", IFN_BF16, 768, 5120, 0);
-    S(1, "", "markov_head.hidden_out.weight", IFN_BF16, ifn_am_inkling_H, 256, 0);
-    S(1, "", "markov_head.hidden_out.bias", IFN_BF16, ifn_am_inkling_H, 0, 0);
+    IFN_INKLING_LOCAL_S(1, "", "fuse_weight", IFN_BF16, 4, 4, 0);
+    IFN_INKLING_LOCAL_S(1, "", "mask_embed", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+    IFN_INKLING_LOCAL_S(1, "", "norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.dflare_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0,
+                        0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.markov_w1.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_V, 256,
+                        0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.rnn_proj.bias", IFN_BF16, 768, 0, 0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.rnn_proj.weight", IFN_BF16, 768, 5120, 0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.hidden_out.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 256,
+                        0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.hidden_out.bias", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
     for (unsigned l = 0; l < 3; l++) {
         (void)snprintf(p, sizeof p, "layers.%u.", l);
-        S(1, p, "input_layernorm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-        S(1, p, "post_attention_layernorm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-        S(1, p, "dflare_norm.weight", IFN_BF16, ifn_am_inkling_H, 0, 0);
-        S(1, p, "self_attn.q_norm.weight", IFN_BF16, 128, 0, 0);
-        S(1, p, "self_attn.k_norm.weight", IFN_BF16, 128, 0, 0);
-        S(1, p, "self_attn.k_norm_ctx.weight", IFN_BF16, 128, 0, 0);
-        S(1, p, "self_attn.q_proj.weight", IFN_BF16, ifn_am_inkling_Q, ifn_am_inkling_H, 0);
-        S(1, p, "self_attn.k_proj.weight", IFN_BF16, ifn_am_inkling_KV, ifn_am_inkling_H, 0);
-        S(1, p, "self_attn.v_proj.weight", IFN_BF16, ifn_am_inkling_KV, ifn_am_inkling_H, 0);
-        S(1, p, "self_attn.o_proj.weight", IFN_BF16, ifn_am_inkling_H, ifn_am_inkling_Q, 0);
-        S(1, p, "mlp.gate_proj.weight", IFN_BF16, ifn_am_inkling_M, ifn_am_inkling_H, 0);
-        S(1, p, "mlp.up_proj.weight", IFN_BF16, ifn_am_inkling_M, ifn_am_inkling_H, 0);
-        S(1, p, "mlp.down_proj.weight", IFN_BF16, ifn_am_inkling_H, ifn_am_inkling_M, 0);
-        S(1, p, "self_attn.k_proj_ctx.weight", IFN_BF16, ifn_am_inkling_KV, ifn_am_inkling_H, 0);
-        S(1, p, "self_attn.v_proj_ctx.weight", IFN_BF16, ifn_am_inkling_KV, ifn_am_inkling_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "input_layernorm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "post_attention_layernorm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                            0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "dflare_norm.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.q_norm.weight", IFN_BF16, 128, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_norm.weight", IFN_BF16, 128, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_norm_ctx.weight", IFN_BF16, 128, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.q_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_Q,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.v_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.o_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_Q, 0);
+        IFN_INKLING_LOCAL_S(1, p, "mlp.gate_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_M,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "mlp.up_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_M,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "mlp.down_proj.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_H,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_M, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_proj_ctx.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.v_proj_ctx.weight", IFN_BF16, ifn_am_inkling_IFN_INKLING_LOCAL_KV,
+                            ifn_am_inkling_IFN_INKLING_LOCAL_H, 0);
     }
     return IFN_OK;
 }
 
-#undef S
+#undef IFN_INKLING_LOCAL_S
 
 ifn_status ifn_inkling_check_descriptor(const ifn_tensor_info *t, const ifn_inkling_spec *s) {
     if (!t || !s || !s->rank || s->rank > 3)
@@ -2577,7 +2657,7 @@ ifn_status ifn_inkling_check_descriptor(const ifn_tensor_info *t, const ifn_inkl
     return IFN_OK;
 }
 
-static ifn_status ifn_am_inkling_bind(void *context, const ifn_inkling_spec *s) {
+static ifn_status ifn_am_inkling_ifn_inkling_local_bind(void *context, const ifn_inkling_spec *s) {
     ifn_inkling_checkpoint *c = context;
     const ifn_tensor_info *t = NULL;
     ifn_status status = ifn_safetensors_find(c->files[s->source], s->name, strlen(s->name), &t);
@@ -2627,7 +2707,7 @@ ifn_status ifn_inkling_checkpoint_open(const char *main_path, const char *mtp_pa
         if (status != IFN_OK)
             goto fail;
     }
-    status = ifn_inkling_visit_specs(mtp_path != NULL, ifn_am_inkling_bind, c);
+    status = ifn_inkling_visit_specs(mtp_path != NULL, ifn_am_inkling_ifn_inkling_local_bind, c);
     if (status != IFN_OK)
         goto fail;
     size_t counts[2] = {0};
@@ -2708,7 +2788,7 @@ ifn_status ifn_inkling_lookup(const ifn_inkling_checkpoint *c, uint32_t source, 
     return ifn_safetensors_named_data(c->files[source], name, out, bytes);
 }
 
-#undef S
+#undef IFN_INKLING_LOCAL_S
 
 /* Module: src/weights_runtime.c */
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
@@ -2733,23 +2813,23 @@ void ifn_weight_backend_check(ifn_gpu_weights *w, int error, const char *operati
     (void)snprintf(w->failure, sizeof w->failure, "%s: CUDA status %d", operation, error);
 }
 
-static ifn_status ifn_am_weights_runtime_result(ifn_gpu_weights *w) {
+static ifn_status ifn_am_weights_runtime_ifn_weights_runtime_local_result(ifn_gpu_weights *w) {
     return ifn_error(w->status, w->status == IFN_OK ? "" : w->failure);
 }
 
-static bool ifn_am_weights_runtime_acquire(ifn_gpu_weights *w) {
+static bool ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(ifn_gpu_weights *w) {
     return w && !atomic_flag_test_and_set_explicit(&w->busy, memory_order_acquire);
 }
 
-static void ifn_am_weights_runtime_unlock(ifn_gpu_weights *w) {
+static void ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(ifn_gpu_weights *w) {
     atomic_flag_clear_explicit(&w->busy, memory_order_release);
 }
 
-static bool ifn_am_weights_runtime_resources(const ifn_gpu_weights *w) {
+static bool ifn_am_weights_runtime_ifn_weights_runtime_local_resources(const ifn_gpu_weights *w) {
     return w->arena || w->stage || w->amax || w->fold_temp || w->stream;
 }
 
-static void ifn_am_weights_runtime_release_ptr(ifn_gpu_weights *w, void **p) {
+static void ifn_am_weights_runtime_ifn_weights_runtime_local_release_ptr(ifn_gpu_weights *w, void **p) {
     if (!*p)
         return;
     int rc = w->backend.release(w->backend.context, *p);
@@ -2758,18 +2838,18 @@ static void ifn_am_weights_runtime_release_ptr(ifn_gpu_weights *w, void **p) {
     ifn_weight_backend_check(w, rc, "free owned GPU allocation");
 }
 
-static void ifn_am_weights_runtime_temporary_cleanup(ifn_gpu_weights *w) {
-    ifn_am_weights_runtime_release_ptr(w, &w->fold_temp);
-    ifn_am_weights_runtime_release_ptr(w, &w->amax);
-    ifn_am_weights_runtime_release_ptr(w, &w->stage);
+static void ifn_am_weights_runtime_ifn_weights_runtime_local_temporary_cleanup(ifn_gpu_weights *w) {
+    ifn_am_weights_runtime_ifn_weights_runtime_local_release_ptr(w, &w->fold_temp);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_release_ptr(w, &w->amax);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_release_ptr(w, &w->stage);
 }
 
-static void ifn_am_weights_runtime_cleanup(ifn_gpu_weights *w) {
+static void ifn_am_weights_runtime_ifn_weights_runtime_local_cleanup(ifn_gpu_weights *w) {
     if (w->stream)
         ifn_weight_backend_check(w, w->backend.sync(w->backend.context, w->stream),
                                  "synchronize owned stream");
-    ifn_am_weights_runtime_temporary_cleanup(w);
-    ifn_am_weights_runtime_release_ptr(w, &w->arena);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_temporary_cleanup(w);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_release_ptr(w, &w->arena);
     if (w->stream && !w->arena && !w->stage && !w->amax && !w->fold_temp) {
         int rc = w->backend.stream_destroy(w->backend.context, w->stream);
         if (!rc)
@@ -2809,7 +2889,7 @@ ifn_status ifn_weights_create(const ifn_weight_config *input, const ifn_options 
     atomic_flag_clear(&w->busy);
     ifn_weights_recipe(w);
     if (w->status != IFN_OK) {
-        status = ifn_am_weights_runtime_result(w);
+        status = ifn_am_weights_runtime_ifn_weights_runtime_local_result(w);
         a.release(a.context, w);
         return status;
     }
@@ -2851,14 +2931,14 @@ ifn_status ifn_weights_plan(const ifn_weight_config *config, const ifn_options *
 ifn_status ifn_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *checkpoint) {
     if (!w || !checkpoint)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing GPU weights/checkpoint");
-    if (!ifn_am_weights_runtime_acquire(w))
+    if (!ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
-    if (ifn_am_weights_runtime_resources(w) || w->ready) {
-        ifn_am_weights_runtime_unlock(w);
+    if (ifn_am_weights_runtime_ifn_weights_runtime_local_resources(w) || w->ready) {
+        ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_BUSY, "destroy existing or failed GPU image before reload");
     }
     if (w->config.with_mtp && ifn_inkling_checkpoint_count(checkpoint) != 876) {
-        ifn_am_weights_runtime_unlock(w);
+        ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_FORMAT, "MTP requested but not admitted");
     }
     w->status = IFN_OK;
@@ -2877,18 +2957,18 @@ ifn_status ifn_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *ch
         if (w->status == IFN_OK)
             ifn_weight_backend_check(w, w->backend.stream_create(w->backend.context, &w->stream),
                                      "create weight stream");
-#define ALLOC(p, n)                                                                                \
+#define IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(p, n)                                                      \
     do {                                                                                           \
         if (w->status == IFN_OK)                                                                   \
             ifn_weight_backend_check(                                                              \
                 w, w->backend.allocate(w->backend.context, &w->p, (size_t)(n)), "allocate " #p);   \
     } while (0)
-        ALLOC(arena, w->plan.arena_bytes);
-        ALLOC(stage, w->plan.staging_bytes);
-        ALLOC(amax, 4);
+        IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(arena, w->plan.arena_bytes);
+        IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(stage, w->plan.staging_bytes);
+        IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(amax, 4);
         if (w->plan.fold_temporary_bytes)
-            ALLOC(fold_temp, w->plan.fold_temporary_bytes);
-#undef ALLOC
+            IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(fold_temp, w->plan.fold_temporary_bytes);
+#undef IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC
         if (w->status == IFN_OK) {
             w->execute = true;
             w->checkpoint = checkpoint;
@@ -2902,17 +2982,17 @@ ifn_status ifn_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *ch
             if (w->status == IFN_OK)
                 ifn_weight_backend_check(w, w->backend.sync(w->backend.context, w->stream),
                                          "finish GPU weight upload");
-            ifn_am_weights_runtime_temporary_cleanup(w);
+            ifn_am_weights_runtime_ifn_weights_runtime_local_temporary_cleanup(w);
         }
         if (w->status != IFN_OK)
-            ifn_am_weights_runtime_cleanup(w);
+            ifn_am_weights_runtime_ifn_weights_runtime_local_cleanup(w);
     }
     if (previous.device >= 0)
         ifn_weight_backend_check(w, w->backend.leave(w->backend.context, &previous),
                                  "restore caller device");
     w->ready = w->status == IFN_OK;
-    ifn_status status = ifn_am_weights_runtime_result(w);
-    ifn_am_weights_runtime_unlock(w);
+    ifn_status status = ifn_am_weights_runtime_ifn_weights_runtime_local_result(w);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
     return status;
 }
 
@@ -2922,30 +3002,30 @@ ifn_status ifn_weights_destroy(ifn_gpu_weights **handle) {
     ifn_gpu_weights *w = *handle;
     if (!w)
         return ifn_error(IFN_OK, "");
-    if (!ifn_am_weights_runtime_acquire(w))
+    if (!ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     if (w->session_users) {
-        ifn_am_weights_runtime_unlock(w);
+        ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_BUSY, "GPU image is retained by a session");
     }
     w->status = IFN_OK;
     w->failure[0] = 0;
     w->backend_error = 0;
     w->ready = false;
-    if (ifn_am_weights_runtime_resources(w)) {
+    if (ifn_am_weights_runtime_ifn_weights_runtime_local_resources(w)) {
         ifn_device_scope previous = {-1, NULL};
         ifn_weight_backend_check(w,
                                  w->backend.enter(w->backend.context, w->config.device, &previous),
                                  "select GPU for cleanup");
         if (w->status == IFN_OK)
-            ifn_am_weights_runtime_cleanup(w);
+            ifn_am_weights_runtime_ifn_weights_runtime_local_cleanup(w);
         if (previous.device >= 0)
             ifn_weight_backend_check(w, w->backend.leave(w->backend.context, &previous),
                                      "restore caller device");
     }
-    ifn_status status = ifn_am_weights_runtime_result(w);
-    if (ifn_am_weights_runtime_resources(w)) {
-        ifn_am_weights_runtime_unlock(w);
+    ifn_status status = ifn_am_weights_runtime_ifn_weights_runtime_local_result(w);
+    if (ifn_am_weights_runtime_ifn_weights_runtime_local_resources(w)) {
+        ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
         return status;
     }
     ifn_options a = w->allocator;
@@ -2959,10 +3039,10 @@ ifn_status ifn_weights_get_plan(ifn_gpu_weights *w, ifn_weight_plan *out) {
         memset(out, 0, sizeof *out);
     if (!w || !out)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing plan arguments");
-    if (!ifn_am_weights_runtime_acquire(w))
+    if (!ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     *out = w->plan;
-    ifn_am_weights_runtime_unlock(w);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
     return ifn_error(IFN_OK, "");
 }
 
@@ -2971,12 +3051,12 @@ ifn_status ifn_weights_get_span(ifn_gpu_weights *w, size_t index, ifn_weight_spa
         memset(out, 0, sizeof *out);
     if (!w || !out)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing span arguments");
-    if (!ifn_am_weights_runtime_acquire(w))
+    if (!ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     ifn_status status = !w->ready ? IFN_BUSY : index >= w->span_count ? IFN_NOT_FOUND : IFN_OK;
     if (status == IFN_OK)
         *out = w->spans[index];
-    ifn_am_weights_runtime_unlock(w);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
     return ifn_error(status, status == IFN_OK ? "" : "weight span unavailable");
 }
 
@@ -2985,12 +3065,12 @@ ifn_status ifn_weights_get_view(ifn_gpu_weights *w, size_t index, ifn_weight_vie
         memset(out, 0, sizeof *out);
     if (!w || !out)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing view arguments");
-    if (!ifn_am_weights_runtime_acquire(w))
+    if (!ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     ifn_status status = !w->ready ? IFN_BUSY : index >= w->view_count ? IFN_NOT_FOUND : IFN_OK;
     if (status == IFN_OK)
         *out = w->views[index];
-    ifn_am_weights_runtime_unlock(w);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
     return ifn_error(status, status == IFN_OK ? "" : "weight view unavailable");
 }
 
@@ -2998,15 +3078,15 @@ ifn_status ifn_weights_read(ifn_gpu_weights *w, size_t index, uint64_t offset, v
                             size_t bytes) {
     if (!w || (!out && bytes))
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid readback arguments");
-    if (!ifn_am_weights_runtime_acquire(w))
+    if (!ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     if (!w->ready) {
-        ifn_am_weights_runtime_unlock(w);
+        ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_BUSY, "weights not ready");
     }
     if (index >= w->span_count || offset > w->spans[index].bytes ||
         bytes > w->spans[index].bytes - offset) {
-        ifn_am_weights_runtime_unlock(w);
+        ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_INVALID_ARGUMENT, "weight readback outside span");
     }
     w->status = IFN_OK;
@@ -3031,12 +3111,12 @@ ifn_status ifn_weights_read(ifn_gpu_weights *w, size_t index, uint64_t offset, v
                                  "restore caller device");
     if (w->status != IFN_OK)
         w->ready = false;
-    ifn_status status = ifn_am_weights_runtime_result(w);
-    ifn_am_weights_runtime_unlock(w);
+    ifn_status status = ifn_am_weights_runtime_ifn_weights_runtime_local_result(w);
+    ifn_am_weights_runtime_ifn_weights_runtime_local_unlock(w);
     return status;
 }
 
-#undef ALLOC
+#undef IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC
 
 /* Module: src/weights_recipe.c */
 /* SPDX-License-Identifier: Apache-2.0
@@ -3049,13 +3129,23 @@ ifn_status ifn_weights_read(ifn_gpu_weights *w, size_t index, uint64_t offset, v
 #include <stdio.h>
 #include <string.h>
 
-enum { ifn_am_weights_recipe_H = 2304, ifn_am_weights_recipe_Q = 3072, ifn_am_weights_recipe_KV = 1024, ifn_am_weights_recipe_E = 128, ifn_am_weights_recipe_I = 1152, ifn_am_weights_recipe_V = 201024, ifn_am_weights_recipe_VU = 200058, ifn_am_weights_recipe_M = 9216 };
+enum {
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H = 2304,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q = 3072,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV = 1024,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E = 128,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_I = 1152,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_V = 201024,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_VU = 200058,
+    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_M = 9216
+};
 
-static void *ifn_am_weights_recipe_pointer(ifn_gpu_weights *w, uint64_t offset) {
+static void *ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(ifn_gpu_weights *w, uint64_t offset) {
     return w->execute && offset != UINT64_MAX ? (unsigned char *)w->arena + (size_t)offset : NULL;
 }
 
-static ifn_weight_view *ifn_am_weights_recipe_view(ifn_gpu_weights *w, const char *label, uint32_t type) {
+static ifn_weight_view *ifn_am_weights_recipe_ifn_weights_recipe_local_view(ifn_gpu_weights *w, const char *label,
+                                                      uint32_t type) {
     if (w->status != IFN_OK)
         return NULL;
     if (w->view_count == IFN_WEIGHT_MAX_VIEWS || strlen(label) >= sizeof w->views[0].label) {
@@ -3071,7 +3161,8 @@ static ifn_weight_view *ifn_am_weights_recipe_view(ifn_gpu_weights *w, const cha
     return v;
 }
 
-static uint64_t ifn_am_weights_recipe_block(ifn_gpu_weights *w, const char *label, const char *suffix, size_t bytes) {
+static uint64_t ifn_am_weights_recipe_ifn_weights_recipe_local_block(ifn_gpu_weights *w, const char *label,
+                                               const char *suffix, size_t bytes) {
     if (w->status != IFN_OK)
         return UINT64_MAX;
     size_t aligned, end;
@@ -3094,8 +3185,9 @@ static uint64_t ifn_am_weights_recipe_block(ifn_gpu_weights *w, const char *labe
     return s->offset;
 }
 
-static void ifn_am_weights_recipe_copy_tensor(ifn_gpu_weights *w, uint32_t source, const char *name, void *dst,
-                        size_t bytes, bool prefix) {
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(ifn_gpu_weights *w, uint32_t source,
+                                                 const char *name, void *dst, size_t bytes,
+                                                 bool prefix) {
     if (!w->execute || w->status != IFN_OK)
         return;
     const void *data = NULL;
@@ -3109,30 +3201,33 @@ static void ifn_am_weights_recipe_copy_tensor(ifn_gpu_weights *w, uint32_t sourc
                              "upload tensor");
 }
 
-static void ifn_am_weights_recipe_raw(ifn_gpu_weights *w, const char *label, uint32_t source, const char *name,
-                size_t bytes) {
-    ifn_weight_view *v = ifn_am_weights_recipe_view(w, label, IFN_WEIGHT_RAW);
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_raw(ifn_gpu_weights *w, const char *label, uint32_t source,
+                                         const char *name, size_t bytes) {
+    ifn_weight_view *v = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, label, IFN_WEIGHT_RAW);
     if (!v)
         return;
-    v->data = ifn_am_weights_recipe_block(w, label, "", bytes);
+    v->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, "", bytes);
     if (w->status == IFN_OK)
-        ifn_am_weights_recipe_copy_tensor(w, source, name, ifn_am_weights_recipe_pointer(w, v->data), bytes, false);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(
+            w, source, name, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data), bytes, false);
 }
 
-static void ifn_am_weights_recipe_stage(ifn_gpu_weights *w, uint32_t source, const char *name, size_t offset,
-                  size_t bytes, bool prefix) {
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_stage(ifn_gpu_weights *w, uint32_t source, const char *name,
+                                           size_t offset, size_t bytes, bool prefix) {
     if (w->status != IFN_OK || !w->execute)
         return;
     if (offset > w->plan.staging_bytes || bytes > w->plan.staging_bytes - offset) {
         ifn_weight_fail(w, IFN_LIMIT, "weight staging overflow");
         return;
     }
-    ifn_am_weights_recipe_copy_tensor(w, source, name, (unsigned char *)w->stage + offset, bytes, prefix);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(w, source, name, (unsigned char *)w->stage + offset, bytes,
+                                         prefix);
 }
 
-static ifn_weight_view *ifn_am_weights_recipe_linear(ifn_gpu_weights *w, const char *label, unsigned rows, unsigned cols,
-                               unsigned kind, const void *input) {
-    ifn_weight_view *v = ifn_am_weights_recipe_view(w, label, IFN_WEIGHT_LINEAR);
+static ifn_weight_view *ifn_am_weights_recipe_ifn_weights_recipe_local_linear(ifn_gpu_weights *w, const char *label,
+                                                        unsigned rows, unsigned cols, unsigned kind,
+                                                        const void *input) {
+    ifn_weight_view *v = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, label, IFN_WEIGHT_LINEAR);
     if (!v)
         return NULL;
     size_t elements;
@@ -3143,40 +3238,44 @@ static ifn_weight_view *ifn_am_weights_recipe_linear(ifn_gpu_weights *w, const c
     v->precision = kind;
     v->rows = rows;
     v->cols = cols;
-    v->data = ifn_am_weights_recipe_block(w, label, ".data",
-                    kind == 0   ? elements * 2
-                    : kind == 1 ? elements
-                                : elements / 2);
+    v->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".data",
+                                             kind == 0   ? elements * 2
+                                             : kind == 1 ? elements
+                                                         : elements / 2);
     if (kind == 1)
-        v->row_scales = ifn_am_weights_recipe_block(w, label, ".row_scales", (size_t)rows * 4);
+        v->row_scales = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".row_scales", (size_t)rows * 4);
     if (kind == 2)
-        v->scales = ifn_am_weights_recipe_block(w, label, ".scales", elements / 16);
+        v->scales = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".scales", elements / 16);
     if (w->execute && w->status == IFN_OK) {
         if (kind == 0)
             ifn_weight_backend_check(w,
-                                     w->backend.copy(w->backend.context, ifn_am_weights_recipe_pointer(w, v->data), input,
-                                                     elements * 2, 2, w->stream),
+                                     w->backend.copy(w->backend.context,
+                                                     ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data),
+                                                     input, elements * 2, 2, w->stream),
                                      "copy BF16 matrix");
         else
             ifn_weight_backend_check(
                 w,
-                w->backend.pack(w->backend.context, input, ifn_am_weights_recipe_pointer(w, v->data),
-                                ifn_am_weights_recipe_pointer(w, kind == 1 ? v->row_scales : v->scales), w->amax,
-                                (int)rows, (int)cols, (int)kind, &v->global_scale, w->stream),
+                w->backend.pack(
+                    w->backend.context, input, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data),
+                    ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, kind == 1 ? v->row_scales : v->scales),
+                    w->amax, (int)rows, (int)cols, (int)kind, &v->global_scale, w->stream),
                 "quantize matrix");
     }
     return v;
 }
 
-static void ifn_am_weights_recipe_staged_linear(ifn_gpu_weights *w, const char *label, uint32_t source, const char *name,
-                          unsigned rows, unsigned cols, unsigned kind, bool prefix) {
-    ifn_am_weights_recipe_stage(w, source, name, 0, (size_t)rows * cols * 2, prefix);
-    (void)ifn_am_weights_recipe_linear(w, label, rows, cols, kind, w->stage);
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_staged_linear(ifn_gpu_weights *w, const char *label,
+                                                   uint32_t source, const char *name, unsigned rows,
+                                                   unsigned cols, unsigned kind, bool prefix) {
+    ifn_am_weights_recipe_ifn_weights_recipe_local_stage(w, source, name, 0, (size_t)rows * cols * 2, prefix);
+    (void)ifn_am_weights_recipe_ifn_weights_recipe_local_linear(w, label, rows, cols, kind, w->stage);
 }
 
-static void ifn_am_weights_recipe_concat(ifn_gpu_weights *w, const char *label, uint32_t source, const char *prefix,
-                   const char *const *suffix, const unsigned *rows, size_t count, unsigned cols,
-                   unsigned kind) {
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_concat(ifn_gpu_weights *w, const char *label, uint32_t source,
+                                            const char *prefix, const char *const *suffix,
+                                            const unsigned *rows, size_t count, unsigned cols,
+                                            unsigned kind) {
     size_t offset = 0, total = 0;
     char name[160];
     for (size_t i = 0; i < count && w->status == IFN_OK; i++) {
@@ -3186,14 +3285,14 @@ static void ifn_am_weights_recipe_concat(ifn_gpu_weights *w, const char *label, 
             return;
         }
         size_t bytes = (size_t)rows[i] * cols * 2;
-        ifn_am_weights_recipe_stage(w, source, name, offset, bytes, false);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_stage(w, source, name, offset, bytes, false);
         offset += bytes;
         total += rows[i];
     }
-    (void)ifn_am_weights_recipe_linear(w, label, (unsigned)total, cols, kind, w->stage);
+    (void)ifn_am_weights_recipe_ifn_weights_recipe_local_linear(w, label, (unsigned)total, cols, kind, w->stage);
 }
 
-static float ifn_am_weights_recipe_f32le(const unsigned char *p) {
+static float ifn_am_weights_recipe_ifn_weights_recipe_local_f32le(const unsigned char *p) {
     uint32_t bits =
         (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
     float f;
@@ -3201,83 +3300,93 @@ static float ifn_am_weights_recipe_f32le(const unsigned char *p) {
     return f;
 }
 
-static void ifn_am_weights_recipe_expert(ifn_gpu_weights *w, const char *label, const char *prefix, const char *bank,
-                   unsigned layer, unsigned cols) {
-    ifn_weight_view *v = ifn_am_weights_recipe_view(w, label, IFN_WEIGHT_EXPERT);
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_expert(ifn_gpu_weights *w, const char *label,
+                                            const char *prefix, const char *bank, unsigned layer,
+                                            unsigned cols) {
+    ifn_weight_view *v = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, label, IFN_WEIGHT_EXPERT);
     if (!v)
         return;
-    v->rows = ifn_am_weights_recipe_H;
+    v->rows = ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H;
     v->cols = cols;
-    v->experts = ifn_am_weights_recipe_E;
+    v->experts = ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E;
     v->precision = layer < 20 || w->config.mode == 2 ? 2 : 1;
-    size_t elements = (size_t)ifn_am_weights_recipe_E * ifn_am_weights_recipe_H * cols;
+    size_t elements = (size_t)ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * cols;
     char wn[160], sn[192], an[192], dn[192];
     (void)snprintf(wn, sizeof wn, "%smlp.experts.%s_weight", prefix, bank);
     (void)snprintf(sn, sizeof sn, "%s_scale", wn);
     if (layer < 20) {
-        v->data = ifn_am_weights_recipe_block(w, label, ".data", elements / 2);
-        v->scales = ifn_am_weights_recipe_block(w, label, ".scales", elements / 16);
-        ifn_am_weights_recipe_copy_tensor(w, 0, wn, ifn_am_weights_recipe_pointer(w, v->data), elements / 2, false);
-        ifn_am_weights_recipe_copy_tensor(w, 0, sn, ifn_am_weights_recipe_pointer(w, v->scales), elements / 16, false);
-        v->expert_scale = ifn_am_weights_recipe_block(w, label, ".expert_scale", ifn_am_weights_recipe_E * 4);
+        v->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".data", elements / 2);
+        v->scales = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".scales", elements / 16);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(w, 0, wn, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data),
+                                             elements / 2, false);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(
+            w, 0, sn, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->scales), elements / 16, false);
+        v->expert_scale = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".expert_scale",
+                                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E * 4);
         if (w->execute && w->status == IFN_OK) {
             (void)snprintf(an, sizeof an, "%s_amax", wn);
             (void)snprintf(dn, sizeof dn, "%s_outer_scale_denominator", wn);
             const void *ap = NULL, *dp = NULL;
             size_t as = 0, ds = 0;
             if (ifn_inkling_lookup(w->checkpoint, 0, an, &ap, &as) != IFN_OK ||
-                ifn_inkling_lookup(w->checkpoint, 0, dn, &dp, &ds) != IFN_OK || as != ifn_am_weights_recipe_E * 4 ||
-                ds != 4) {
+                ifn_inkling_lookup(w->checkpoint, 0, dn, &dp, &ds) != IFN_OK ||
+                as != ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E * 4 || ds != 4) {
                 ifn_weight_fail(w, IFN_FORMAT, "invalid expert scale metadata");
                 return;
             }
-            float denom = ifn_am_weights_recipe_f32le(dp), scales[ifn_am_weights_recipe_E];
+            float denom = ifn_am_weights_recipe_ifn_weights_recipe_local_f32le(dp), scales[ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E];
             if (!isfinite(denom) || denom <= 0 || !isfinite(1.0f / denom)) {
                 ifn_weight_fail(w, IFN_FORMAT, "invalid expert scale denominator");
                 return;
             }
             float inverse = 1.0f / denom;
-            for (size_t i = 0; i < ifn_am_weights_recipe_E; i++) {
-                float amax = ifn_am_weights_recipe_f32le((const unsigned char *)ap + i * 4);
+            for (size_t i = 0; i < ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E; i++) {
+                float amax = ifn_am_weights_recipe_ifn_weights_recipe_local_f32le((const unsigned char *)ap + i * 4);
                 scales[i] = amax * inverse;
                 if (!isfinite(amax) || amax < 0 || !isfinite(scales[i])) {
                     ifn_weight_fail(w, IFN_FORMAT, "invalid expert amax");
                     return;
                 }
             }
-            ifn_weight_backend_check(w,
-                                     w->backend.copy(w->backend.context,
-                                                     ifn_am_weights_recipe_pointer(w, v->expert_scale), scales,
-                                                     sizeof scales, 0, w->stream),
-                                     "upload expert scales");
+            ifn_weight_backend_check(
+                w,
+                w->backend.copy(w->backend.context,
+                                ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->expert_scale), scales,
+                                sizeof scales, 0, w->stream),
+                "upload expert scales");
         }
     } else if (w->config.mode != 2) {
-        v->data = ifn_am_weights_recipe_block(w, label, ".data", elements);
-        v->scales = ifn_am_weights_recipe_block(w, label, ".scales", elements / 32);
-        ifn_am_weights_recipe_copy_tensor(w, 0, wn, ifn_am_weights_recipe_pointer(w, v->data), elements, false);
-        ifn_am_weights_recipe_copy_tensor(w, 0, sn, ifn_am_weights_recipe_pointer(w, v->scales), elements / 32, false);
+        v->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".data", elements);
+        v->scales = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".scales", elements / 32);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(w, 0, wn, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data),
+                                             elements, false);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_copy_tensor(
+            w, 0, sn, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->scales), elements / 32, false);
     } else {
-        ifn_am_weights_recipe_stage(w, 0, wn, 0, elements, false);
-        ifn_am_weights_recipe_stage(w, 0, sn, elements, elements / 32, false);
-        v->expert_scale = ifn_am_weights_recipe_block(w, label, ".expert_scale", ifn_am_weights_recipe_E * 4);
-        v->data = ifn_am_weights_recipe_block(w, label, ".data", elements / 2);
-        v->scales = ifn_am_weights_recipe_block(w, label, ".scales", elements / 16);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_stage(w, 0, wn, 0, elements, false);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_stage(w, 0, sn, elements, elements / 32, false);
+        v->expert_scale = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".expert_scale",
+                                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E * 4);
+        v->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".data", elements / 2);
+        v->scales = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, label, ".scales", elements / 16);
         if (w->execute && w->status == IFN_OK)
-            ifn_weight_backend_check(w,
-                                     w->backend.expert(w->backend.context, w->stage,
-                                                       (unsigned char *)w->stage + elements,
-                                                       ifn_am_weights_recipe_pointer(w, v->data), ifn_am_weights_recipe_pointer(w, v->scales),
-                                                       ifn_am_weights_recipe_pointer(w, v->expert_scale), ifn_am_weights_recipe_E, ifn_am_weights_recipe_H, (int)cols,
-                                                       w->stream),
-                                     "convert MXFP8 experts");
+            ifn_weight_backend_check(
+                w,
+                w->backend.expert(
+                    w->backend.context, w->stage, (unsigned char *)w->stage + elements,
+                    ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data),
+                    ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->scales),
+                    ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->expert_scale),
+                    ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H, (int)cols, w->stream),
+                "convert MXFP8 experts");
     }
 }
 
-static void ifn_am_weights_recipe_fuse(ifn_gpu_weights *w) {
-    ifn_weight_view *v = ifn_am_weights_recipe_view(w, "dspark.fuse_alpha", IFN_WEIGHT_RAW);
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_fuse(ifn_gpu_weights *w) {
+    ifn_weight_view *v = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, "dspark.fuse_alpha", IFN_WEIGHT_RAW);
     if (!v)
         return;
-    v->data = ifn_am_weights_recipe_block(w, v->label, "", 64);
+    v->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, v->label, "", 64);
     if (!w->execute || w->status != IFN_OK)
         return;
     const void *data = NULL;
@@ -3315,13 +3424,14 @@ static void ifn_am_weights_recipe_fuse(ifn_gpu_weights *w) {
         for (size_t col = 0; col < 4; col++)
             alpha[row * 4 + col] = (float)(values[col] / sum);
     }
-    ifn_weight_backend_check(
-        w,
-        w->backend.copy(w->backend.context, ifn_am_weights_recipe_pointer(w, v->data), alpha, sizeof alpha, 0, w->stream),
-        "upload fusion alpha");
+    ifn_weight_backend_check(w,
+                             w->backend.copy(w->backend.context,
+                                             ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, v->data), alpha,
+                                             sizeof alpha, 0, w->stream),
+                             "upload fusion alpha");
 }
 
-static ifn_weight_view *ifn_am_weights_recipe_named(ifn_gpu_weights *w, const char *name) {
+static ifn_weight_view *ifn_am_weights_recipe_ifn_weights_recipe_local_named(ifn_gpu_weights *w, const char *name) {
     for (size_t i = 0; i < w->view_count; i++)
         if (!strcmp(w->views[i].label, name))
             return &w->views[i];
@@ -3329,10 +3439,11 @@ static ifn_weight_view *ifn_am_weights_recipe_named(ifn_gpu_weights *w, const ch
     return NULL;
 }
 
-static void ifn_am_weights_recipe_alias(ifn_gpu_weights *w, const char *label, const ifn_weight_view *source) {
+static void ifn_am_weights_recipe_ifn_weights_recipe_local_alias(ifn_gpu_weights *w, const char *label,
+                                           const ifn_weight_view *source) {
     if (!source || w->status != IFN_OK)
         return;
-    ifn_weight_view *v = ifn_am_weights_recipe_view(w, label, source->type);
+    ifn_weight_view *v = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, label, source->type);
     if (!v)
         return;
     char name[128];
@@ -3344,87 +3455,117 @@ static void ifn_am_weights_recipe_alias(ifn_gpu_weights *w, const char *label, c
 void ifn_weights_recipe(ifn_gpu_weights *w) {
     w->offset = w->span_count = w->view_count = 0;
     unsigned kind = w->config.mode, mtp_kind = kind == 0 || w->config.mtp_bf16 ? 0 : 2;
-    ifn_am_weights_recipe_raw(w, "embed", 0, "model.llm.embed.weight", (size_t)ifn_am_weights_recipe_V * ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_raw(w, "embed_norm", 0, "model.llm.embed_norm.weight", ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_raw(w, "final_norm", 0, "model.llm.norm.weight", ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_staged_linear(w, "unembed", 0, "model.llm.unembed.weight", ifn_am_weights_recipe_VU, ifn_am_weights_recipe_H, kind, true);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "embed", 0, "model.llm.embed.weight",
+                                 (size_t)ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_V * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H *
+                                     2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "embed_norm", 0, "model.llm.embed_norm.weight",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "final_norm", 0, "model.llm.norm.weight",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_staged_linear(w, "unembed", 0, "model.llm.unembed.weight",
+                                           ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_VU, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H,
+                                           kind, true);
     char name[160], label[128], prefix[96];
     for (unsigned i = 0; i < 23; i++) {
         (void)snprintf(name, sizeof name, "model.llm.attn_res.attn_queries.%u", i);
         (void)snprintf(label, sizeof label, "attn_queries.%u", i);
-        ifn_am_weights_recipe_raw(w, label, 0, name, ((i + 2) % 6 == 0 ? 3u : 1u) * ifn_am_weights_recipe_H * 4);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, label, 0, name,
+                                     ((i + 2) % 6 == 0 ? 3u : 1u) * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
     }
     for (unsigned i = 0; i < 24; i++) {
         (void)snprintf(name, sizeof name, "model.llm.attn_res.mlp_queries.%u", i);
         (void)snprintf(label, sizeof label, "mlp_queries.%u", i);
-        ifn_am_weights_recipe_raw(w, label, 0, name, ifn_am_weights_recipe_H * 4);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, label, 0, name, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
     }
-    ifn_am_weights_recipe_raw(w, "output_query", 0, "model.llm.attn_res.output_query", ifn_am_weights_recipe_H * 4);
-    ifn_am_weights_recipe_raw(w, "cross_pass_queries", 0, "model.llm.middle_cycle_cross_pass_queries", 24 * ifn_am_weights_recipe_H * 4);
-    ifn_am_weights_recipe_raw(w, "cross_pass_kv_queries", 0, "model.llm.middle_cycle_cross_pass_kv_queries", 24 * ifn_am_weights_recipe_H * 4);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "output_query", 0, "model.llm.attn_res.output_query",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "cross_pass_queries", 0,
+                                 "model.llm.middle_cycle_cross_pass_queries",
+                                 24 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "cross_pass_kv_queries", 0,
+                                 "model.llm.middle_cycle_cross_pass_kv_queries",
+                                 24 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
     for (unsigned i = 0; i < 24 && w->status == IFN_OK; i++) {
         (void)snprintf(prefix, sizeof prefix, "model.llm.layers.%u.", i);
-#define RAW(field, suffix, bytes)                                                                  \
+#define IFN_WEIGHTS_RECIPE_LOCAL_RAW(field, suffix, bytes)                                         \
     do {                                                                                           \
         (void)snprintf(label, sizeof label, "layers.%u.%s", i, field);                             \
         (void)snprintf(name, sizeof name, "%s%s", prefix, suffix);                                 \
-        ifn_am_weights_recipe_raw(w, label, 0, name, bytes);                                                             \
+        ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, label, 0, name, bytes);                                    \
     } while (0)
-#define LINEAR(field, suffix, rows, cols, k)                                                       \
+#define IFN_WEIGHTS_RECIPE_LOCAL_LINEAR(field, suffix, rows, cols, k)                              \
     do {                                                                                           \
         (void)snprintf(label, sizeof label, "layers.%u.%s", i, field);                             \
         (void)snprintf(name, sizeof name, "%s%s", prefix, suffix);                                 \
-        ifn_am_weights_recipe_staged_linear(w, label, 0, name, rows, cols, k, false);                                    \
+        ifn_am_weights_recipe_ifn_weights_recipe_local_staged_linear(w, label, 0, name, rows, cols, k, false);           \
     } while (0)
         bool global = (i + 1) % 6 == 0;
         if (global) {
-            RAW("q_in_norm", "q_input_norm.weight", ifn_am_weights_recipe_H * 2);
-            RAW("k_in_norm", "k_input_norm.weight", ifn_am_weights_recipe_H * 2);
-            RAW("v_in_norm", "v_input_norm.weight", ifn_am_weights_recipe_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_in_norm", "q_input_norm.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_in_norm", "k_input_norm.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_in_norm", "v_input_norm.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
         } else
-            RAW("attn_norm", "attn_norm.weight", ifn_am_weights_recipe_H * 2);
-        RAW("mlp_norm", "mlp_norm.weight", ifn_am_weights_recipe_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("attn_norm", "attn_norm.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("mlp_norm", "mlp_norm.weight", ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
         const char *qrgs[] = {"attn.wq_du.weight", "attn.wr_du.weight", "attn.gate_attn.weight",
                               "attn.attn_sink_proj.weight"};
-        const unsigned qrgs_rows[] = {ifn_am_weights_recipe_Q, 384, ifn_am_weights_recipe_Q, 24};
+        const unsigned qrgs_rows[] = {ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q, 384, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q,
+                                      24};
         (void)snprintf(label, sizeof label, "layers.%u.w_qrgs", i);
-        ifn_am_weights_recipe_concat(w, label, 0, prefix, qrgs, qrgs_rows, 4, ifn_am_weights_recipe_H, kind);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_concat(w, label, 0, prefix, qrgs, qrgs_rows, 4,
+                                        ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H, kind);
         const char *kv[] = {"attn.wk_dv.weight", "attn.wv_dv.weight"};
-        const unsigned kv_rows[] = {ifn_am_weights_recipe_KV, ifn_am_weights_recipe_KV};
+        const unsigned kv_rows[] = {ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV};
         (void)snprintf(label, sizeof label, "layers.%u.w_kv", i);
-        ifn_am_weights_recipe_concat(w, label, 0, prefix, kv, kv_rows, 2, ifn_am_weights_recipe_H, kind);
-        ifn_weight_view *v = ifn_am_weights_recipe_named(w, label);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_concat(w, label, 0, prefix, kv, kv_rows, 2,
+                                        ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H, kind);
+        ifn_weight_view *v = ifn_am_weights_recipe_ifn_weights_recipe_local_named(w, label);
         (void)snprintf(label, sizeof label, "layers.%u.w_k", i);
-        ifn_am_weights_recipe_alias(w, label, v);
-        ifn_weight_view *k = ifn_am_weights_recipe_named(w, label);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_alias(w, label, v);
+        ifn_weight_view *k = ifn_am_weights_recipe_ifn_weights_recipe_local_named(w, label);
         if (k)
-            k->rows = ifn_am_weights_recipe_KV;
+            k->rows = ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV;
         (void)snprintf(label, sizeof label, "layers.%u.w_v", i);
-        ifn_am_weights_recipe_alias(w, label, v);
-        ifn_weight_view *vv = ifn_am_weights_recipe_named(w, label);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_alias(w, label, v);
+        ifn_weight_view *vv = ifn_am_weights_recipe_ifn_weights_recipe_local_named(w, label);
         if (vv) {
-            vv->rows = ifn_am_weights_recipe_KV;
-            vv->data += (size_t)ifn_am_weights_recipe_KV * ifn_am_weights_recipe_H * (kind == 0 ? 2u : 1u) / (kind == 2 ? 2u : 1u);
+            vv->rows = ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV;
+            vv->data += (size_t)ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H *
+                        (kind == 0 ? 2u : 1u) / (kind == 2 ? 2u : 1u);
             if (kind == 1)
-                vv->row_scales += ifn_am_weights_recipe_KV * 4;
+                vv->row_scales += ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * 4;
             if (kind == 2)
-                vv->scales += (size_t)ifn_am_weights_recipe_KV * ifn_am_weights_recipe_H / 16;
+                vv->scales += (size_t)ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H / 16;
         }
-        LINEAR("w_o", "attn.wo_ud.weight", ifn_am_weights_recipe_H, ifn_am_weights_recipe_Q, kind);
+        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_o", "attn.wo_ud.weight", ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H,
+                                        ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q, kind);
         if (global) {
-            RAW("k_sconv_w", "attn.k_sconv.static_w", 4 * ifn_am_weights_recipe_KV * 2);
-            RAW("v_sconv_w", "attn.v_sconv.static_w", 4 * ifn_am_weights_recipe_KV * 2);
-            RAW("k_sconv_proj", "attn.k_sconv.weight_proj", 32 * ifn_am_weights_recipe_H * 2);
-            RAW("v_sconv_proj", "attn.v_sconv.weight_proj", 32 * ifn_am_weights_recipe_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_sconv_w", "attn.k_sconv.static_w",
+                                         4 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_sconv_w", "attn.v_sconv.static_w",
+                                         4 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_sconv_proj", "attn.k_sconv.weight_proj",
+                                         32 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_sconv_proj", "attn.v_sconv.weight_proj",
+                                         32 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
         } else {
-            RAW("k_sconv_w", "attn.k_sconv.weight", ifn_am_weights_recipe_KV * 4 * 2);
-            RAW("v_sconv_w", "attn.v_sconv.weight", ifn_am_weights_recipe_KV * 4 * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_sconv_w", "attn.k_sconv.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * 4 * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_sconv_w", "attn.v_sconv.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV * 4 * 2);
         }
-        RAW("attn_sconv_w", "attn_sconv.weight", ifn_am_weights_recipe_H * 4 * 2);
-        RAW("mlp_sconv_w", "mlp_sconv.weight", ifn_am_weights_recipe_H * 4 * 2);
-        RAW("q_clip_scale", "attn.q_l2_clip.scale", ifn_am_weights_recipe_Q * 2);
-        RAW("rel_clip_scale", "attn.rel_l2_clip.scale", 384 * 2);
-        RAW("rel_logits_proj", "attn.rel_logits_proj.proj", 16 * 1024 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("attn_sconv_w", "attn_sconv.weight",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("mlp_sconv_w", "mlp_sconv.weight",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 4 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_clip_scale", "attn.q_l2_clip.scale",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("rel_clip_scale", "attn.rel_l2_clip.scale", 384 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("rel_logits_proj", "attn.rel_logits_proj.proj", 16 * 1024 * 2);
         if (i >= 6 && i < 18) {
             const char *stems[] = {"attn", "k", "v", "mlp"};
             for (unsigned j = 0; j < 4; j++) {
@@ -3434,121 +3575,151 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
                                    stems[j], parts[part]);
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.%s_%s", i, j,
                                    parts[part], kind == 2 ? "nvfp4" : "w");
-                    unsigned rows = part ? ifn_am_weights_recipe_H : 64, cols = part ? 64 : 2 * ifn_am_weights_recipe_H;
+                    unsigned rows = part ? ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H : 64,
+                             cols = part ? 64 : 2 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H;
                     if (kind == 2)
-                        ifn_am_weights_recipe_staged_linear(w, label, 0, name, rows, cols, 2, false);
+                        ifn_am_weights_recipe_ifn_weights_recipe_local_staged_linear(w, label, 0, name, rows, cols, 2,
+                                                               false);
                     else
-                        ifn_am_weights_recipe_raw(w, label, 0, name, (size_t)rows * cols * 2);
+                        ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, label, 0, name, (size_t)rows * cols * 2);
                 }
             }
         }
         if (kind == 2)
-            LINEAR("router_nvfp4", "mlp.gate.weight", ifn_am_weights_recipe_E, ifn_am_weights_recipe_H, 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("router_nvfp4", "mlp.gate.weight",
+                                            ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H,
+                                            2);
         else
-            RAW("router_w", "mlp.gate.weight", ifn_am_weights_recipe_E * ifn_am_weights_recipe_H * 2);
-        RAW("router_bias", "mlp.gate.bias", ifn_am_weights_recipe_E * 4);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("router_w", "mlp.gate.weight",
+                                         ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H *
+                                             2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("router_bias", "mlp.gate.bias",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_E * 4);
         (void)snprintf(label, sizeof label, "layers.%u.w13", i);
-        ifn_am_weights_recipe_expert(w, label, prefix, "w13", i, ifn_am_weights_recipe_H);
+        ifn_am_weights_recipe_ifn_weights_recipe_local_expert(w, label, prefix, "w13", i, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H);
         (void)snprintf(label, sizeof label, "layers.%u.w2", i);
-        ifn_am_weights_recipe_expert(w, label, prefix, "w2", i, ifn_am_weights_recipe_I);
-#undef LINEAR
-#undef RAW
+        ifn_am_weights_recipe_ifn_weights_recipe_local_expert(w, label, prefix, "w2", i, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_I);
+#undef IFN_WEIGHTS_RECIPE_LOCAL_LINEAR
+#undef IFN_WEIGHTS_RECIPE_LOCAL_RAW
     }
     if (!w->config.with_mtp || w->status != IFN_OK)
         return;
-    ifn_am_weights_recipe_fuse(w);
-    ifn_am_weights_recipe_raw(w, "dspark.mask_embed", 1, "mask_embed", ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_raw(w, "dspark.norm_w", 1, "norm.weight", ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_raw(w, "dspark.markov_dflare_norm", 1, "markov_head.dflare_norm.weight", ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_raw(w, "dspark.markov_w1", 1, "markov_head.markov_w1.weight", (size_t)ifn_am_weights_recipe_V * 256 * 2);
-    ifn_am_weights_recipe_raw(w, "dspark.rnn_bias", 1, "markov_head.rnn_proj.bias", 768 * 2);
-    ifn_am_weights_recipe_raw(w, "dspark.hidden_out_w", 1, "markov_head.hidden_out.weight", ifn_am_weights_recipe_H * 256 * 2);
-    ifn_am_weights_recipe_raw(w, "dspark.hidden_out_b", 1, "markov_head.hidden_out.bias", ifn_am_weights_recipe_H * 2);
-    ifn_am_weights_recipe_stage(w, 1, "markov_head.rnn_proj.weight", 0, 768 * 5120 * 2, false);
-    ifn_weight_view *sp = ifn_am_weights_recipe_view(w, "dspark.rnn_w_sp", 0);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_fuse(w);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.mask_embed", 1, "mask_embed",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.norm_w", 1, "norm.weight",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.markov_dflare_norm", 1,
+                                 "markov_head.dflare_norm.weight", ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.markov_w1", 1, "markov_head.markov_w1.weight",
+                                 (size_t)ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_V * 256 * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.rnn_bias", 1, "markov_head.rnn_proj.bias", 768 * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.hidden_out_w", 1, "markov_head.hidden_out.weight",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 256 * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, "dspark.hidden_out_b", 1, "markov_head.hidden_out.bias",
+                                 ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_stage(w, 1, "markov_head.rnn_proj.weight", 0, 768 * 5120 * 2, false);
+    ifn_weight_view *sp = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, "dspark.rnn_w_sp", 0);
     if (!sp)
         return;
-    sp->data = ifn_am_weights_recipe_block(w, sp->label, "", 768 * 512 * 2);
-    ifn_weight_view *rh = ifn_am_weights_recipe_view(w, "dspark.rnn_w_h", 0);
+    sp->data = ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, sp->label, "", 768 * 512 * 2);
+    ifn_weight_view *rh = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, "dspark.rnn_w_h", 0);
     if (!rh)
         return;
-    rh->data = ifn_am_weights_recipe_block(w, rh->label, "", 768 * ifn_am_weights_recipe_H * 2);
-    ifn_weight_view *rf = ifn_am_weights_recipe_view(w, "dspark.rnn_w_f", 0);
+    rh->data =
+        ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, rh->label, "", 768 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_weight_view *rf = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, "dspark.rnn_w_f", 0);
     if (!rf)
         return;
-    rf->data = ifn_am_weights_recipe_block(w, rf->label, "", 768 * ifn_am_weights_recipe_H * 2);
+    rf->data =
+        ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, rf->label, "", 768 * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
     if (w->execute && w->status == IFN_OK)
         ifn_weight_backend_check(w,
-                                 w->backend.rnn(w->backend.context, w->stage, ifn_am_weights_recipe_pointer(w, sp->data),
-                                                ifn_am_weights_recipe_pointer(w, rh->data), ifn_am_weights_recipe_pointer(w, rf->data),
+                                 w->backend.rnn(w->backend.context, w->stage,
+                                                ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, sp->data),
+                                                ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, rh->data),
+                                                ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, rf->data),
                                                 w->stream),
                                  "split MTP RNN");
-    ifn_am_weights_recipe_stage(w, 0, "model.llm.unembed.weight", 0, (size_t)ifn_am_weights_recipe_VU * ifn_am_weights_recipe_H * 2, true);
-    ifn_am_weights_recipe_alias(w, "dspark.unembed_draft", ifn_am_weights_recipe_named(w, "unembed"));
-    ifn_weight_view *bias = ifn_am_weights_recipe_view(w, "dspark.fold_b", 0);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_stage(
+        w, 0, "model.llm.unembed.weight", 0,
+        (size_t)ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_VU * ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2, true);
+    ifn_am_weights_recipe_ifn_weights_recipe_local_alias(w, "dspark.unembed_draft",
+                                   ifn_am_weights_recipe_ifn_weights_recipe_local_named(w, "unembed"));
+    ifn_weight_view *bias = ifn_am_weights_recipe_ifn_weights_recipe_local_view(w, "dspark.fold_b", 0);
     if (!bias)
         return;
-    bias->data = ifn_am_weights_recipe_block(w, bias->label, "", ifn_am_weights_recipe_VU * 4);
+    bias->data =
+        ifn_am_weights_recipe_ifn_weights_recipe_local_block(w, bias->label, "", ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_VU * 4);
     if (w->execute && w->status == IFN_OK) {
-        ifn_weight_view *hw = ifn_am_weights_recipe_named(w, "dspark.hidden_out_w"),
-                        *hb = ifn_am_weights_recipe_named(w, "dspark.hidden_out_b");
+        ifn_weight_view *hw = ifn_am_weights_recipe_ifn_weights_recipe_local_named(w, "dspark.hidden_out_w"),
+                        *hb = ifn_am_weights_recipe_ifn_weights_recipe_local_named(w, "dspark.hidden_out_b");
         if (w->status == IFN_OK)
-            ifn_weight_backend_check(w,
-                                     w->backend.fold(w->backend.context, w->stage,
-                                                     ifn_am_weights_recipe_pointer(w, hw->data), ifn_am_weights_recipe_pointer(w, hb->data),
-                                                     ifn_am_weights_recipe_pointer(w, bias->data), w->fold_temp,
-                                                     w->stream),
-                                     "fold MTP Markov head");
+            ifn_weight_backend_check(
+                w,
+                w->backend.fold(
+                    w->backend.context, w->stage, ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, hw->data),
+                    ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, hb->data),
+                    ifn_am_weights_recipe_ifn_weights_recipe_local_pointer(w, bias->data), w->fold_temp, w->stream),
+                "fold MTP Markov head");
     }
-    (void)ifn_am_weights_recipe_linear(w, "dspark.fold_w", ifn_am_weights_recipe_VU, 256, mtp_kind, w->fold_temp);
+    (void)ifn_am_weights_recipe_ifn_weights_recipe_local_linear(w, "dspark.fold_w", ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_VU, 256,
+                                          mtp_kind, w->fold_temp);
     for (unsigned i = 0; i < 3 && w->status == IFN_OK; i++) {
         (void)snprintf(prefix, sizeof prefix, "layers.%u.", i);
-#define RAW(field, suffix, bytes)                                                                  \
+#define IFN_WEIGHTS_RECIPE_LOCAL_RAW(field, suffix, bytes)                                         \
     do {                                                                                           \
         (void)snprintf(label, sizeof label, "dspark.layers.%u.%s", i, field);                      \
         (void)snprintf(name, sizeof name, "%s%s", prefix, suffix);                                 \
-        ifn_am_weights_recipe_raw(w, label, 1, name, bytes);                                                             \
+        ifn_am_weights_recipe_ifn_weights_recipe_local_raw(w, label, 1, name, bytes);                                    \
     } while (0)
-#define CONCAT(field, parts, rows, count)                                                          \
+#define IFN_WEIGHTS_RECIPE_LOCAL_CONCAT(field, parts, rows, count)                                 \
     do {                                                                                           \
         (void)snprintf(label, sizeof label, "dspark.layers.%u.%s", i, field);                      \
-        ifn_am_weights_recipe_concat(w, label, 1, prefix, parts, rows, count, ifn_am_weights_recipe_H, mtp_kind);                              \
+        ifn_am_weights_recipe_ifn_weights_recipe_local_concat(w, label, 1, prefix, parts, rows, count,                   \
+                                        ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H, mtp_kind);                     \
     } while (0)
-#define LINEAR(field, suffix, rows, cols)                                                          \
+#define IFN_WEIGHTS_RECIPE_LOCAL_LINEAR(field, suffix, rows, cols)                                 \
     do {                                                                                           \
         (void)snprintf(label, sizeof label, "dspark.layers.%u.%s", i, field);                      \
         (void)snprintf(name, sizeof name, "%s%s", prefix, suffix);                                 \
-        ifn_am_weights_recipe_staged_linear(w, label, 1, name, rows, cols, mtp_kind, false);                             \
+        ifn_am_weights_recipe_ifn_weights_recipe_local_staged_linear(w, label, 1, name, rows, cols, mtp_kind, false);    \
     } while (0)
-        RAW("input_norm", "input_layernorm.weight", ifn_am_weights_recipe_H * 2);
-        RAW("post_norm", "post_attention_layernorm.weight", ifn_am_weights_recipe_H * 2);
-        RAW("dflare_norm", "dflare_norm.weight", ifn_am_weights_recipe_H * 2);
-        RAW("q_norm", "self_attn.q_norm.weight", 128 * 2);
-        RAW("k_norm", "self_attn.k_norm.weight", 128 * 2);
-        RAW("k_norm_ctx", "self_attn.k_norm_ctx.weight", 128 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("input_norm", "input_layernorm.weight",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("post_norm", "post_attention_layernorm.weight",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("dflare_norm", "dflare_norm.weight",
+                                     ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_norm", "self_attn.q_norm.weight", 128 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_norm", "self_attn.k_norm.weight", 128 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_norm_ctx", "self_attn.k_norm_ctx.weight", 128 * 2);
         const char *qkv[] = {"self_attn.q_proj.weight", "self_attn.k_proj.weight",
                              "self_attn.v_proj.weight"};
-        const unsigned qr[] = {ifn_am_weights_recipe_Q, ifn_am_weights_recipe_KV, ifn_am_weights_recipe_KV};
-        CONCAT("w_qkv", qkv, qr, 3);
-        LINEAR("w_o", "self_attn.o_proj.weight", ifn_am_weights_recipe_H, ifn_am_weights_recipe_Q);
+        const unsigned qr[] = {ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV,
+                               ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV};
+        IFN_WEIGHTS_RECIPE_LOCAL_CONCAT("w_qkv", qkv, qr, 3);
+        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_o", "self_attn.o_proj.weight",
+                                        ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_Q);
         const char *gu[] = {"mlp.gate_proj.weight", "mlp.up_proj.weight"};
-        const unsigned gr[] = {ifn_am_weights_recipe_M, ifn_am_weights_recipe_M};
-        CONCAT("w_gu", gu, gr, 2);
-        LINEAR("w_down", "mlp.down_proj.weight", ifn_am_weights_recipe_H, ifn_am_weights_recipe_M);
+        const unsigned gr[] = {ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_M, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_M};
+        IFN_WEIGHTS_RECIPE_LOCAL_CONCAT("w_gu", gu, gr, 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_down", "mlp.down_proj.weight",
+                                        ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_H, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_M);
         const char *kv[] = {"self_attn.k_proj_ctx.weight", "self_attn.v_proj_ctx.weight"};
-        const unsigned kr[] = {ifn_am_weights_recipe_KV, ifn_am_weights_recipe_KV};
-        CONCAT("w_kv_ctx", kv, kr, 2);
-#undef RAW
-#undef CONCAT
-#undef LINEAR
+        const unsigned kr[] = {ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV, ifn_am_weights_recipe_IFN_WEIGHTS_RECIPE_LOCAL_KV};
+        IFN_WEIGHTS_RECIPE_LOCAL_CONCAT("w_kv_ctx", kv, kr, 2);
+#undef IFN_WEIGHTS_RECIPE_LOCAL_RAW
+#undef IFN_WEIGHTS_RECIPE_LOCAL_CONCAT
+#undef IFN_WEIGHTS_RECIPE_LOCAL_LINEAR
     }
 }
 
-#undef RAW
-#undef LINEAR
-#undef RAW
-#undef CONCAT
-#undef LINEAR
+#undef IFN_WEIGHTS_RECIPE_LOCAL_RAW
+#undef IFN_WEIGHTS_RECIPE_LOCAL_LINEAR
+#undef IFN_WEIGHTS_RECIPE_LOCAL_RAW
+#undef IFN_WEIGHTS_RECIPE_LOCAL_CONCAT
+#undef IFN_WEIGHTS_RECIPE_LOCAL_LINEAR
 
 /* Module: src/sampling.c */
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
@@ -3592,7 +3763,7 @@ ifn_status ifn_decode_resolve(const ifn_decode_options *input, ifn_decode_option
 
 #include <string.h>
 
-static uint64_t ifn_am_lookup_hash4(int32_t a, int32_t b, int32_t c, int32_t d) {
+static uint64_t ifn_am_lookup_ifn_lookup_local_hash4(int32_t a, int32_t b, int32_t c, int32_t d) {
     uint64_t h = (uint64_t)(int64_t)a * UINT64_C(0x9e3779b97f4a7c15);
     h = (h ^ (uint64_t)(int64_t)b) * UINT64_C(0xbf58476d1ce4e5b9);
     h = (h ^ (uint64_t)(int64_t)c) * UINT64_C(0x94d049bb133111eb);
@@ -3600,13 +3771,14 @@ static uint64_t ifn_am_lookup_hash4(int32_t a, int32_t b, int32_t c, int32_t d) 
     return h ^ (h >> 31);
 }
 
-static int32_t ifn_am_lookup_at(const ifn_lookup *s, uint32_t i) {
+static int32_t ifn_am_lookup_ifn_lookup_local_at(const ifn_lookup *s, uint32_t i) {
     return s->history[i & 8191];
 }
 
-static uint64_t ifn_am_lookup_suffix(const ifn_lookup *s) {
+static uint64_t ifn_am_lookup_ifn_lookup_local_suffix(const ifn_lookup *s) {
     uint32_t n = s->count;
-    return ifn_am_lookup_hash4(ifn_am_lookup_at(s, n - 4), ifn_am_lookup_at(s, n - 3), ifn_am_lookup_at(s, n - 2), ifn_am_lookup_at(s, n - 1));
+    return ifn_am_lookup_ifn_lookup_local_hash4(ifn_am_lookup_ifn_lookup_local_at(s, n - 4), ifn_am_lookup_ifn_lookup_local_at(s, n - 3),
+                                  ifn_am_lookup_ifn_lookup_local_at(s, n - 2), ifn_am_lookup_ifn_lookup_local_at(s, n - 1));
 }
 
 void ifn_lookup_reset(ifn_lookup *s) {
@@ -3624,7 +3796,7 @@ void ifn_lookup_push(ifn_lookup *s, int32_t token) {
     s->count = i + 1;
     if (s->count < 4)
         return;
-    uint64_t h = ifn_am_lookup_suffix(s);
+    uint64_t h = ifn_am_lookup_ifn_lookup_local_suffix(s);
     size_t slot = (size_t)(h & 16383);
     if (s->stamp[slot] == s->generation && s->hash[slot] == h) {
         s->older[slot] = s->newest[slot];
@@ -3641,7 +3813,7 @@ bool ifn_lookup_match(const ifn_lookup *s, int32_t out[7]) {
     uint32_t n = s->count;
     if (n < 24)
         return false;
-    uint64_t h = ifn_am_lookup_suffix(s);
+    uint64_t h = ifn_am_lookup_ifn_lookup_local_suffix(s);
     size_t slot = (size_t)(h & 16383);
     if (s->stamp[slot] != s->generation || s->hash[slot] != h)
         return false;
@@ -3652,10 +3824,10 @@ bool ifn_lookup_match(const ifn_lookup *s, int32_t out[7]) {
     if (candidate - 16 < low)
         return false;
     for (uint32_t k = 1; k <= 16; k++)
-        if (ifn_am_lookup_at(s, candidate - k) != ifn_am_lookup_at(s, n - k))
+        if (ifn_am_lookup_ifn_lookup_local_at(s, candidate - k) != ifn_am_lookup_ifn_lookup_local_at(s, n - k))
             return false;
     for (uint32_t j = 0; j < 7; j++)
-        out[j] = ifn_am_lookup_at(s, candidate + j);
+        out[j] = ifn_am_lookup_ifn_lookup_local_at(s, candidate + j);
     return true;
 }
 
@@ -3668,7 +3840,7 @@ bool ifn_lookup_match(const ifn_lookup *s, int32_t out[7]) {
 
 #include <string.h>
 
-static bool ifn_am_chat_utf8(const char *p, size_t n) {
+static bool ifn_am_chat_ifn_chat_local_utf8(const char *p, size_t n) {
     size_t at = 0;
     uint32_t cp;
     while (at < n)
@@ -3677,7 +3849,7 @@ static bool ifn_am_chat_utf8(const char *p, size_t n) {
     return true;
 }
 
-static bool ifn_am_chat_marker(const ifn_tokenizer *t, const char *p) {
+static bool ifn_am_chat_ifn_chat_local_marker(const ifn_tokenizer *t, const char *p) {
     int32_t id = ifn_special_lookup(t, p, strlen(p));
     return id >= 0 && t->entries[id].special;
 }
@@ -3688,9 +3860,10 @@ typedef struct {
     int32_t *out;
     size_t capacity, count;
     ifn_status status;
-} encoder;
+} ifn_chat_local_encoder;
 
-static void ifn_am_chat_append(encoder *e, const char *p, size_t n, uint32_t special) {
+static void ifn_am_chat_ifn_chat_local_append(ifn_chat_local_encoder *e, const char *p, size_t n,
+                                  uint32_t special) {
     if (e->status != IFN_OK || !n)
         return;
     size_t count = 0;
@@ -3705,57 +3878,58 @@ static void ifn_am_chat_append(encoder *e, const char *p, size_t n, uint32_t spe
         e->status = IFN_LIMIT;
 }
 
-static void ifn_am_chat_tag(encoder *e, const char *p) {
-    ifn_am_chat_append(e, p, strlen(p), 1);
+static void ifn_am_chat_ifn_chat_local_tag(ifn_chat_local_encoder *e, const char *p) {
+    ifn_am_chat_ifn_chat_local_append(e, p, strlen(p), 1);
 }
 
-static void ifn_am_chat_effort(encoder *e, uint32_t value) {
+static void ifn_am_chat_ifn_chat_local_effort(ifn_chat_local_encoder *e, uint32_t value) {
     static const char *levels[] = {"0", "0.1", "0.2", "0.7", "0.9", "0.99"};
-    ifn_am_chat_tag(e, "<|message_system|><|content_text|>Thinking effort level: ");
-    ifn_am_chat_tag(e, levels[value]);
-    ifn_am_chat_tag(e, "<|end_message|>");
+    ifn_am_chat_ifn_chat_local_tag(e, "<|message_system|><|content_text|>Thinking effort level: ");
+    ifn_am_chat_ifn_chat_local_tag(e, levels[value]);
+    ifn_am_chat_ifn_chat_local_tag(e, "<|end_message|>");
 }
 
-static void ifn_am_chat_block(encoder *e, const ifn_chat_message *m, const char *kind, const char *p,
-                  size_t n) {
+static void ifn_am_chat_ifn_chat_local_block(ifn_chat_local_encoder *e, const ifn_chat_message *m,
+                                 const char *kind, const char *p, size_t n) {
     static const char *roles[] = {"<|message_system|>", "<|message_system|>", "<|message_user|>",
                                   "<|message_model|>"};
-    ifn_am_chat_tag(e, roles[m->role]);
-    ifn_am_chat_append(e, m->name, m->name_bytes, 0);
-    ifn_am_chat_tag(e, kind);
-    ifn_am_chat_append(e, p, n, 0);
-    ifn_am_chat_tag(e, "<|end_message|>");
+    ifn_am_chat_ifn_chat_local_tag(e, roles[m->role]);
+    ifn_am_chat_ifn_chat_local_append(e, m->name, m->name_bytes, 0);
+    ifn_am_chat_ifn_chat_local_tag(e, kind);
+    ifn_am_chat_ifn_chat_local_append(e, p, n, 0);
+    ifn_am_chat_ifn_chat_local_tag(e, "<|end_message|>");
 }
 
-static uint32_t ifn_am_chat_pass(encoder *e, const ifn_chat_message *m, size_t count,
-                     const ifn_chat_options *o) {
+static uint32_t ifn_am_chat_ifn_chat_local_pass(ifn_chat_local_encoder *e, const ifn_chat_message *m,
+                                    size_t count, const ifn_chat_options *o) {
     bool emitted = false;
     uint32_t prefix = 0;
     for (size_t i = 0; i < count && e->status == IFN_OK; i++) {
         bool sys = m[i].role <= IFN_CHAT_DEVELOPER;
         if (!emitted && !sys) {
-            ifn_am_chat_effort(e, o->effort);
+            ifn_am_chat_ifn_chat_local_effort(e, o->effort);
             emitted = true;
             prefix = (uint32_t)e->count;
         }
         bool reasoning =
             m[i].role == IFN_CHAT_ASSISTANT && o->keep_history_thinking && m[i].reasoning_bytes;
         if (reasoning)
-            ifn_am_chat_block(e, m + i, "<|content_thinking|>", m[i].reasoning, m[i].reasoning_bytes);
+            ifn_am_chat_ifn_chat_local_block(e, m + i, "<|content_thinking|>", m[i].reasoning,
+                                 m[i].reasoning_bytes);
         bool text = m[i].content && (m[i].content_bytes || !reasoning);
         if (text)
-            ifn_am_chat_block(e, m + i, "<|content_text|>", m[i].content, m[i].content_bytes);
+            ifn_am_chat_ifn_chat_local_block(e, m + i, "<|content_text|>", m[i].content, m[i].content_bytes);
         if (m[i].role == IFN_CHAT_ASSISTANT && (reasoning || text))
-            ifn_am_chat_tag(e, "<|content_model_end_sampling|>");
+            ifn_am_chat_ifn_chat_local_tag(e, "<|content_model_end_sampling|>");
         if (sys && !emitted)
             prefix = (uint32_t)e->count;
     }
     if (!emitted) {
-        ifn_am_chat_effort(e, o->effort);
+        ifn_am_chat_ifn_chat_local_effort(e, o->effort);
         prefix = (uint32_t)e->count;
     }
     if (!o->enable_thinking)
-        ifn_am_chat_tag(e, "<|message_model|><|content_text|>");
+        ifn_am_chat_ifn_chat_local_tag(e, "<|message_model|><|content_text|>");
     return prefix;
 }
 
@@ -3790,8 +3964,9 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
             !ifn_size_add(bytes, m[i].reasoning_bytes, &bytes) ||
             !ifn_size_add(bytes, m[i].name_bytes, &bytes) || bytes > 32u * 1024u * 1024u)
             return ifn_error(IFN_LIMIT, "chat text/name limit exceeded");
-        if (!ifn_am_chat_utf8(m[i].content, m[i].content_bytes) ||
-            !ifn_am_chat_utf8(m[i].reasoning, m[i].reasoning_bytes) || !ifn_am_chat_utf8(m[i].name, m[i].name_bytes))
+        if (!ifn_am_chat_ifn_chat_local_utf8(m[i].content, m[i].content_bytes) ||
+            !ifn_am_chat_ifn_chat_local_utf8(m[i].reasoning, m[i].reasoning_bytes) ||
+            !ifn_am_chat_ifn_chat_local_utf8(m[i].name, m[i].name_bytes))
             return ifn_error(IFN_FORMAT, "chat text is not UTF-8");
     }
     const char *tags[] = {"<|message_system|>",
@@ -3802,10 +3977,10 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
                           "<|end_message|>",
                           "<|content_model_end_sampling|>"};
     for (size_t i = 0; i < sizeof tags / sizeof *tags; i++)
-        if (!ifn_am_chat_marker(t, tags[i]))
+        if (!ifn_am_chat_ifn_chat_local_marker(t, tags[i]))
             return ifn_error(IFN_UNSUPPORTED, "chat protocol marker missing");
-    encoder e = {t, scratch, NULL, 0, 0, IFN_OK};
-    uint32_t system = ifn_am_chat_pass(&e, m, count, &o);
+    ifn_chat_local_encoder e = {t, scratch, NULL, 0, 0, IFN_OK};
+    uint32_t system = ifn_am_chat_ifn_chat_local_pass(&e, m, count, &o);
     if (e.status != IFN_OK)
         return ifn_error(e.status, "chat sizing failed");
     *needed = e.count;
@@ -3815,7 +3990,7 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
     e.out = out;
     e.capacity = capacity;
     e.count = 0;
-    (void)ifn_am_chat_pass(&e, m, count, &o);
+    (void)ifn_am_chat_ifn_chat_local_pass(&e, m, count, &o);
     return ifn_error(e.status, e.status == IFN_OK ? "" : "chat encoding failed");
 }
 
@@ -3831,7 +4006,7 @@ ifn_status ifn_chat_encode(const ifn_tokenizer *t, const ifn_chat_message *m, si
 typedef struct {
     unsigned char bytes[4];
     size_t used, need;
-} unicode;
+} ifn_stream_local_unicode;
 
 struct ifn_stream {
     ifn_options allocator;
@@ -3846,7 +4021,7 @@ struct ifn_stream {
     char batch[1024];
     size_t batch_bytes;
     uint32_t batch_channel;
-    unicode utf8[2];
+    ifn_stream_local_unicode utf8[2];
     int32_t model, text, thinking, end, eos;
     uint32_t section, input_kind;
     size_t header_bytes;
@@ -3854,25 +4029,25 @@ struct ifn_stream {
     ifn_stream_info info;
 };
 
-static ifn_status ifn_am_stream_fail(ifn_stream *s, ifn_status rc, const char *message) {
+static ifn_status ifn_am_stream_ifn_stream_local_fail(ifn_stream *s, ifn_status rc, const char *message) {
     s->info.error_status = rc;
     s->info.finish_reason = IFN_STREAM_ERROR;
     return ifn_error(rc, message);
 }
 
-static bool ifn_am_stream_running(const ifn_stream *s) {
+static bool ifn_am_stream_ifn_stream_local_running(const ifn_stream *s) {
     return s->info.finish_reason == IFN_STREAM_RUNNING;
 }
 
-static void ifn_am_stream_flush(ifn_stream *s) {
-    if (!s->batch_bytes || !ifn_am_stream_running(s))
+static void ifn_am_stream_ifn_stream_local_flush(ifn_stream *s) {
+    if (!s->batch_bytes || !ifn_am_stream_ifn_stream_local_running(s))
         return;
     size_t n = s->batch_bytes;
     s->batch_bytes = 0;
     uint64_t *counter =
         s->batch_channel == IFN_STREAM_CONTENT ? &s->info.content_bytes : &s->info.reasoning_bytes;
     if (n > UINT64_MAX - *counter) {
-        (void)ifn_am_stream_fail(s, IFN_LIMIT, "stream byte count overflow");
+        (void)ifn_am_stream_ifn_stream_local_fail(s, IFN_LIMIT, "stream byte count overflow");
         return;
     }
     *counter += n;
@@ -3880,12 +4055,13 @@ static void ifn_am_stream_flush(ifn_stream *s) {
         s->info.finish_reason = IFN_STREAM_CALLBACK;
 }
 
-static void ifn_am_stream_emit(ifn_stream *s, uint32_t channel, const unsigned char *p, size_t n) {
-    if (!ifn_am_stream_running(s) || !n)
+static void ifn_am_stream_ifn_stream_local_emit(ifn_stream *s, uint32_t channel, const unsigned char *p,
+                                  size_t n) {
+    if (!ifn_am_stream_ifn_stream_local_running(s) || !n)
         return;
     if (s->batch_bytes && (s->batch_channel != channel || n > sizeof s->batch - s->batch_bytes))
-        ifn_am_stream_flush(s);
-    if (!ifn_am_stream_running(s))
+        ifn_am_stream_ifn_stream_local_flush(s);
+    if (!ifn_am_stream_ifn_stream_local_running(s))
         return;
     s->batch_channel = channel;
     memcpy(s->batch + s->batch_bytes, p, n);
@@ -3894,7 +4070,7 @@ static void ifn_am_stream_emit(ifn_stream *s, uint32_t channel, const unsigned c
 
 /* Returns byte indexes; all stop strings and pending input are valid UTF-8,
  * so a match/prefix start is necessarily a character boundary. */
-static void ifn_am_stream_scan(const ifn_stream *s, size_t *complete, size_t *potential) {
+static void ifn_am_stream_ifn_stream_local_scan(const ifn_stream *s, size_t *complete, size_t *potential) {
     *complete = *potential = s->pending_bytes;
     for (size_t i = 0; i < s->pending_bytes; i++)
         for (size_t j = 0; j < s->options.stop_count; j++) {
@@ -3907,54 +4083,55 @@ static void ifn_am_stream_scan(const ifn_stream *s, size_t *complete, size_t *po
         }
 }
 
-static void ifn_am_stream_filter(ifn_stream *s, const unsigned char *p, size_t n, bool final) {
-    if (!ifn_am_stream_running(s))
+static void ifn_am_stream_ifn_stream_local_filter(ifn_stream *s, const unsigned char *p, size_t n, bool final) {
+    if (!ifn_am_stream_ifn_stream_local_running(s))
         return;
     if (n) {
         memcpy(s->pending + s->pending_bytes, p, n);
         s->pending_bytes += n;
     }
     size_t complete, potential;
-    ifn_am_stream_scan(s, &complete, &potential);
+    ifn_am_stream_ifn_stream_local_scan(s, &complete, &potential);
     if (complete < s->pending_bytes && (final || potential >= complete)) {
-        ifn_am_stream_emit(s, IFN_STREAM_CONTENT, s->pending, complete);
-        ifn_am_stream_flush(s);
-        if (ifn_am_stream_running(s))
+        ifn_am_stream_ifn_stream_local_emit(s, IFN_STREAM_CONTENT, s->pending, complete);
+        ifn_am_stream_ifn_stream_local_flush(s);
+        if (ifn_am_stream_ifn_stream_local_running(s))
             s->info.finish_reason = IFN_STREAM_STOP;
         s->pending_bytes = 0;
         return;
     }
     size_t ready = final ? s->pending_bytes : (complete < potential ? complete : potential);
-    ifn_am_stream_emit(s, IFN_STREAM_CONTENT, s->pending, ready);
+    ifn_am_stream_ifn_stream_local_emit(s, IFN_STREAM_CONTENT, s->pending, ready);
     memmove(s->pending, s->pending + ready, s->pending_bytes - ready);
     s->pending_bytes -= ready;
 }
 
-static void ifn_am_stream_codepoint(ifn_stream *s, uint32_t channel, const unsigned char *p, size_t n) {
+static void ifn_am_stream_ifn_stream_local_codepoint(ifn_stream *s, uint32_t channel, const unsigned char *p,
+                                       size_t n) {
     if (channel == IFN_STREAM_CONTENT)
-        ifn_am_stream_filter(s, p, n, false);
+        ifn_am_stream_ifn_stream_local_filter(s, p, n, false);
     else
-        ifn_am_stream_emit(s, channel, p, n);
+        ifn_am_stream_ifn_stream_local_emit(s, channel, p, n);
 }
 
-static void ifn_am_stream_replacement(ifn_stream *s, uint32_t channel) {
+static void ifn_am_stream_ifn_stream_local_replacement(ifn_stream *s, uint32_t channel) {
     if (!s->options.replace_invalid_utf8) {
-        (void)ifn_am_stream_fail(s, IFN_FORMAT, "invalid or incomplete stream UTF-8");
+        (void)ifn_am_stream_ifn_stream_local_fail(s, IFN_FORMAT, "invalid or incomplete stream UTF-8");
         return;
     }
     s->info.utf8_replacements++;
     static const unsigned char bad[] = {0xef, 0xbf, 0xbd};
-    ifn_am_stream_codepoint(s, channel, bad, 3);
+    ifn_am_stream_ifn_stream_local_codepoint(s, channel, bad, 3);
 }
 
-static void ifn_am_stream_byte(ifn_stream *s, uint32_t channel, unsigned char b) {
-    unicode *u = &s->utf8[channel];
+static void ifn_am_stream_ifn_stream_local_byte(ifn_stream *s, uint32_t channel, unsigned char b) {
+    ifn_stream_local_unicode *u = &s->utf8[channel];
     for (;;) {
-        if (!ifn_am_stream_running(s))
+        if (!ifn_am_stream_ifn_stream_local_running(s))
             return;
         if (!u->used) {
             if (b < 0x80) {
-                ifn_am_stream_codepoint(s, channel, &b, 1);
+                ifn_am_stream_ifn_stream_local_codepoint(s, channel, &b, 1);
                 return;
             }
             u->need = b >= 0xc2 && b <= 0xdf   ? 2
@@ -3962,7 +4139,7 @@ static void ifn_am_stream_byte(ifn_stream *s, uint32_t channel, unsigned char b)
                       : b >= 0xf0 && b <= 0xf4 ? 4
                                                : 0;
             if (!u->need) {
-                ifn_am_stream_replacement(s, channel);
+                ifn_am_stream_ifn_stream_local_replacement(s, channel);
                 return;
             }
             u->bytes[0] = b;
@@ -3982,37 +4159,37 @@ static void ifn_am_stream_byte(ifn_stream *s, uint32_t channel, unsigned char b)
         }
         if (!valid) {
             u->used = 0;
-            ifn_am_stream_replacement(s, channel);
+            ifn_am_stream_ifn_stream_local_replacement(s, channel);
             continue;
         }
         u->bytes[u->used++] = b;
         if (u->used == u->need) {
             u->used = 0;
-            ifn_am_stream_codepoint(s, channel, u->bytes, u->need);
+            ifn_am_stream_ifn_stream_local_codepoint(s, channel, u->bytes, u->need);
         }
         return;
     }
 }
 
-static void ifn_am_stream_finish_unicode(ifn_stream *s, uint32_t channel) {
+static void ifn_am_stream_ifn_stream_local_finish_unicode(ifn_stream *s, uint32_t channel) {
     if (s->utf8[channel].used) {
         s->utf8[channel].used = 0;
-        ifn_am_stream_replacement(s, channel);
+        ifn_am_stream_ifn_stream_local_replacement(s, channel);
     }
 }
 
-static void ifn_am_stream_finish(ifn_stream *s, uint32_t reason) {
-    if (!ifn_am_stream_running(s))
+static void ifn_am_stream_ifn_stream_local_finish(ifn_stream *s, uint32_t reason) {
+    if (!ifn_am_stream_ifn_stream_local_running(s))
         return;
-    ifn_am_stream_finish_unicode(s, IFN_STREAM_REASONING);
-    ifn_am_stream_finish_unicode(s, IFN_STREAM_CONTENT);
-    ifn_am_stream_filter(s, NULL, 0, true);
-    ifn_am_stream_flush(s);
-    if (ifn_am_stream_running(s))
+    ifn_am_stream_ifn_stream_local_finish_unicode(s, IFN_STREAM_REASONING);
+    ifn_am_stream_ifn_stream_local_finish_unicode(s, IFN_STREAM_CONTENT);
+    ifn_am_stream_ifn_stream_local_filter(s, NULL, 0, true);
+    ifn_am_stream_ifn_stream_local_flush(s);
+    if (ifn_am_stream_ifn_stream_local_running(s))
         s->info.finish_reason = reason;
 }
 
-static bool ifn_am_stream_valid_utf8(const char *p, size_t n) {
+static bool ifn_am_stream_ifn_stream_local_valid_utf8(const char *p, size_t n) {
     size_t at = 0;
     uint32_t cp;
     while (at < n)
@@ -4021,7 +4198,7 @@ static bool ifn_am_stream_valid_utf8(const char *p, size_t n) {
     return true;
 }
 
-static int32_t ifn_am_stream_special(const ifn_tokenizer *t, const char *p) {
+static int32_t ifn_am_stream_ifn_stream_local_special(const ifn_tokenizer *t, const char *p) {
     int32_t id = ifn_special_lookup(t, p, strlen(p));
     return id >= 0 && t->entries[id].special ? id : -1;
 }
@@ -4048,7 +4225,7 @@ ifn_status ifn_stream_create(const ifn_tokenizer *t, const ifn_stream_options *i
             return ifn_error(IFN_INVALID_ARGUMENT, "empty stop string");
         if (o.stops[i].bytes > 64)
             return ifn_error(IFN_LIMIT, "stop string exceeds 64 bytes");
-        if (!ifn_am_stream_valid_utf8(o.stops[i].data, o.stops[i].bytes))
+        if (!ifn_am_stream_ifn_stream_local_valid_utf8(o.stops[i].data, o.stops[i].bytes))
             return ifn_error(IFN_FORMAT, "stop string is not UTF-8");
     }
     int32_t ids[5] = {-1, -1, -1, -1, -1};
@@ -4058,10 +4235,10 @@ ifn_status ifn_stream_create(const ifn_tokenizer *t, const ifn_stream_options *i
         const char *names[] = {"<|message_model|>", "<|content_text|>", "<|content_thinking|>",
                                "<|end_message|>", "<|content_model_end_sampling|>"};
         for (unsigned i = 0; i < 5; i++)
-            if ((ids[i] = ifn_am_stream_special(t, names[i])) < 0)
+            if ((ids[i] = ifn_am_stream_ifn_stream_local_special(t, names[i])) < 0)
                 return ifn_error(IFN_UNSUPPORTED, "stream protocol marker missing");
     } else if (t)
-        ids[4] = ifn_am_stream_special(t, "<|content_model_end_sampling|>");
+        ids[4] = ifn_am_stream_ifn_stream_local_special(t, "<|content_model_end_sampling|>");
     ifn_options a;
     ifn_status rc = ifn_options_resolve(allocator, &a);
     if (rc != IFN_OK)
@@ -4102,40 +4279,40 @@ ifn_status ifn_stream_reset(ifn_stream *s, ifn_text_callback callback, void *con
     return ifn_error(IFN_OK, "");
 }
 
-static ifn_status ifn_am_stream_result(ifn_stream *s) {
+static ifn_status ifn_am_stream_ifn_stream_local_result(ifn_stream *s) {
     return ifn_error(s->info.error_status, s->info.error_status ? "stream decoding failed" : "");
 }
 
-static ifn_status ifn_am_stream_begin(ifn_stream *s, uint32_t kind) {
+static ifn_status ifn_am_stream_ifn_stream_local_begin(ifn_stream *s, uint32_t kind) {
     if (!s)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing stream");
     if (s->busy)
         return ifn_error(IFN_BUSY, "stream callback active");
     if (s->input_kind && s->input_kind != kind)
         return ifn_error(IFN_INVALID_ARGUMENT, "cannot mix byte and token input");
-    return ifn_am_stream_result(s);
+    return ifn_am_stream_ifn_stream_local_result(s);
 }
 
 ifn_status ifn_stream_push_bytes(ifn_stream *s, const void *data, size_t n) {
     if ((!data && n) || n > 32u * 1024u * 1024u)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid stream byte span");
-    ifn_status rc = ifn_am_stream_begin(s, 1);
+    ifn_status rc = ifn_am_stream_ifn_stream_local_begin(s, 1);
     if (rc != IFN_OK)
         return rc;
-    if (!ifn_am_stream_running(s))
-        return ifn_am_stream_result(s);
+    if (!ifn_am_stream_ifn_stream_local_running(s))
+        return ifn_am_stream_ifn_stream_local_result(s);
     s->busy = true;
     s->input_kind = 1;
     const unsigned char *p = data;
-    for (size_t i = 0; i < n && ifn_am_stream_running(s); i++)
-        ifn_am_stream_byte(s, IFN_STREAM_CONTENT, p[i]);
-    ifn_am_stream_flush(s);
+    for (size_t i = 0; i < n && ifn_am_stream_ifn_stream_local_running(s); i++)
+        ifn_am_stream_ifn_stream_local_byte(s, IFN_STREAM_CONTENT, p[i]);
+    ifn_am_stream_ifn_stream_local_flush(s);
     s->busy = false;
-    return ifn_am_stream_result(s);
+    return ifn_am_stream_ifn_stream_local_result(s);
 }
 
 ifn_status ifn_stream_push_token(ifn_stream *s, int32_t id) {
-    ifn_status rc = ifn_am_stream_begin(s, 2);
+    ifn_status rc = ifn_am_stream_ifn_stream_local_begin(s, 2);
     if (rc != IFN_OK)
         return rc;
     if (!s->tokenizer)
@@ -4145,45 +4322,47 @@ ifn_status ifn_stream_push_token(ifn_stream *s, int32_t id) {
     rc = ifn_tokenizer_decode(s->tokenizer, id, 0, &data, &n);
     if (rc != IFN_OK)
         return rc;
-    if (!ifn_am_stream_running(s))
-        return ifn_am_stream_result(s);
+    if (!ifn_am_stream_ifn_stream_local_running(s))
+        return ifn_am_stream_ifn_stream_local_result(s);
     s->busy = true;
     s->input_kind = 2;
     if (s->info.tokens == UINT64_MAX) {
-        (void)ifn_am_stream_fail(s, IFN_LIMIT, "stream token count overflow");
+        (void)ifn_am_stream_ifn_stream_local_fail(s, IFN_LIMIT, "stream token count overflow");
         goto done;
     }
     s->info.tokens++;
     if (id == s->eos) {
-        ifn_am_stream_finish(s, IFN_STREAM_EOS);
+        ifn_am_stream_ifn_stream_local_finish(s, IFN_STREAM_EOS);
         goto done;
     }
     if (s->options.parse_chat && s->tokenizer->entries[id].special) {
         if (id == s->model || id == s->text || id == s->thinking || id == s->end) {
-            ifn_am_stream_finish_unicode(s, s->section == 2 ? IFN_STREAM_REASONING : IFN_STREAM_CONTENT);
-            ifn_am_stream_flush(s);
+            ifn_am_stream_ifn_stream_local_finish_unicode(s, s->section == 2 ? IFN_STREAM_REASONING
+                                                               : IFN_STREAM_CONTENT);
+            ifn_am_stream_ifn_stream_local_flush(s);
             s->section = id == s->model ? 1 : id == s->thinking ? 2 : 0;
             s->header_bytes = 0;
         } else
-            (void)ifn_am_stream_fail(s, IFN_UNSUPPORTED, "unsupported generated tool/multimodal/control section");
+            (void)ifn_am_stream_ifn_stream_local_fail(s, IFN_UNSUPPORTED,
+                                        "unsupported generated tool/multimodal/control section");
         goto done;
     }
     if (!s->options.parse_chat && s->tokenizer->entries[id].special)
         goto done;
     if (s->section == 1) {
         if (n > 1024 - s->header_bytes)
-            (void)ifn_am_stream_fail(s, IFN_LIMIT, "model header exceeds 1024 bytes");
+            (void)ifn_am_stream_ifn_stream_local_fail(s, IFN_LIMIT, "model header exceeds 1024 bytes");
         else
             s->header_bytes += n;
         goto done;
     }
-    for (size_t i = 0; i < n && ifn_am_stream_running(s); i++)
-        ifn_am_stream_byte(s, s->section == 2 ? IFN_STREAM_REASONING : IFN_STREAM_CONTENT,
-             ((const unsigned char *)data)[i]);
+    for (size_t i = 0; i < n && ifn_am_stream_ifn_stream_local_running(s); i++)
+        ifn_am_stream_ifn_stream_local_byte(s, s->section == 2 ? IFN_STREAM_REASONING : IFN_STREAM_CONTENT,
+                              ((const unsigned char *)data)[i]);
 done:
-    ifn_am_stream_flush(s);
+    ifn_am_stream_ifn_stream_local_flush(s);
     s->busy = false;
-    return ifn_am_stream_result(s);
+    return ifn_am_stream_ifn_stream_local_result(s);
 }
 
 ifn_status ifn_stream_finish(ifn_stream *s, uint32_t reason) {
@@ -4192,9 +4371,9 @@ ifn_status ifn_stream_finish(ifn_stream *s, uint32_t reason) {
     if (s->busy)
         return ifn_error(IFN_BUSY, "stream callback active");
     s->busy = true;
-    ifn_am_stream_finish(s, reason);
+    ifn_am_stream_ifn_stream_local_finish(s, reason);
     s->busy = false;
-    return ifn_am_stream_result(s);
+    return ifn_am_stream_ifn_stream_local_result(s);
 }
 
 ifn_status ifn_stream_get_info(const ifn_stream *s, ifn_stream_info *out) {
@@ -4229,11 +4408,12 @@ ifn_status ifn_stream_destroy(ifn_stream **out) {
 #include <stdio.h>
 #include <string.h>
 
-static void *ifn_am_engine_bind_address(ifn_gpu_weights *w, uint64_t offset) {
+static void *ifn_am_engine_bind_ifn_engine_bind_local_address(ifn_gpu_weights *w, uint64_t offset) {
     return offset == IFN_WEIGHT_NO_OFFSET ? NULL : (unsigned char *)w->arena + (size_t)offset;
 }
 
-static ifn_status ifn_am_engine_bind_bind(ifn_gpu_weights *w, const char *label, void *out, uint32_t type) {
+static ifn_status ifn_am_engine_bind_ifn_engine_bind_local_bind(ifn_gpu_weights *w, const char *label, void *out,
+                                             uint32_t type) {
     for (size_t i = 0; i < w->view_count; i++) {
         const ifn_weight_view *v = &w->views[i];
         if (strcmp(label, v->label))
@@ -4241,27 +4421,27 @@ static ifn_status ifn_am_engine_bind_bind(ifn_gpu_weights *w, const char *label,
         if (v->type != type)
             return ifn_error(IFN_FORMAT, "AR weight type mismatch");
         if (type == IFN_WEIGHT_RAW) {
-            void *p = ifn_am_engine_bind_address(w, v->data);
+            void *p = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->data);
             memcpy(out, &p, sizeof p);
         } else if (type == IFN_WEIGHT_LINEAR) {
-            CLinearWeight x = {0};
+            ifn_cuda_c_linear_weight x = {0};
             x.kind = (uint8_t)v->precision;
             x.rows = (int32_t)v->rows;
             x.cols = (int32_t)v->cols;
-            x.data = ifn_am_engine_bind_address(w, v->data);
-            x.scales = ifn_am_engine_bind_address(w, v->scales);
-            x.row_scales = ifn_am_engine_bind_address(w, v->row_scales);
+            x.data = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->data);
+            x.scales = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->scales);
+            x.row_scales = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->row_scales);
             x.global_scale = v->global_scale;
             memcpy(out, &x, sizeof x);
         } else {
-            CExpertBank x = {0};
+            ifn_cuda_c_expert_bank x = {0};
             x.is_nvfp4 = v->precision == 2;
             x.n_experts = (int32_t)v->experts;
             x.rows = (int32_t)v->rows;
             x.cols = (int32_t)v->cols;
-            x.data = ifn_am_engine_bind_address(w, v->data);
-            x.scales = ifn_am_engine_bind_address(w, v->scales);
-            x.expert_scale = ifn_am_engine_bind_address(w, v->expert_scale);
+            x.data = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->data);
+            x.scales = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->scales);
+            x.expert_scale = ifn_am_engine_bind_ifn_engine_bind_local_address(w, v->expert_scale);
             memcpy(out, &x, sizeof x);
         }
         return IFN_OK;
@@ -4271,195 +4451,199 @@ static ifn_status ifn_am_engine_bind_bind(ifn_gpu_weights *w, const char *label,
 
 ifn_status ifn_ar_bind(ifn_gpu_weights *w, ifn_ar_model *m) {
     memset(m, 0, sizeof *m);
-#define B(label, member, type)                                                                     \
+#define IFN_ENGINE_BIND_LOCAL_B(label, member, type)                                               \
     do {                                                                                           \
-        ifn_status rc = ifn_am_engine_bind_bind(w, label, &(member), type);                                           \
+        ifn_status rc = ifn_am_engine_bind_ifn_engine_bind_local_bind(w, label, &(member), type);                     \
         if (rc != IFN_OK)                                                                          \
             return rc;                                                                             \
     } while (0)
-    B("embed", m->embed, IFN_WEIGHT_RAW);
-    B("embed_norm", m->embed_norm, IFN_WEIGHT_RAW);
-    B("final_norm", m->final_norm, IFN_WEIGHT_RAW);
-    B("output_query", m->output_query, IFN_WEIGHT_RAW);
-    B("cross_pass_queries", m->cross_pass_queries, IFN_WEIGHT_RAW);
-    B("cross_pass_kv_queries", m->cross_pass_kv_queries, IFN_WEIGHT_RAW);
-    B("unembed", m->unembed, IFN_WEIGHT_LINEAR);
+    IFN_ENGINE_BIND_LOCAL_B("embed", m->embed, IFN_WEIGHT_RAW);
+    IFN_ENGINE_BIND_LOCAL_B("embed_norm", m->embed_norm, IFN_WEIGHT_RAW);
+    IFN_ENGINE_BIND_LOCAL_B("final_norm", m->final_norm, IFN_WEIGHT_RAW);
+    IFN_ENGINE_BIND_LOCAL_B("output_query", m->output_query, IFN_WEIGHT_RAW);
+    IFN_ENGINE_BIND_LOCAL_B("cross_pass_queries", m->cross_pass_queries, IFN_WEIGHT_RAW);
+    IFN_ENGINE_BIND_LOCAL_B("cross_pass_kv_queries", m->cross_pass_kv_queries, IFN_WEIGHT_RAW);
+    IFN_ENGINE_BIND_LOCAL_B("unembed", m->unembed, IFN_WEIGHT_LINEAR);
     char label[128];
     for (unsigned i = 0; i < 23; i++) {
         (void)snprintf(label, sizeof label, "attn_queries.%u", i);
-        B(label, m->attn_queries[i], IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B(label, m->attn_queries[i], IFN_WEIGHT_RAW);
     }
     for (unsigned i = 0; i < 24; i++) {
         (void)snprintf(label, sizeof label, "mlp_queries.%u", i);
-        B(label, m->mlp_queries[i], IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B(label, m->mlp_queries[i], IFN_WEIGHT_RAW);
     }
     for (unsigned i = 0; i < 24; i++) {
         if (i % 6 != 5) {
             (void)snprintf(label, sizeof label, "layers.%u.attn_norm", i);
-            B(label, m->layers[i].attn_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].attn_norm, IFN_WEIGHT_RAW);
         }
         if (i % 6 == 5) {
             (void)snprintf(label, sizeof label, "layers.%u.q_in_norm", i);
-            B(label, m->layers[i].q_in_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].q_in_norm, IFN_WEIGHT_RAW);
         }
         if (i % 6 == 5) {
             (void)snprintf(label, sizeof label, "layers.%u.k_in_norm", i);
-            B(label, m->layers[i].k_in_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].k_in_norm, IFN_WEIGHT_RAW);
         }
         if (i % 6 == 5) {
             (void)snprintf(label, sizeof label, "layers.%u.v_in_norm", i);
-            B(label, m->layers[i].v_in_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].v_in_norm, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.mlp_norm", i);
-            B(label, m->layers[i].mlp_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].mlp_norm, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w_qrgs", i);
-            B(label, m->layers[i].w_qrgs, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w_qrgs, IFN_WEIGHT_LINEAR);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w_kv", i);
-            B(label, m->layers[i].w_kv, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w_kv, IFN_WEIGHT_LINEAR);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w_k", i);
-            B(label, m->layers[i].w_k, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w_k, IFN_WEIGHT_LINEAR);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w_v", i);
-            B(label, m->layers[i].w_v, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w_v, IFN_WEIGHT_LINEAR);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w_o", i);
-            B(label, m->layers[i].w_o, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w_o, IFN_WEIGHT_LINEAR);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.k_sconv_w", i);
-            B(label, m->layers[i].k_sconv_w, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].k_sconv_w, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.v_sconv_w", i);
-            B(label, m->layers[i].v_sconv_w, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].v_sconv_w, IFN_WEIGHT_RAW);
         }
         if (i % 6 == 5) {
             (void)snprintf(label, sizeof label, "layers.%u.k_sconv_proj", i);
-            B(label, m->layers[i].k_sconv_proj, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].k_sconv_proj, IFN_WEIGHT_RAW);
         }
         if (i % 6 == 5) {
             (void)snprintf(label, sizeof label, "layers.%u.v_sconv_proj", i);
-            B(label, m->layers[i].v_sconv_proj, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].v_sconv_proj, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.attn_sconv_w", i);
-            B(label, m->layers[i].attn_sconv_w, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].attn_sconv_w, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.mlp_sconv_w", i);
-            B(label, m->layers[i].mlp_sconv_w, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].mlp_sconv_w, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.q_clip_scale", i);
-            B(label, m->layers[i].q_clip_scale, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].q_clip_scale, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.rel_clip_scale", i);
-            B(label, m->layers[i].rel_clip_scale, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].rel_clip_scale, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.rel_logits_proj", i);
-            B(label, m->layers[i].rel_logits_proj, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].rel_logits_proj, IFN_WEIGHT_RAW);
         }
         if (w->config.mode != 2) {
             (void)snprintf(label, sizeof label, "layers.%u.router_w", i);
-            B(label, m->layers[i].router_w, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].router_w, IFN_WEIGHT_RAW);
         }
         if (w->config.mode == 2) {
             (void)snprintf(label, sizeof label, "layers.%u.router_nvfp4", i);
-            B(label, m->layers[i].router_nvfp4, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].router_nvfp4, IFN_WEIGHT_LINEAR);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.router_bias", i);
-            B(label, m->layers[i].router_bias, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].router_bias, IFN_WEIGHT_RAW);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w13", i);
-            B(label, m->layers[i].w13, IFN_WEIGHT_EXPERT);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w13, IFN_WEIGHT_EXPERT);
         }
         if (true) {
             (void)snprintf(label, sizeof label, "layers.%u.w2", i);
-            B(label, m->layers[i].w2, IFN_WEIGHT_EXPERT);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w2, IFN_WEIGHT_EXPERT);
         }
         if (i >= 6 && i < 18)
             for (unsigned j = 0; j < 4; j++) {
                 if (w->config.mode == 2) {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.down_nvfp4", i, j);
-                    B(label, m->layers[i].ctrl[j].down_nvfp4, IFN_WEIGHT_LINEAR);
+                    IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].ctrl[j].down_nvfp4,
+                                            IFN_WEIGHT_LINEAR);
                 } else {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.down_w", i, j);
-                    B(label, m->layers[i].ctrl[j].down_w, IFN_WEIGHT_RAW);
+                    IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].ctrl[j].down_w, IFN_WEIGHT_RAW);
                 }
                 if (w->config.mode == 2) {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.forget_nvfp4", i, j);
-                    B(label, m->layers[i].ctrl[j].forget_nvfp4, IFN_WEIGHT_LINEAR);
+                    IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].ctrl[j].forget_nvfp4,
+                                            IFN_WEIGHT_LINEAR);
                 } else {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.forget_w", i, j);
-                    B(label, m->layers[i].ctrl[j].forget_w, IFN_WEIGHT_RAW);
+                    IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].ctrl[j].forget_w, IFN_WEIGHT_RAW);
                 }
                 if (w->config.mode == 2) {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.gain_nvfp4", i, j);
-                    B(label, m->layers[i].ctrl[j].gain_nvfp4, IFN_WEIGHT_LINEAR);
+                    IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].ctrl[j].gain_nvfp4,
+                                            IFN_WEIGHT_LINEAR);
                 } else {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.gain_w", i, j);
-                    B(label, m->layers[i].ctrl[j].gain_w, IFN_WEIGHT_RAW);
+                    IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].ctrl[j].gain_w, IFN_WEIGHT_RAW);
                 }
             }
     }
     if (w->config.with_mtp) {
         m->dspark.loaded = 1;
         m->dspark.draft_vocab_size = 200058;
-        B("dspark.fuse_alpha", m->dspark.fuse_alpha, IFN_WEIGHT_RAW);
-        B("dspark.mask_embed", m->dspark.mask_embed, IFN_WEIGHT_RAW);
-        B("dspark.norm_w", m->dspark.norm_w, IFN_WEIGHT_RAW);
-        B("dspark.markov_dflare_norm", m->dspark.markov_dflare_norm, IFN_WEIGHT_RAW);
-        B("dspark.markov_w1", m->dspark.markov_w1, IFN_WEIGHT_RAW);
-        B("dspark.rnn_w_sp", m->dspark.rnn_w_sp, IFN_WEIGHT_RAW);
-        B("dspark.rnn_w_h", m->dspark.rnn_w_h, IFN_WEIGHT_RAW);
-        B("dspark.rnn_w_f", m->dspark.rnn_w_f, IFN_WEIGHT_RAW);
-        B("dspark.rnn_bias", m->dspark.rnn_bias, IFN_WEIGHT_RAW);
-        B("dspark.hidden_out_w", m->dspark.hidden_out_w, IFN_WEIGHT_RAW);
-        B("dspark.hidden_out_b", m->dspark.hidden_out_b, IFN_WEIGHT_RAW);
-        B("dspark.unembed_draft", m->dspark.unembed_draft, IFN_WEIGHT_LINEAR);
-        B("dspark.fold_w", m->dspark.fold_w, IFN_WEIGHT_LINEAR);
-        B("dspark.fold_b", m->dspark.fold_b, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.fuse_alpha", m->dspark.fuse_alpha, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.mask_embed", m->dspark.mask_embed, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.norm_w", m->dspark.norm_w, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.markov_dflare_norm", m->dspark.markov_dflare_norm,
+                                IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.markov_w1", m->dspark.markov_w1, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.rnn_w_sp", m->dspark.rnn_w_sp, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.rnn_w_h", m->dspark.rnn_w_h, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.rnn_w_f", m->dspark.rnn_w_f, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.rnn_bias", m->dspark.rnn_bias, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.hidden_out_w", m->dspark.hidden_out_w, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.hidden_out_b", m->dspark.hidden_out_b, IFN_WEIGHT_RAW);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.unembed_draft", m->dspark.unembed_draft, IFN_WEIGHT_LINEAR);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.fold_w", m->dspark.fold_w, IFN_WEIGHT_LINEAR);
+        IFN_ENGINE_BIND_LOCAL_B("dspark.fold_b", m->dspark.fold_b, IFN_WEIGHT_RAW);
         for (unsigned i = 0; i < 3; i++) {
             m->dspark.layers[i].is_local = i != 1;
             (void)snprintf(label, sizeof label, "dspark.layers.%u.input_norm", i);
-            B(label, m->dspark.layers[i].input_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].input_norm, IFN_WEIGHT_RAW);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.post_norm", i);
-            B(label, m->dspark.layers[i].post_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].post_norm, IFN_WEIGHT_RAW);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.dflare_norm", i);
-            B(label, m->dspark.layers[i].dflare_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].dflare_norm, IFN_WEIGHT_RAW);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.q_norm", i);
-            B(label, m->dspark.layers[i].q_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].q_norm, IFN_WEIGHT_RAW);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.k_norm", i);
-            B(label, m->dspark.layers[i].k_norm, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].k_norm, IFN_WEIGHT_RAW);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.k_norm_ctx", i);
-            B(label, m->dspark.layers[i].k_norm_ctx, IFN_WEIGHT_RAW);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].k_norm_ctx, IFN_WEIGHT_RAW);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.w_qkv", i);
-            B(label, m->dspark.layers[i].w_qkv, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].w_qkv, IFN_WEIGHT_LINEAR);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.w_o", i);
-            B(label, m->dspark.layers[i].w_o, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].w_o, IFN_WEIGHT_LINEAR);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.w_gu", i);
-            B(label, m->dspark.layers[i].w_gu, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].w_gu, IFN_WEIGHT_LINEAR);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.w_down", i);
-            B(label, m->dspark.layers[i].w_down, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].w_down, IFN_WEIGHT_LINEAR);
             (void)snprintf(label, sizeof label, "dspark.layers.%u.w_kv_ctx", i);
-            B(label, m->dspark.layers[i].w_kv_ctx, IFN_WEIGHT_LINEAR);
+            IFN_ENGINE_BIND_LOCAL_B(label, m->dspark.layers[i].w_kv_ctx, IFN_WEIGHT_LINEAR);
         }
     }
 
-#undef B
+#undef IFN_ENGINE_BIND_LOCAL_B
     return IFN_OK;
 }
 
@@ -4474,7 +4658,7 @@ void ifn_ar_schedule(ifn_visit out[48]) {
         out[i++] = (ifn_visit){l, 0, false, l % 6 == 5};
 }
 
-#undef B
+#undef IFN_ENGINE_BIND_LOCAL_B
 
 /* Module: src/engine_layout.c */
 /* SPDX-License-Identifier: Apache-2.0
@@ -4482,7 +4666,7 @@ void ifn_ar_schedule(ifn_visit out[48]) {
  * Two-pass target and optional DSpark workspace layout. B<=8 matches
  * target-forward geometry; prefix checkpoints are separately owned host memory. */
 
-static void *ifn_am_engine_layout_take(ifn_session *s, size_t count, size_t width) {
+static void *ifn_am_engine_layout_ifn_engine_layout_local_take(ifn_session *s, size_t count, size_t width) {
     size_t bytes, aligned, end;
     if (s->status != IFN_OK)
         return NULL;
@@ -4506,17 +4690,17 @@ void ifn_ar_layout(ifn_session *s, size_t groups) {
         unsigned format = global ? s->config.kv_format : 0;
         s->kv_cap[i] = (int32_t)cap;
         size_t width = format == 0 ? 2048 : format == 1 ? 1024 : 512;
-        s->k_cache[i] = ifn_am_engine_layout_take(s, cap, width);
-        s->v_cache[i] = ifn_am_engine_layout_take(s, cap, width);
-        s->k_scale[i] = format ? ifn_am_engine_layout_take(s, cap, format == 1 ? 16 : 32) : NULL;
-        s->v_scale[i] = format ? ifn_am_engine_layout_take(s, cap, format == 1 ? 16 : 32) : NULL;
-        s->k_ring[i] = ifn_am_engine_layout_take(s, 16 * 1024, 4);
-        s->v_ring[i] = ifn_am_engine_layout_take(s, 16 * 1024, 4);
-        s->attn_ring[i] = ifn_am_engine_layout_take(s, 16 * 2304, 4);
-        s->mlp_ring[i] = ifn_am_engine_layout_take(s, 16 * 2304, 4);
+        s->k_cache[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, width);
+        s->v_cache[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, width);
+        s->k_scale[i] = format ? ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, format == 1 ? 16 : 32) : NULL;
+        s->v_scale[i] = format ? ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, format == 1 ? 16 : 32) : NULL;
+        s->k_ring[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 16 * 1024, 4);
+        s->v_ring[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 16 * 1024, 4);
+        s->attn_ring[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 16 * 2304, 4);
+        s->mlp_ring[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 16 * 2304, 4);
     }
-#define F(name, n) s->name = ifn_am_engine_layout_take(s, (n), 4)
-#define H(name, n) s->name = ifn_am_engine_layout_take(s, (n), 2)
+#define IFN_ENGINE_LAYOUT_LOCAL_F(name, n) s->name = ifn_am_engine_layout_ifn_engine_layout_local_take(s, (n), 4)
+#define IFN_ENGINE_LAYOUT_LOCAL_H(name, n) s->name = ifn_am_engine_layout_ifn_engine_layout_local_take(s, (n), 2)
     if (s->weights->config.with_mtp) {
         for (unsigned i = 0; i < 3; i++) {
             size_t cap = i != 1                              ? 1032
@@ -4525,115 +4709,117 @@ void ifn_ar_layout(ifn_session *s, size_t groups) {
             unsigned format = i != 1 ? 0 : s->config.kv_format;
             s->ds_cap[i] = (int32_t)cap;
             size_t width = format == 0 ? 2048 : format == 1 ? 1024 : 512;
-            s->ds_k[i] = ifn_am_engine_layout_take(s, cap, width);
-            s->ds_v[i] = ifn_am_engine_layout_take(s, cap, width);
-            s->ds_ks[i] = format ? ifn_am_engine_layout_take(s, cap, format == 1 ? 16 : 32) : NULL;
-            s->ds_vs[i] = format ? ifn_am_engine_layout_take(s, cap, format == 1 ? 16 : 32) : NULL;
+            s->ds_k[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, width);
+            s->ds_v[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, width);
+            s->ds_ks[i] =
+                format ? ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, format == 1 ? 16 : 32) : NULL;
+            s->ds_vs[i] =
+                format ? ifn_am_engine_layout_ifn_engine_layout_local_take(s, cap, format == 1 ? 16 : 32) : NULL;
         }
-        F(ds_f_ring, 16 * 2304);
-        F(taps, 4 * 8 * 2304);
-        F(ds_mix, 3 * 8 * 2304);
-        F(ds_kv, 8 * 2 * 1024);
-        F(ds_ws, 2000000);
-        F(d_anchor, 1);
-        F(d_drafts, 7);
-        F(d_accepted, 8);
-        F(d_num_acc, 1);
-        F(d_draft_is_delta, 1);
-        F(d_draft_probs, 7 * 200058);
-        F(d_draft_q_sel, 7);
-        F(d_conf, 7);
-        F(d_width, 1);
+        IFN_ENGINE_LAYOUT_LOCAL_F(ds_f_ring, 16 * 2304);
+        IFN_ENGINE_LAYOUT_LOCAL_F(taps, 4 * 8 * 2304);
+        IFN_ENGINE_LAYOUT_LOCAL_F(ds_mix, 3 * 8 * 2304);
+        IFN_ENGINE_LAYOUT_LOCAL_F(ds_kv, 8 * 2 * 1024);
+        IFN_ENGINE_LAYOUT_LOCAL_F(ds_ws, 2000000);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_anchor, 1);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_drafts, 7);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_accepted, 8);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_num_acc, 1);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_draft_is_delta, 1);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_draft_probs, 7 * 200058);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_draft_q_sel, 7);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_conf, 7);
+        IFN_ENGINE_LAYOUT_LOCAL_F(d_width, 1);
     }
-    F(split_buf, 2050000);
-    F(d_pos, 1);
-    F(d_tokens, 8);
-    F(d_next_tokens, 8);
-    F(hidden, 8 * 2304);
-    F(prelude, 8 * 2304);
-    F(partial, 8 * 2304);
-    F(blocks, 8 * 4 * 2304);
-    F(saved, 8 * 2304);
-    F(prior_last, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(split_buf, 2050000);
+    IFN_ENGINE_LAYOUT_LOCAL_F(d_pos, 1);
+    IFN_ENGINE_LAYOUT_LOCAL_F(d_tokens, 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(d_next_tokens, 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(hidden, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(prelude, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(partial, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(blocks, 8 * 4 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(saved, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(prior_last, 8 * 2304);
     for (unsigned i = 0; i < 3; i++) {
-        s->attn_in[i] = ifn_am_engine_layout_take(s, 8 * 2304, 4);
-        s->attn_in_h[i] = ifn_am_engine_layout_take(s, 8 * 2304, 2);
+        s->attn_in[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 8 * 2304, 4);
+        s->attn_in_h[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 8 * 2304, 2);
     }
-    F(qrgs, 8 * 6552);
-    F(k_proj, 8 * 1024);
-    F(v_proj, 8 * 1024);
-    F(attn_gated, 8 * 3072);
-    H(attn_gated_h, 8 * 3072);
-    F(o_proj, 8 * 2304);
-    F(residual, 8 * 2304);
-    F(mlp_in, 8 * 2304);
-    F(mlp_normed, 8 * 2304);
-    H(mlp_normed_h, 8 * 2304);
-    F(ctrl_msg, 3 * 8 * 2304);
-    F(ctrl_cat, 3 * 8 * 2 * 2304);
-    F(ctrl_d, 3 * 8 * 64);
-    F(router_logits, 8 * 128);
-    F(route_ids, 8 * 8);
-    F(route_w, 8 * 8);
-    s->exp_groups = ifn_am_engine_layout_take(s, groups, 1);
-    H(moe_act_h, 8 * 8 * 1152);
-    F(moe_down, 8 * 2304);
-    F(lm_blk_val, 8 * 1024);
-    F(lm_blk_idx, 8 * 1024);
-    F(lm_logits, 8 * 200058);
-    s->d_sample_cfg = ifn_am_engine_layout_take(s, 1, sizeof(CSampleConfig));
-    s->d_loopcd_cfg = ifn_am_engine_layout_take(s, 1, sizeof(CLoopCDConfig));
-    F(loopcd_h1, 8 * 2304);
-    F(loopcd_h2, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(qrgs, 8 * 6552);
+    IFN_ENGINE_LAYOUT_LOCAL_F(k_proj, 8 * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(v_proj, 8 * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(attn_gated, 8 * 3072);
+    IFN_ENGINE_LAYOUT_LOCAL_H(attn_gated_h, 8 * 3072);
+    IFN_ENGINE_LAYOUT_LOCAL_F(o_proj, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(residual, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(mlp_in, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(mlp_normed, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_H(mlp_normed_h, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(ctrl_msg, 3 * 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(ctrl_cat, 3 * 8 * 2 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(ctrl_d, 3 * 8 * 64);
+    IFN_ENGINE_LAYOUT_LOCAL_F(router_logits, 8 * 128);
+    IFN_ENGINE_LAYOUT_LOCAL_F(route_ids, 8 * 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(route_w, 8 * 8);
+    s->exp_groups = ifn_am_engine_layout_ifn_engine_layout_local_take(s, groups, 1);
+    IFN_ENGINE_LAYOUT_LOCAL_H(moe_act_h, 8 * 8 * 1152);
+    IFN_ENGINE_LAYOUT_LOCAL_F(moe_down, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(lm_blk_val, 8 * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(lm_blk_idx, 8 * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(lm_logits, 8 * 200058);
+    s->d_sample_cfg = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 1, sizeof(ifn_cuda_c_sample_config));
+    s->d_loopcd_cfg = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 1, sizeof(ifn_cuda_c_loop_cd_config));
+    IFN_ENGINE_LAYOUT_LOCAL_F(loopcd_h1, 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(loopcd_h2, 8 * 2304);
 
     enum { P = 2048 };
 
     if (s->weights->config.with_mtp) {
-        F(p_taps, 4 * P * 2304);
+        IFN_ENGINE_LAYOUT_LOCAL_F(p_taps, 4 * P * 2304);
     }
-    F(p_tokens, P);
-    F(p_pos_vec, P / 8);
-    F(p_hidden, P * 2304);
-    F(p_prelude, P * 2304);
-    F(p_partial, P * 2304);
-    F(p_blocks, P * 4 * 2304);
-    F(p_saved, P * 2304);
-    F(p_prior_last, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_tokens, P);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_pos_vec, P / 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_hidden, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_prelude, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_partial, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_blocks, P * 4 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_saved, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_prior_last, P * 2304);
     for (unsigned i = 0; i < 3; i++) {
-        s->p_attn_in[i] = ifn_am_engine_layout_take(s, P * 2304, 4);
-        s->p_attn_in_h[i] = ifn_am_engine_layout_take(s, P * 2304, 2);
+        s->p_attn_in[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, P * 2304, 4);
+        s->p_attn_in_h[i] = ifn_am_engine_layout_ifn_engine_layout_local_take(s, P * 2304, 2);
     }
-    F(p_qrgs, P * 6552);
-    F(p_k_proj, P * 1024);
-    F(p_v_proj, P * 1024);
-    H(p_attn_gated_h, P * 3072);
-    F(p_o_proj, P * 2304);
-    F(p_residual, P * 2304);
-    F(p_mlp_in, P * 2304);
-    F(p_mlp_normed, P * 2304);
-    H(p_mlp_normed_h, P * 2304);
-    F(p_router_logits, P * 128);
-    F(p_route_ids, P * 8);
-    F(p_route_w, P * 8);
-    F(p_exp_offsets, 1024);
-    F(p_sorted_tok, P * 8);
-    F(p_sorted_slot, P * 8);
-    F(p_sorted_w, P * 8);
-    H(p_moe_act_h, P * 8 * 1152);
-    F(p_moe_slot_out, P * 8 * 2304);
-    H(p_w_f16, 6552 * 2304);
-    F(p_ctrl_msg, P * 2304);
-    H(p_ctrl_cat_h, P * 4608);
-    F(p_ctrl_d, P * 64);
-    H(p_ctrl_d_h, P * 64);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_qrgs, P * 6552);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_k_proj, P * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_v_proj, P * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_H(p_attn_gated_h, P * 3072);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_o_proj, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_residual, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_mlp_in, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_mlp_normed, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_H(p_mlp_normed_h, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_router_logits, P * 128);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_route_ids, P * 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_route_w, P * 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_exp_offsets, 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_sorted_tok, P * 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_sorted_slot, P * 8);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_sorted_w, P * 8);
+    IFN_ENGINE_LAYOUT_LOCAL_H(p_moe_act_h, P * 8 * 1152);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_moe_slot_out, P * 8 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_H(p_w_f16, 6552 * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_ctrl_msg, P * 2304);
+    IFN_ENGINE_LAYOUT_LOCAL_H(p_ctrl_cat_h, P * 4608);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_ctrl_d, P * 64);
+    IFN_ENGINE_LAYOUT_LOCAL_H(p_ctrl_d_h, P * 64);
     s->p_ctrl_f = s->p_qrgs;
     s->p_ctrl_g = s->p_qrgs ? s->p_qrgs + P * 2304 : NULL;
-#undef F
-#undef H
+#undef IFN_ENGINE_LAYOUT_LOCAL_F
+#undef IFN_ENGINE_LAYOUT_LOCAL_H
 }
 
-#undef F
-#undef H
+#undef IFN_ENGINE_LAYOUT_LOCAL_F
+#undef IFN_ENGINE_LAYOUT_LOCAL_H
 
 /* Module: src/engine_forward.c */
 /* SPDX-License-Identifier: Apache-2.0
@@ -4646,7 +4832,7 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
     void *stream = s->stream;
     int32_t blocks = 0;
     bool prior = false, pending = false;
-    squid_launch_embed_norm(w->embed, w->embed_norm, s->d_tokens, s->hidden, batch, stream);
+    ifn_launch_embed_norm(w->embed, w->embed_norm, s->d_tokens, s->hidden, batch, stream);
     for (unsigned vi = 0; vi < 48; vi++) {
         ifn_visit v = s->schedule[vi];
         unsigned l = v.layer;
@@ -4656,12 +4842,12 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             if (v.pass == 0)
                 pre_tap = s->prelude;
             else {
-                squid_launch_extract_block(s->blocks, 4, 2, s->saved, batch, stream);
-                squid_launch_rmsnorm(s->hidden, NULL, s->prior_last, batch, 2304, 2304, 1e-6f,
-                                     stream);
+                ifn_launch_extract_block(s->blocks, 4, 2, s->saved, batch, stream);
+                ifn_launch_rmsnorm(s->hidden, NULL, s->prior_last, batch, 2304, 2304, 1e-6f,
+                                   stream);
                 ifn_ar_check(s,
-                             squid_cuda_memcpy_d2d_async(s->hidden, s->prelude,
-                                                         (size_t)batch * 2304 * 4, stream),
+                             ifn_cuda_memcpy_d2d_async(s->hidden, s->prelude,
+                                                       (size_t)batch * 2304 * 4, stream),
                              "restore prelude");
                 blocks = 1;
                 prior = true;
@@ -4699,7 +4885,7 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             o[0] = s->mlp_in;
         if (pending) {
             const ifn_layer *prev = &w->layers[s->schedule[vi - 1].layer];
-            squid_launch_mega_mlp_post_next_depth_norm(
+            ifn_launch_mega_mlp_post_next_depth_norm(
                 s->moe_down, 0, prev->mlp_sconv_w, s->mlp_ring[vi - 1], s->residual, s->hidden,
                 pre_tap, NULL, partial, s->blocks, blocks, w->attn_queries[l - 1], n[0], n[1], n[2],
                 o[0], o[1], o[2], oh[0], oh[1], oh[2], count, batch, s->d_pos, NULL, NULL, NULL,
@@ -4707,9 +4893,9 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
                 vi == 42 ? s->d_loopcd_cfg : NULL, stream);
             pending = false;
         } else
-            squid_launch_fused_depth_norm(s->hidden, partial, s->blocks, blocks,
-                                          l ? w->attn_queries[l - 1] : NULL, n[0], n[1], n[2], o[0],
-                                          o[1], o[2], oh[0], oh[1], oh[2], count, batch, stream);
+            ifn_launch_fused_depth_norm(s->hidden, partial, s->blocks, blocks,
+                                        l ? w->attn_queries[l - 1] : NULL, n[0], n[1], n[2], o[0],
+                                        o[1], o[2], oh[0], oh[1], oh[2], count, batch, stream);
         if (use_prior) {
             unsigned loc = l - 6;
             float *xs[3] = {v.global ? s->attn_in[0] : s->mlp_in,
@@ -4720,51 +4906,51 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             const float *queries[3] = {w->cross_pass_queries + 2 * loc * 2304,
                                        w->cross_pass_kv_queries + 2 * loc * 2304,
                                        w->cross_pass_kv_queries + (2 * loc + 1) * 2304};
-            const CControllerWeights *cw[3] = {&lw->ctrl[0], &lw->ctrl[1], &lw->ctrl[2]};
+            const ifn_cuda_c_controller_weights *cw[3] = {&lw->ctrl[0], &lw->ctrl[1], &lw->ctrl[2]};
             const void *norms[3] = {v.global ? lw->q_in_norm : lw->attn_norm,
                                     v.global ? lw->k_in_norm : lw->attn_norm,
                                     v.global ? lw->v_in_norm : lw->attn_norm};
             if (s->weights->config.mode == 2)
-                squid_launch_controller_mega_nvfp4(xs, s->saved, s->prior_last, queries, cw, norms,
-                                                   outs, half ? out_h : NULL, 3, batch, stream);
+                ifn_launch_controller_mega_nvfp4(xs, s->saved, s->prior_last, queries, cw, norms,
+                                                 outs, half ? out_h : NULL, 3, batch, stream);
             else
-                squid_launch_controller_merge_batched(
-                    xs, s->saved, s->prior_last, queries, cw, norms, outs, half ? out_h : NULL, 3,
-                    s->ctrl_msg, s->ctrl_cat, s->ctrl_d, batch, stream);
+                ifn_launch_controller_merge_batched(xs, s->saved, s->prior_last, queries, cw, norms,
+                                                    outs, half ? out_h : NULL, 3, s->ctrl_msg,
+                                                    s->ctrl_cat, s->ctrl_d, batch, stream);
         }
         float *in_q = s->attn_in[0], *in_k = s->attn_in[distinct ? 1 : 0],
               *in_v = s->attn_in[distinct ? 2 : 0];
         if (half)
-            squid_launch_qkvrg_fused(&lw->w_qrgs, &lw->w_k, &lw->w_v, s->attn_in_h[0],
-                                     s->attn_in_h[distinct ? 1 : 0], s->attn_in_h[distinct ? 2 : 0],
-                                     s->qrgs, s->k_proj, s->v_proj, batch, stream);
+            ifn_launch_qkvrg_fused(&lw->w_qrgs, &lw->w_k, &lw->w_v, s->attn_in_h[0],
+                                   s->attn_in_h[distinct ? 1 : 0], s->attn_in_h[distinct ? 2 : 0],
+                                   s->qrgs, s->k_proj, s->v_proj, batch, stream);
         else {
-            squid_launch_linear(&lw->w_qrgs, in_q, s->qrgs, batch, 0, stream);
-            squid_launch_linear(&lw->w_k, in_k, s->k_proj, batch, 0, stream);
-            squid_launch_linear(&lw->w_v, in_v, s->v_proj, batch, 0, stream);
+            ifn_launch_linear(&lw->w_qrgs, in_q, s->qrgs, batch, 0, stream);
+            ifn_launch_linear(&lw->w_k, in_k, s->k_proj, batch, 0, stream);
+            ifn_launch_linear(&lw->w_v, in_v, s->v_proj, batch, 0, stream);
         }
         if (v.global)
-            squid_launch_mega_global_sconv_prep_store(
+            ifn_launch_mega_global_sconv_prep_store(
                 s->qrgs, s->k_proj, s->v_proj, in_k, in_v, lw->k_sconv_w, lw->v_sconv_w,
                 lw->k_sconv_proj, lw->v_sconv_proj, s->k_ring[vi], s->v_ring[vi], lw->q_clip_scale,
                 lw->rel_clip_scale, s->k_cache[vi], s->v_cache[vi], s->k_scale[vi], s->v_scale[vi],
                 (uint8_t)s->config.kv_format, s->kv_cap[vi], batch, s->d_pos, stream);
         else
-            squid_launch_mega_local_sconv_prep_store(
+            ifn_launch_mega_local_sconv_prep_store(
                 s->qrgs, s->k_proj, s->v_proj, lw->k_sconv_w, lw->v_sconv_w, s->k_ring[vi],
                 s->v_ring[vi], lw->q_clip_scale, lw->rel_clip_scale, s->k_cache[vi], s->v_cache[vi],
                 s->kv_cap[vi], batch, s->d_pos, stream);
-        squid_launch_relative_attention_gated(
+        ifn_launch_relative_attention_gated(
             s->qrgs, lw->rel_logits_proj, s->k_cache[vi], s->v_cache[vi], s->k_scale[vi],
             s->v_scale[vi], v.global ? (uint8_t)s->config.kv_format : 0, s->split_buf,
             half ? NULL : s->attn_gated, half ? s->attn_gated_h : NULL, s->kv_cap[vi],
             v.global ? 0 : 1024, batch, s->d_pos, stream);
         if (half)
-            squid_launch_linear_h(&lw->w_o, s->attn_gated_h, s->o_proj, batch, 0, stream);
+            ifn_launch_linear_h(&lw->w_o, s->attn_gated_h, s->o_proj, batch, 0, stream);
         else
-            squid_launch_linear(&lw->w_o, s->attn_gated, s->o_proj, batch, 0, stream);
+            ifn_launch_linear(&lw->w_o, s->attn_gated, s->o_proj, batch, 0, stream);
         bool boundary = l % 6 == 0;
-        squid_launch_mega_attn_post_mlp_in(
+        ifn_launch_mega_attn_post_mlp_in(
             s->o_proj, lw->attn_sconv_w, s->attn_ring[vi], s->hidden, s->partial, s->blocks, blocks,
             boundary ? 1 : 0, s->residual, w->mlp_queries[l], use_prior ? NULL : lw->mlp_norm,
             use_prior ? s->mlp_in : s->mlp_normed, use_prior ? NULL : s->mlp_normed_h, batch,
@@ -4775,29 +4961,29 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             float *xs[1] = {s->mlp_in}, *outs[1] = {s->mlp_normed};
             void *outs_h[1] = {s->mlp_normed_h};
             const float *q[3] = {w->cross_pass_queries + (2 * (l - 6) + 1) * 2304, NULL, NULL};
-            const CControllerWeights *cw[3] = {&lw->ctrl[3], NULL, NULL};
+            const ifn_cuda_c_controller_weights *cw[3] = {&lw->ctrl[3], NULL, NULL};
             const void *norms[3] = {lw->mlp_norm, NULL, NULL};
             if (s->weights->config.mode == 2)
-                squid_launch_controller_mega_nvfp4(xs, s->saved, s->prior_last, q, cw, norms, outs,
-                                                   outs_h, 1, batch, stream);
+                ifn_launch_controller_mega_nvfp4(xs, s->saved, s->prior_last, q, cw, norms, outs,
+                                                 outs_h, 1, batch, stream);
             else
-                squid_launch_controller_merge_batched(xs, s->saved, s->prior_last, q, cw, norms,
-                                                      outs, outs_h, 1, s->ctrl_msg, s->ctrl_cat,
-                                                      s->ctrl_d, batch, stream);
+                ifn_launch_controller_merge_batched(xs, s->saved, s->prior_last, q, cw, norms, outs,
+                                                    outs_h, 1, s->ctrl_msg, s->ctrl_cat, s->ctrl_d,
+                                                    batch, stream);
         }
         if (s->weights->config.mode == 2)
-            squid_launch_route_topk_nvfp4(s->mlp_normed_h, &lw->router_nvfp4, lw->router_bias,
-                                          s->router_logits, s->route_ids, s->route_w, NULL, batch,
-                                          stream);
+            ifn_launch_route_topk_nvfp4(s->mlp_normed_h, &lw->router_nvfp4, lw->router_bias,
+                                        s->router_logits, s->route_ids, s->route_w, NULL, batch,
+                                        stream);
         else
-            squid_launch_route_topk(s->mlp_normed, lw->router_w, lw->router_bias, s->router_logits,
-                                    s->route_ids, s->route_w, NULL, batch, stream);
-        squid_launch_moe_gate_up_h(&lw->w13, s->mlp_normed_h, s->route_ids, s->exp_groups,
-                                   s->moe_act_h, batch, stream);
-        squid_launch_moe_down_h(&lw->w2, s->moe_act_h, s->route_ids, s->route_w, s->exp_groups,
-                                s->moe_down, batch, stream);
+            ifn_launch_route_topk(s->mlp_normed, lw->router_w, lw->router_bias, s->router_logits,
+                                  s->route_ids, s->route_w, NULL, batch, stream);
+        ifn_launch_moe_gate_up_h(&lw->w13, s->mlp_normed_h, s->route_ids, s->exp_groups,
+                                 s->moe_act_h, batch, stream);
+        ifn_launch_moe_down_h(&lw->w2, s->moe_act_h, s->route_ids, s->route_w, s->exp_groups,
+                              s->moe_down, batch, stream);
         if (vi == 17 || vi == 29) {
-            squid_launch_mega_mlp_post_res(
+            ifn_launch_mega_mlp_post_res(
                 s->moe_down, 0, lw->mlp_sconv_w, s->mlp_ring[vi], s->residual, s->hidden,
                 vi == 17 ? s->loopcd_h1 : s->loopcd_h2, batch, s->d_pos, NULL, NULL, NULL, stream);
             pending = false;
@@ -4806,14 +4992,14 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
         if (s->status != IFN_OK)
             return;
     }
-    squid_launch_mega_mlp_post_next_depth_norm(
+    ifn_launch_mega_mlp_post_next_depth_norm(
         s->moe_down, 0, w->layers[s->schedule[47].layer].mlp_sconv_w, s->mlp_ring[47], s->residual,
         s->hidden, NULL, s->use_mtp ? s->taps + 3 * (size_t)batch * 2304 : NULL, NULL, s->blocks,
         blocks, w->output_query, w->final_norm, NULL, NULL, s->mlp_normed, NULL, NULL, NULL, NULL,
         NULL, 1, batch, s->d_pos, NULL, NULL, NULL, NULL, NULL, NULL, stream);
     ifn_spec_commit(s, s->taps, batch, s->d_pos);
     if (lm)
-        squid_launch_lm_head_argmax(
+        ifn_launch_lm_head_argmax(
             &w->unembed, s->mlp_normed, s->d_next_tokens, s->lm_logits, s->lm_blk_val,
             s->lm_blk_idx, s->d_sample_cfg, s->d_pos, s->verifying ? s->d_drafts : NULL,
             s->verifying ? s->d_draft_probs : NULL, s->verifying ? s->d_draft_q_sel : NULL,
@@ -4831,25 +5017,25 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
 
 void ifn_spec_commit(ifn_session *s, const float *taps, int32_t batch, const int32_t *position) {
     if (s->use_mtp && s->status == IFN_OK)
-        squid_launch_dspark_commit(&s->model.dspark, taps, s->ds_k, s->ds_v, s->ds_ks, s->ds_vs,
-                                   s->ds_cap, (uint8_t)s->config.kv_format, s->ds_f_ring, s->ds_mix,
-                                   s->ds_kv, batch, position, s->stream);
+        ifn_launch_dspark_commit(&s->model.dspark, taps, s->ds_k, s->ds_v, s->ds_ks, s->ds_vs,
+                                 s->ds_cap, (uint8_t)s->config.kv_format, s->ds_f_ring, s->ds_mix,
+                                 s->ds_kv, batch, position, s->stream);
 }
 
 void ifn_spec_draft(ifn_session *s, uint32_t drafts, float *confidence) {
     const void *ks[3] = {s->ds_ks[0], s->ds_ks[1], s->ds_ks[2]};
     const void *vs[3] = {s->ds_vs[0], s->ds_vs[1], s->ds_vs[2]};
-    squid_launch_dspark_draft(s->model.embed, s->model.embed_norm, &s->model.dspark, s->d_anchor,
-                              s->d_pos, (int32_t)drafts, s->ds_k, s->ds_v, ks, vs, s->ds_cap,
-                              (uint8_t)s->config.kv_format, s->split_buf, s->ds_f_ring, s->ds_ws,
-                              s->d_drafts, confidence, s->d_sample_cfg, s->d_draft_probs,
-                              s->d_draft_q_sel, s->d_draft_is_delta, s->stream);
+    ifn_launch_dspark_draft(s->model.embed, s->model.embed_norm, &s->model.dspark, s->d_anchor,
+                            s->d_pos, (int32_t)drafts, s->ds_k, s->ds_v, ks, vs, s->ds_cap,
+                            (uint8_t)s->config.kv_format, s->split_buf, s->ds_f_ring, s->ds_ws,
+                            s->d_drafts, confidence, s->d_sample_cfg, s->d_draft_probs,
+                            s->d_draft_q_sel, s->d_draft_is_delta, s->stream);
     ifn_ar_check(s, ifn_cuda_launch_status(), "DSpark draft launch");
 }
 
 void ifn_spec_verify(ifn_session *s, uint32_t drafts) {
-    squid_launch_assemble_verify_tokens(s->d_anchor, s->d_drafts, s->d_tokens, (int32_t)drafts,
-                                        s->stream);
+    ifn_launch_assemble_verify_tokens(s->d_anchor, s->d_drafts, s->d_tokens, (int32_t)drafts,
+                                      s->stream);
     ifn_spec_target(s, drafts);
 }
 
@@ -4858,8 +5044,8 @@ void ifn_spec_target(ifn_session *s, uint32_t drafts) {
     ifn_ar_forward(s, (int32_t)drafts + 1, true);
     s->verifying = false;
     if (s->status == IFN_OK)
-        squid_launch_spec_verify(s->d_next_tokens, s->d_drafts, (int32_t)drafts + 1, s->d_accepted,
-                                 s->d_num_acc, s->d_pos, s->d_anchor, s->stream);
+        ifn_launch_spec_verify(s->d_next_tokens, s->d_drafts, (int32_t)drafts + 1, s->d_accepted,
+                               s->d_num_acc, s->d_pos, s->d_anchor, s->stream);
     ifn_ar_check(s, ifn_cuda_launch_status(), "DSpark draft/verify launch");
 }
 
@@ -4873,17 +5059,17 @@ void ifn_spec_step(ifn_session *s, uint32_t drafts) {
         return;
     }
     if (!s->spec_graph[drafts]) {
-        ifn_ar_check(s, squid_cuda_graph_begin(s->stream), "begin DSpark graph");
+        ifn_ar_check(s, ifn_cuda_graph_begin(s->stream), "begin DSpark graph");
         if (s->status != IFN_OK)
             return;
         ifn_spec_draft(s, drafts, NULL);
         if (s->status == IFN_OK)
             ifn_spec_verify(s, drafts);
-        ifn_ar_check(s, squid_cuda_graph_end_instantiate(s->stream, &s->spec_graph[drafts]),
+        ifn_ar_check(s, ifn_cuda_graph_end_instantiate(s->stream, &s->spec_graph[drafts]),
                      "instantiate DSpark graph");
     }
     if (s->status == IFN_OK)
-        ifn_ar_check(s, squid_cuda_graph_launch(s->spec_graph[drafts], s->stream),
+        ifn_ar_check(s, ifn_cuda_graph_launch(s->spec_graph[drafts], s->stream),
                      "launch DSpark graph");
 }
 
@@ -4894,34 +5080,33 @@ void ifn_spec_step(ifn_session *s, uint32_t drafts) {
  * Pinned adaptive graph scheduling: width switch, lookup verification and
  * next-draft overlap. Every exit drains work before reset or resource release. */
 
-static void ifn_am_engine_adaptive_capture_finish(ifn_session *s, void **graph) {
-    ifn_ar_check(s, squid_cuda_graph_end_instantiate(s->stream, graph),
+static void ifn_am_engine_adaptive_ifn_engine_adaptive_local_capture_finish(ifn_session *s, void **graph) {
+    ifn_ar_check(s, ifn_cuda_graph_end_instantiate(s->stream, graph),
                  "finish adaptive component capture");
 }
 
-static void ifn_am_engine_adaptive_prepare(ifn_session *s, float threshold) {
+static void ifn_am_engine_adaptive_ifn_engine_adaptive_local_prepare(ifn_session *s, float threshold) {
     if (!s->draft_graph) {
-        ifn_ar_check(s, squid_cuda_graph_begin(s->stream), "begin draft graph");
+        ifn_ar_check(s, ifn_cuda_graph_begin(s->stream), "begin draft graph");
         if (s->status != IFN_OK)
             return;
         ifn_spec_draft(s, 7, s->d_conf);
-        ifn_am_engine_adaptive_capture_finish(s, &s->draft_graph);
+        ifn_am_engine_adaptive_ifn_engine_adaptive_local_capture_finish(s, &s->draft_graph);
     }
     if (s->status != IFN_OK)
         return;
     if (!s->lookup_graph) {
-        ifn_ar_check(s, squid_cuda_graph_begin(s->stream), "begin lookup graph");
+        ifn_ar_check(s, ifn_cuda_graph_begin(s->stream), "begin lookup graph");
         if (s->status != IFN_OK)
             return;
         ifn_spec_verify(s, 7);
         if (s->status == IFN_OK)
-            ifn_ar_check(s, squid_cuda_memcpy_d2h_async(s->h_count, s->d_num_acc, 4, s->stream),
+            ifn_ar_check(s, ifn_cuda_memcpy_d2h_async(s->h_count, s->d_num_acc, 4, s->stream),
                          "capture lookup count");
         if (s->status == IFN_OK)
-            ifn_ar_check(s,
-                         squid_cuda_memcpy_d2h_async(s->h_accepted, s->d_accepted, 32, s->stream),
+            ifn_ar_check(s, ifn_cuda_memcpy_d2h_async(s->h_accepted, s->d_accepted, 32, s->stream),
                          "capture lookup output");
-        ifn_am_engine_adaptive_capture_finish(s, &s->lookup_graph);
+        ifn_am_engine_adaptive_ifn_engine_adaptive_local_capture_finish(s, &s->lookup_graph);
     }
     if (s->status != IFN_OK || s->adaptive_threshold == threshold)
         return;
@@ -4951,12 +5136,12 @@ static void ifn_am_engine_adaptive_prepare(ifn_session *s, float threshold) {
         s->adaptive_threshold = threshold;
 }
 
-static void ifn_am_engine_adaptive_draft(ifn_session *s) {
+static void ifn_am_engine_adaptive_ifn_engine_adaptive_local_draft(ifn_session *s) {
     if (s->status != IFN_OK)
         return;
     /* Conservatively retain the in-flight marker if launch/sync fails. */
     s->draft_in_flight = true;
-    int e = squid_cuda_graph_launch(s->draft_graph, s->stream);
+    int e = ifn_cuda_graph_launch(s->draft_graph, s->stream);
     ifn_ar_check(s, e, "launch overlapped draft");
     if (!e)
         s->decode_info.draft_launches++;
@@ -4965,7 +5150,7 @@ static void ifn_am_engine_adaptive_draft(ifn_session *s) {
 void ifn_adaptive_step(ifn_session *s, const ifn_decode_options *options, bool lookup) {
     if (s->status != IFN_OK)
         return;
-    ifn_am_engine_adaptive_prepare(s, options->spec_threshold);
+    ifn_am_engine_adaptive_ifn_engine_adaptive_local_prepare(s, options->spec_threshold);
     if (s->status != IFN_OK)
         return;
     if (lookup) {
@@ -4978,7 +5163,7 @@ void ifn_adaptive_step(ifn_session *s, const ifn_decode_options *options, bool l
                 s, b->copy(b->context, s->d_drafts, (int32_t *)s->pinned + 10, 28, 0, s->stream),
                 "upload lookup proposal");
         if (s->status == IFN_OK)
-            ifn_ar_check(s, squid_cuda_graph_launch(s->lookup_graph, s->stream),
+            ifn_ar_check(s, ifn_cuda_graph_launch(s->lookup_graph, s->stream),
                          "verify lookup proposal");
         if (s->status == IFN_OK)
             ifn_ar_check(s, b->sync(b->context, s->stream), "finish lookup verification");
@@ -4987,17 +5172,17 @@ void ifn_adaptive_step(ifn_session *s, const ifn_decode_options *options, bool l
         return;
     }
     if (!s->draft_in_flight)
-        ifn_am_engine_adaptive_draft(s);
+        ifn_am_engine_adaptive_ifn_engine_adaptive_local_draft(s);
     if (s->status == IFN_OK)
         ifn_ar_check(s, ifn_adaptive_launch(s->adaptive_state, s->stream),
                      "launch adaptive verification");
     if (s->status == IFN_OK)
-        ifn_ar_check(s, squid_cuda_event_record(s->done_event, s->stream),
+        ifn_ar_check(s, ifn_cuda_event_record(s->done_event, s->stream),
                      "record verified-output event");
     if (s->status == IFN_OK)
-        ifn_am_engine_adaptive_draft(s);
+        ifn_am_engine_adaptive_ifn_engine_adaptive_local_draft(s);
     if (s->status == IFN_OK)
-        ifn_ar_check(s, squid_cuda_event_sync(s->done_event), "await verified outputs");
+        ifn_ar_check(s, ifn_cuda_event_sync(s->done_event), "await verified outputs");
 }
 
 void ifn_adaptive_drain(ifn_session *s) {
@@ -5018,7 +5203,7 @@ void ifn_adaptive_drain(ifn_session *s) {
 
 #include <string.h>
 
-static size_t ifn_am_engine_prefix_add(ifn_session *s, size_t a, size_t b) {
+static size_t ifn_am_engine_prefix_ifn_engine_prefix_local_add(ifn_session *s, size_t a, size_t b) {
     size_t out = 0;
     if (!ifn_size_add(a, b, &out))
         s->status = IFN_LIMIT;
@@ -5032,10 +5217,11 @@ typedef struct {
     unsigned char *host;
     size_t offset, capacity;
     int direction; /* -1 plan, 0 restore, 1 save */
-} transfer;
+} ifn_engine_prefix_local_transfer;
 
-static void ifn_am_engine_prefix_span(transfer *t, void *device, size_t bytes) {
-    size_t end = ifn_am_engine_prefix_add(t->s, t->offset, bytes);
+static void ifn_am_engine_prefix_ifn_engine_prefix_local_span(ifn_engine_prefix_local_transfer *t, void *device,
+                                         size_t bytes) {
+    size_t end = ifn_am_engine_prefix_ifn_engine_prefix_local_add(t->s, t->offset, bytes);
     if (t->s->status != IFN_OK)
         return;
     if (t->direction >= 0) {
@@ -5053,48 +5239,50 @@ static void ifn_am_engine_prefix_span(transfer *t, void *device, size_t bytes) {
     t->offset = end;
 }
 
-static void ifn_am_engine_prefix_local(transfer *t) {
+static void ifn_am_engine_prefix_ifn_engine_prefix_local_local(ifn_engine_prefix_local_transfer *t) {
     ifn_session *s = t->s;
     for (unsigned i = 0; i < 48; i++) {
         if (!s->schedule[i].global) {
-            ifn_am_engine_prefix_span(t, s->k_cache[i], (size_t)s->kv_cap[i] * 2048);
-            ifn_am_engine_prefix_span(t, s->v_cache[i], (size_t)s->kv_cap[i] * 2048);
+            ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->k_cache[i], (size_t)s->kv_cap[i] * 2048);
+            ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->v_cache[i], (size_t)s->kv_cap[i] * 2048);
         }
-        ifn_am_engine_prefix_span(t, s->k_ring[i], 16 * 1024 * 4);
-        ifn_am_engine_prefix_span(t, s->v_ring[i], 16 * 1024 * 4);
-        ifn_am_engine_prefix_span(t, s->attn_ring[i], 16 * 2304 * 4);
-        ifn_am_engine_prefix_span(t, s->mlp_ring[i], 16 * 2304 * 4);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->k_ring[i], 16 * 1024 * 4);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->v_ring[i], 16 * 1024 * 4);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->attn_ring[i], 16 * 2304 * 4);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->mlp_ring[i], 16 * 2304 * 4);
     }
     if (s->ds_f_ring) {
         for (unsigned i = 0; i < 3; i += 2) {
-            ifn_am_engine_prefix_span(t, s->ds_k[i], (size_t)s->ds_cap[i] * 2048);
-            ifn_am_engine_prefix_span(t, s->ds_v[i], (size_t)s->ds_cap[i] * 2048);
+            ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->ds_k[i], (size_t)s->ds_cap[i] * 2048);
+            ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->ds_v[i], (size_t)s->ds_cap[i] * 2048);
         }
-        ifn_am_engine_prefix_span(t, s->ds_f_ring, 16 * 2304 * 4);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, s->ds_f_ring, 16 * 2304 * 4);
     }
 }
 
-static void ifn_am_engine_prefix_pair(transfer *t, void *k, void *v, void *ks, void *vs, uint32_t n) {
+static void ifn_am_engine_prefix_ifn_engine_prefix_local_pair(ifn_engine_prefix_local_transfer *t, void *k, void *v,
+                                         void *ks, void *vs, uint32_t n) {
     unsigned format = t->s->config.kv_format;
-    ifn_am_engine_prefix_span(t, k, (size_t)n * (format == 0 ? 2048 : format == 1 ? 1024 : 512));
-    ifn_am_engine_prefix_span(t, v, (size_t)n * (format == 0 ? 2048 : format == 1 ? 1024 : 512));
+    ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, k, (size_t)n * (format == 0 ? 2048 : format == 1 ? 1024 : 512));
+    ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, v, (size_t)n * (format == 0 ? 2048 : format == 1 ? 1024 : 512));
     if (format) {
-        ifn_am_engine_prefix_span(t, ks, (size_t)n * (format == 1 ? 16 : 32));
-        ifn_am_engine_prefix_span(t, vs, (size_t)n * (format == 1 ? 16 : 32));
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, ks, (size_t)n * (format == 1 ? 16 : 32));
+        ifn_am_engine_prefix_ifn_engine_prefix_local_span(t, vs, (size_t)n * (format == 1 ? 16 : 32));
     }
 }
 
-static void ifn_am_engine_prefix_global(transfer *t, uint32_t n) {
+static void ifn_am_engine_prefix_ifn_engine_prefix_local_global(ifn_engine_prefix_local_transfer *t, uint32_t n) {
     ifn_session *s = t->s;
     for (unsigned i = 0; i < 48; i++)
         if (s->schedule[i].global)
-            ifn_am_engine_prefix_pair(t, s->k_cache[i], s->v_cache[i], s->k_scale[i], s->v_scale[i], n);
+            ifn_am_engine_prefix_ifn_engine_prefix_local_pair(t, s->k_cache[i], s->v_cache[i], s->k_scale[i],
+                                         s->v_scale[i], n);
     if (s->ds_f_ring)
-        ifn_am_engine_prefix_pair(t, s->ds_k[1], s->ds_v[1], s->ds_ks[1], s->ds_vs[1],
-             n < (uint32_t)s->ds_cap[1] ? n : (uint32_t)s->ds_cap[1]);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_pair(t, s->ds_k[1], s->ds_v[1], s->ds_ks[1], s->ds_vs[1],
+                                     n < (uint32_t)s->ds_cap[1] ? n : (uint32_t)s->ds_cap[1]);
 }
 
-static void ifn_am_engine_prefix_sync_transfer(ifn_session *s) {
+static void ifn_am_engine_prefix_ifn_engine_prefix_local_sync_transfer(ifn_session *s) {
     if (s->status == IFN_OK)
         ifn_ar_check(s, s->weights->backend.sync(s->weights->backend.context, s->stream),
                      "complete prefix state transfer");
@@ -5125,16 +5313,17 @@ ifn_status ifn_prefix_allocate(ifn_session *s) {
     if (s->prefix.enabled)
         return IFN_OK;
     ifn_prefix *p = &s->prefix;
-    transfer l = {s, NULL, 0, 0, -1}, g = l;
-    ifn_am_engine_prefix_local(&l);
-    ifn_am_engine_prefix_global(&g, s->config.context_tokens < 4096 ? s->config.context_tokens : 4096);
+    ifn_engine_prefix_local_transfer l = {s, NULL, 0, 0, -1}, g = l;
+    ifn_am_engine_prefix_ifn_engine_prefix_local_local(&l);
+    ifn_am_engine_prefix_ifn_engine_prefix_local_global(&g, s->config.context_tokens < 4096 ? s->config.context_tokens
+                                                                       : 4096);
     p->local_bytes = l.offset;
     p->shield_bytes = g.offset;
     size_t total = 0;
     for (unsigned i = 0; i < 4; i++)
-        total = ifn_am_engine_prefix_add(s, total, l.offset);
-    total = ifn_am_engine_prefix_add(s, total, g.offset);
-    total = ifn_am_engine_prefix_add(s, total, (size_t)s->config.context_tokens * 4);
+        total = ifn_am_engine_prefix_ifn_engine_prefix_local_add(s, total, l.offset);
+    total = ifn_am_engine_prefix_ifn_engine_prefix_local_add(s, total, g.offset);
+    total = ifn_am_engine_prefix_ifn_engine_prefix_local_add(s, total, (size_t)s->config.context_tokens * 4);
     if (s->status != IFN_OK)
         return ifn_error(s->status, "prefix size overflow");
     p->tokens = s->allocator.allocate(s->allocator.context, (size_t)s->config.context_tokens * 4);
@@ -5161,9 +5350,9 @@ void ifn_prefix_save(ifn_session *s, unsigned slot, uint32_t position) {
         return;
     ifn_checkpoint *c = &p->checkpoints[slot];
     c->valid = false;
-    transfer t = {s, c->data, 0, p->local_bytes, 1};
-    ifn_am_engine_prefix_local(&t);
-    ifn_am_engine_prefix_sync_transfer(s);
+    ifn_engine_prefix_local_transfer t = {s, c->data, 0, p->local_bytes, 1};
+    ifn_am_engine_prefix_ifn_engine_prefix_local_local(&t);
+    ifn_am_engine_prefix_ifn_engine_prefix_local_sync_transfer(s);
     if (s->status == IFN_OK && t.offset == p->local_bytes) {
         c->position = position;
         c->valid = true;
@@ -5185,9 +5374,9 @@ uint32_t ifn_prefix_begin(ifn_session *s, const int32_t *tokens, uint32_t n, uin
     uint32_t start = 0;
     if (p->length >= 1024 && common < 512 && need <= 4096) {
         p->shield_tokens = p->length < need ? p->length : need;
-        transfer t = {s, p->shield, 0, p->shield_bytes, 1};
-        ifn_am_engine_prefix_global(&t, p->shield_tokens);
-        ifn_am_engine_prefix_sync_transfer(s);
+        ifn_engine_prefix_local_transfer t = {s, p->shield, 0, p->shield_bytes, 1};
+        ifn_am_engine_prefix_ifn_engine_prefix_local_global(&t, p->shield_tokens);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_sync_transfer(s);
         s->prefix_info.shielded_tokens = p->shield_tokens;
         return 0;
     }
@@ -5206,9 +5395,10 @@ uint32_t ifn_prefix_begin(ifn_session *s, const int32_t *tokens, uint32_t n, uin
         ifn_prefix_invalidate(s);
     else {
         if (best >= 0) {
-            transfer t = {s, p->checkpoints[best].data, 0, p->local_bytes, 0};
-            ifn_am_engine_prefix_local(&t);
-            ifn_am_engine_prefix_sync_transfer(s);
+            ifn_engine_prefix_local_transfer t = {s, p->checkpoints[best].data, 0, p->local_bytes,
+                                                  0};
+            ifn_am_engine_prefix_ifn_engine_prefix_local_local(&t);
+            ifn_am_engine_prefix_ifn_engine_prefix_local_sync_transfer(s);
             s->prefix_info.checkpoint_restores++;
         }
         s->position = (int32_t)start;
@@ -5252,9 +5442,9 @@ void ifn_prefix_finish(ifn_session *s, bool cancelled) {
         return;
     }
     if (p->shield_tokens) {
-        transfer t = {s, p->shield, 0, p->shield_bytes, 0};
-        ifn_am_engine_prefix_global(&t, p->shield_tokens);
-        ifn_am_engine_prefix_sync_transfer(s);
+        ifn_engine_prefix_local_transfer t = {s, p->shield, 0, p->shield_bytes, 0};
+        ifn_am_engine_prefix_ifn_engine_prefix_local_global(&t, p->shield_tokens);
+        ifn_am_engine_prefix_ifn_engine_prefix_local_sync_transfer(s);
         p->live = -1;
         p->shield_tokens = 0;
     } else {
@@ -5273,21 +5463,24 @@ void ifn_prefix_finish(ifn_session *s, bool cancelled) {
  * Pinned Engine.prefill_chunk_batched with optional DSpark tap commits. */
 
 
-#define CHECK(call)                                                                                \
+#define IFN_ENGINE_PREFILL_LOCAL_CHECK(call)                                                       \
     do {                                                                                           \
         ifn_ar_check(s, (call), "batched prefill");                                                \
         if (s->status != IFN_OK)                                                                   \
             return;                                                                                \
     } while (0)
 
-static void ifn_am_engine_prefill_gemm(ifn_session *s, const CLinearWeight *w, const void *x, float *y, int32_t n) {
+static void ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(ifn_session *s, const ifn_cuda_c_linear_weight *w,
+                                          const void *x, float *y, int32_t n) {
     if (s->status == IFN_OK)
         ifn_ar_check(s, ifn_prefill_gemm_h(s->blas, w, x, y, s->p_w_f16, n, s->stream),
                      "prefill GEMM");
 }
 
-static void ifn_am_engine_prefill_controller(ifn_session *s, const float *x, const float *q, const CControllerWeights *cw,
-                       const void *norm, float *out, void *out_h, int32_t n) {
+static void ifn_am_engine_prefill_ifn_engine_prefill_local_controller(ifn_session *s, const float *x, const float *q,
+                                                const ifn_cuda_c_controller_weights *cw,
+                                                const void *norm, float *out, void *out_h,
+                                                int32_t n) {
     if (s->status == IFN_OK)
         ifn_ar_check(s,
                      ifn_prefill_controller_one(s->blas, x, s->p_saved, s->p_prior_last, q, cw,
@@ -5301,16 +5494,18 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
     if (s->status != IFN_OK)
         return;
     if (!s->blas)
-        CHECK(ifn_blas_create(&s->blas, s->stream));
+        IFN_ENGINE_PREFILL_LOCAL_CHECK(ifn_blas_create(&s->blas, s->stream));
     int32_t pos[256];
     for (int32_t i = 0; i < n / 8; i++)
         pos[i] = s->position + i * 8;
     const ifn_weight_backend *backend = &s->weights->backend;
-    CHECK(backend->copy(backend->context, s->p_pos_vec, pos, (size_t)(n / 8) * 4, 0, s->stream));
-    CHECK(backend->copy(backend->context, s->p_tokens, tokens, (size_t)n * 4, 0, s->stream));
+    IFN_ENGINE_PREFILL_LOCAL_CHECK(
+        backend->copy(backend->context, s->p_pos_vec, pos, (size_t)(n / 8) * 4, 0, s->stream));
+    IFN_ENGINE_PREFILL_LOCAL_CHECK(
+        backend->copy(backend->context, s->p_tokens, tokens, (size_t)n * 4, 0, s->stream));
     void *stream = s->stream;
     const ifn_ar_model *w = &s->model;
-    squid_launch_embed_norm(w->embed, w->embed_norm, s->p_tokens, s->p_hidden, n, stream);
+    ifn_launch_embed_norm(w->embed, w->embed_norm, s->p_tokens, s->p_hidden, n, stream);
     int32_t blocks = 0;
     bool prior = false, pending = false;
     for (unsigned vi = 0; vi < 48; vi++) {
@@ -5322,11 +5517,11 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
             if (v.pass == 0)
                 prelude = true;
             else {
-                squid_launch_extract_block(s->p_blocks, 4, 2, s->p_saved, n, stream);
-                squid_launch_rmsnorm(s->p_hidden, NULL, s->p_prior_last, n, 2304, 2304, 1e-6f,
-                                     stream);
-                CHECK(backend->copy(backend->context, s->p_hidden, s->p_prelude,
-                                    (size_t)n * 2304 * 4, 2, stream));
+                ifn_launch_extract_block(s->p_blocks, 4, 2, s->p_saved, n, stream);
+                ifn_launch_rmsnorm(s->p_hidden, NULL, s->p_prior_last, n, 2304, 2304, 1e-6f,
+                                   stream);
+                IFN_ENGINE_PREFILL_LOCAL_CHECK(backend->copy(
+                    backend->context, s->p_hidden, s->p_prelude, (size_t)n * 2304 * 4, 2, stream));
                 blocks = 1;
                 prior = true;
             }
@@ -5334,17 +5529,17 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
         bool use_prior = v.loop && prior, distinct = v.global || use_prior, boundary = l % 6 == 0;
         if (pending) {
             const ifn_layer *prev = &w->layers[s->schedule[vi - 1].layer];
-            squid_launch_prefill_sconv_post_res(s->p_moe_slot_out, 1, prev->mlp_sconv_w,
-                                                s->mlp_ring[vi - 1], s->p_residual, s->p_hidden,
-                                                prelude ? s->p_prelude : NULL, NULL, NULL, 0, 0, n,
-                                                s->p_pos_vec, NULL, NULL, NULL, stream);
+            ifn_launch_prefill_sconv_post_res(s->p_moe_slot_out, 1, prev->mlp_sconv_w,
+                                              s->mlp_ring[vi - 1], s->p_residual, s->p_hidden,
+                                              prelude ? s->p_prelude : NULL, NULL, NULL, 0, 0, n,
+                                              s->p_pos_vec, NULL, NULL, NULL, stream);
         }
         if (s->use_mtp && (vi == 5 || vi == 23 || vi == 41))
-            squid_launch_prefill_copy_taps(s->p_hidden, s->p_taps,
-                                           vi == 5    ? 0
-                                           : vi == 23 ? 1
-                                                      : 2,
-                                           n, stream);
+            ifn_launch_prefill_copy_taps(s->p_hidden, s->p_taps,
+                                         vi == 5    ? 0
+                                         : vi == 23 ? 1
+                                                    : 2,
+                                         n, stream);
         pending = false;
         const void *norm[3] = {NULL, NULL, NULL};
         float *out[3] = {NULL, NULL, NULL};
@@ -5369,10 +5564,10 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
             count = 3;
         } else
             out[0] = s->p_mlp_in;
-        squid_launch_fused_depth_norm(s->p_hidden, boundary ? s->p_partial : NULL, s->p_blocks,
-                                      blocks, l ? w->attn_queries[l - 1] : NULL, norm[0], norm[1],
-                                      norm[2], out[0], out[1], out[2], half[0], half[1], half[2],
-                                      count, n, stream);
+        ifn_launch_fused_depth_norm(s->p_hidden, boundary ? s->p_partial : NULL, s->p_blocks,
+                                    blocks, l ? w->attn_queries[l - 1] : NULL, norm[0], norm[1],
+                                    norm[2], out[0], out[1], out[2], half[0], half[1], half[2],
+                                    count, n, stream);
         if (use_prior) {
             unsigned loc = l - 6;
             const float *q[3] = {w->cross_pass_queries + 2 * loc * 2304,
@@ -5382,100 +5577,102 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
                                     v.global ? lw->k_in_norm : lw->attn_norm,
                                     v.global ? lw->v_in_norm : lw->attn_norm};
             for (unsigned j = 0; j < 3; j++)
-                ifn_am_engine_prefill_controller(s, v.global ? s->p_attn_in[j] : s->p_mlp_in, q[j], &lw->ctrl[j],
-                           norms[j], s->p_attn_in[j], s->p_attn_in_h[j], n);
+                ifn_am_engine_prefill_ifn_engine_prefill_local_controller(s, v.global ? s->p_attn_in[j] : s->p_mlp_in,
+                                                    q[j], &lw->ctrl[j], norms[j], s->p_attn_in[j],
+                                                    s->p_attn_in_h[j], n);
         }
         void *ik = s->p_attn_in_h[distinct ? 1 : 0], *iv = s->p_attn_in_h[distinct ? 2 : 0];
-        ifn_am_engine_prefill_gemm(s, &lw->w_qrgs, s->p_attn_in_h[0], s->p_qrgs, n);
-        ifn_am_engine_prefill_gemm(s, &lw->w_k, ik, s->p_k_proj, n);
-        ifn_am_engine_prefill_gemm(s, &lw->w_v, iv, s->p_v_proj, n);
+        ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_qrgs, s->p_attn_in_h[0], s->p_qrgs, n);
+        ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_k, ik, s->p_k_proj, n);
+        ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_v, iv, s->p_v_proj, n);
         if (s->status != IFN_OK)
             return;
         if (v.global) {
-            CHECK(ifn_prefill_global_sconv_prep_store(
+            IFN_ENGINE_PREFILL_LOCAL_CHECK(ifn_prefill_global_sconv_prep_store(
                 s->blas, s->p_qrgs, s->p_k_proj, s->p_v_proj, ik, iv, lw->k_sconv_w, lw->v_sconv_w,
                 lw->k_sconv_proj, lw->v_sconv_proj, s->k_ring[vi], s->v_ring[vi], lw->q_clip_scale,
                 lw->rel_clip_scale, s->k_cache[vi], s->v_cache[vi], s->k_scale[vi], s->v_scale[vi],
                 (uint8_t)s->config.kv_format, s->kv_cap[vi], s->p_ctrl_d, s->p_w_f16, n,
                 s->p_pos_vec, stream));
-            squid_launch_prefill_flash_attn_tc(s->p_qrgs, lw->rel_logits_proj, s->k_cache[vi],
-                                               s->v_cache[vi], s->k_scale[vi], s->v_scale[vi],
-                                               (uint8_t)s->config.kv_format, s->p_attn_gated_h,
-                                               s->kv_cap[vi], 0, n, s->p_pos_vec, stream);
+            ifn_launch_prefill_flash_attn_tc(s->p_qrgs, lw->rel_logits_proj, s->k_cache[vi],
+                                             s->v_cache[vi], s->k_scale[vi], s->v_scale[vi],
+                                             (uint8_t)s->config.kv_format, s->p_attn_gated_h,
+                                             s->kv_cap[vi], 0, n, s->p_pos_vec, stream);
         } else
             for (int32_t off = 0; off < n;) {
                 int32_t sub = n - off > 256 ? 256 : n - off;
                 float *qrgs = s->p_qrgs + (size_t)off * 6552, *k = s->p_k_proj + (size_t)off * 1024,
                       *val = s->p_v_proj + (size_t)off * 1024;
                 const int32_t *p = s->p_pos_vec + off / 8;
-                squid_launch_prefill_local_sconv_prep_store(
+                ifn_launch_prefill_local_sconv_prep_store(
                     qrgs, k, val, lw->k_sconv_w, lw->v_sconv_w, s->k_ring[vi], s->v_ring[vi],
                     lw->q_clip_scale, lw->rel_clip_scale, s->k_cache[vi], s->v_cache[vi],
                     s->kv_cap[vi], sub, p, stream);
-                squid_launch_prefill_flash_attn_tc(
+                ifn_launch_prefill_flash_attn_tc(
                     qrgs, lw->rel_logits_proj, s->k_cache[vi], s->v_cache[vi], NULL, NULL, 0,
                     (unsigned char *)s->p_attn_gated_h + (size_t)off * 3072 * 2, s->kv_cap[vi],
                     1024, sub, p, stream);
                 off += sub;
             }
-        ifn_am_engine_prefill_gemm(s, &lw->w_o, s->p_attn_gated_h, s->p_o_proj, n);
+        ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_o, s->p_attn_gated_h, s->p_o_proj, n);
         if (s->status != IFN_OK)
             return;
-        squid_launch_prefill_sconv_post_res(s->p_o_proj, 0, lw->attn_sconv_w, s->attn_ring[vi],
-                                            s->p_hidden, s->p_residual, NULL, s->p_blocks,
-                                            s->p_partial, blocks, boundary ? 1 : 0, n, s->p_pos_vec,
-                                            NULL, NULL, NULL, stream);
+        ifn_launch_prefill_sconv_post_res(s->p_o_proj, 0, lw->attn_sconv_w, s->attn_ring[vi],
+                                          s->p_hidden, s->p_residual, NULL, s->p_blocks,
+                                          s->p_partial, blocks, boundary ? 1 : 0, n, s->p_pos_vec,
+                                          NULL, NULL, NULL, stream);
         if (boundary)
             blocks++;
-        squid_launch_fused_depth_norm(
-            s->p_residual, NULL, s->p_blocks, blocks, w->mlp_queries[l],
-            use_prior ? NULL : lw->mlp_norm, NULL, NULL, use_prior ? s->p_mlp_in : s->p_mlp_normed,
-            NULL, NULL, use_prior ? NULL : s->p_mlp_normed_h, NULL, NULL, 1, n, stream);
+        ifn_launch_fused_depth_norm(s->p_residual, NULL, s->p_blocks, blocks, w->mlp_queries[l],
+                                    use_prior ? NULL : lw->mlp_norm, NULL, NULL,
+                                    use_prior ? s->p_mlp_in : s->p_mlp_normed, NULL, NULL,
+                                    use_prior ? NULL : s->p_mlp_normed_h, NULL, NULL, 1, n, stream);
         if (use_prior)
-            ifn_am_engine_prefill_controller(s, s->p_mlp_in, w->cross_pass_queries + (2 * (l - 6) + 1) * 2304,
-                       &lw->ctrl[3], lw->mlp_norm, s->p_mlp_normed, s->p_mlp_normed_h, n);
-        CLinearWeight router = lw->router_nvfp4;
+            ifn_am_engine_prefill_ifn_engine_prefill_local_controller(
+                s, s->p_mlp_in, w->cross_pass_queries + (2 * (l - 6) + 1) * 2304, &lw->ctrl[3],
+                lw->mlp_norm, s->p_mlp_normed, s->p_mlp_normed_h, n);
+        ifn_cuda_c_linear_weight router = lw->router_nvfp4;
         if (s->weights->config.mode != 2) {
-            router = (CLinearWeight){0, 128, 2304, lw->router_w, NULL, NULL, 1};
+            router = (ifn_cuda_c_linear_weight){0, 128, 2304, lw->router_w, NULL, NULL, 1};
         }
-        ifn_am_engine_prefill_gemm(s, &router, s->p_mlp_normed_h, s->p_router_logits, n);
+        ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &router, s->p_mlp_normed_h, s->p_router_logits, n);
         if (s->status != IFN_OK)
             return;
-        squid_launch_prefill_route_and_sort(s->p_router_logits, lw->router_bias, s->p_route_ids,
-                                            s->p_route_w, s->p_exp_offsets, s->p_sorted_tok,
-                                            s->p_sorted_slot, s->p_sorted_w, n, stream);
-        squid_launch_prefill_moe_gate_up_h(&lw->w13, s->p_mlp_normed_h, s->p_exp_offsets,
-                                           s->p_sorted_tok, s->p_sorted_slot, s->p_moe_act_h, n,
-                                           stream);
-        squid_launch_prefill_moe_down_h(&lw->w2, s->p_moe_act_h, s->p_exp_offsets, s->p_sorted_tok,
-                                        s->p_sorted_slot, s->p_sorted_w, s->p_moe_slot_out, n,
-                                        stream);
+        ifn_launch_prefill_route_and_sort(s->p_router_logits, lw->router_bias, s->p_route_ids,
+                                          s->p_route_w, s->p_exp_offsets, s->p_sorted_tok,
+                                          s->p_sorted_slot, s->p_sorted_w, n, stream);
+        ifn_launch_prefill_moe_gate_up_h(&lw->w13, s->p_mlp_normed_h, s->p_exp_offsets,
+                                         s->p_sorted_tok, s->p_sorted_slot, s->p_moe_act_h, n,
+                                         stream);
+        ifn_launch_prefill_moe_down_h(&lw->w2, s->p_moe_act_h, s->p_exp_offsets, s->p_sorted_tok,
+                                      s->p_sorted_slot, s->p_sorted_w, s->p_moe_slot_out, n,
+                                      stream);
         if (vi == 17 || vi == 29)
-            squid_launch_prefill_sconv_post_res(
+            ifn_launch_prefill_sconv_post_res(
                 s->p_moe_slot_out, 1, lw->mlp_sconv_w, s->mlp_ring[vi], s->p_residual, s->p_hidden,
                 NULL, NULL, NULL, 0, 0, n, s->p_pos_vec, NULL, NULL, NULL, stream);
         else
             pending = true;
-        CHECK(ifn_cuda_launch_status());
+        IFN_ENGINE_PREFILL_LOCAL_CHECK(ifn_cuda_launch_status());
     }
-    squid_launch_prefill_sconv_post_res(s->p_moe_slot_out, 1,
-                                        w->layers[s->schedule[47].layer].mlp_sconv_w,
-                                        s->mlp_ring[47], s->p_residual, s->p_hidden, NULL, NULL,
-                                        NULL, 0, 0, n, s->p_pos_vec, NULL, NULL, NULL, stream);
-    squid_launch_fused_depth_norm(s->p_hidden, NULL, s->p_blocks, blocks, w->output_query,
-                                  w->final_norm, NULL, NULL, s->p_mlp_normed, NULL, NULL, NULL,
-                                  NULL, NULL, 1, n, stream);
+    ifn_launch_prefill_sconv_post_res(s->p_moe_slot_out, 1,
+                                      w->layers[s->schedule[47].layer].mlp_sconv_w, s->mlp_ring[47],
+                                      s->p_residual, s->p_hidden, NULL, NULL, NULL, 0, 0, n,
+                                      s->p_pos_vec, NULL, NULL, NULL, stream);
+    ifn_launch_fused_depth_norm(s->p_hidden, NULL, s->p_blocks, blocks, w->output_query,
+                                w->final_norm, NULL, NULL, s->p_mlp_normed, NULL, NULL, NULL, NULL,
+                                NULL, 1, n, stream);
     if (s->use_mtp) {
-        squid_launch_prefill_copy_taps(s->p_mlp_normed, s->p_taps, 3, n, stream);
+        ifn_launch_prefill_copy_taps(s->p_mlp_normed, s->p_taps, 3, n, stream);
         for (int32_t i = 0; i < n / 8; i++)
             ifn_spec_commit(s, s->p_taps + (size_t)i * 4 * 8 * 2304, 8, s->p_pos_vec + i);
     }
-    CHECK(ifn_cuda_launch_status());
-    CHECK(backend->sync(backend->context, stream));
+    IFN_ENGINE_PREFILL_LOCAL_CHECK(ifn_cuda_launch_status());
+    IFN_ENGINE_PREFILL_LOCAL_CHECK(backend->sync(backend->context, stream));
     s->position += n;
 }
 
-#undef CHECK
+#undef IFN_ENGINE_PREFILL_LOCAL_CHECK
 
 /* Module: src/engine_runtime.c */
 /* SPDX-License-Identifier: Apache-2.0
@@ -5485,7 +5682,7 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
 
 #include <stdio.h>
 #include <string.h>
-static atomic_flag ifn_am_engine_runtime_live_session = ATOMIC_FLAG_INIT;
+static atomic_flag ifn_am_engine_runtime_ifn_engine_runtime_local_live_session = ATOMIC_FLAG_INIT;
 
 void ifn_ar_check(ifn_session *s, int rc, const char *op) {
     if (rc && s->status == IFN_OK) {
@@ -5496,25 +5693,26 @@ void ifn_ar_check(ifn_session *s, int rc, const char *op) {
     }
 }
 
-static ifn_status ifn_am_engine_runtime_result(ifn_session *s) {
+static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_result(ifn_session *s) {
     return ifn_error(s->status, s->status == IFN_OK ? "" : s->failure);
 }
 
-static bool ifn_am_engine_runtime_lock(ifn_session *s) {
+static bool ifn_am_engine_runtime_ifn_engine_runtime_local_lock(ifn_session *s) {
     return s && !atomic_flag_test_and_set_explicit(&s->busy, memory_order_acquire);
 }
 
-static void ifn_am_engine_runtime_unlock(ifn_session *s) {
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(ifn_session *s) {
     atomic_flag_clear_explicit(&s->busy, memory_order_release);
 }
 
-static void ifn_am_engine_runtime_sync(ifn_session *s) {
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_sync(ifn_session *s) {
     if (s->status == IFN_OK)
         ifn_ar_check(s, s->weights->backend.sync(s->weights->backend.context, s->stream),
                      "synchronize session");
 }
 
-static void ifn_am_engine_runtime_copy(ifn_session *s, void *dst, const void *src, size_t bytes, int kind) {
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_copy(ifn_session *s, void *dst, const void *src, size_t bytes,
+                                          int kind) {
     if (s->status == IFN_OK)
         ifn_ar_check(
             s,
@@ -5522,7 +5720,7 @@ static void ifn_am_engine_runtime_copy(ifn_session *s, void *dst, const void *sr
             "session copy");
 }
 
-static ifn_device_scope ifn_am_engine_runtime_enter(ifn_session *s) {
+static ifn_device_scope ifn_am_engine_runtime_ifn_engine_runtime_local_enter(ifn_session *s) {
     ifn_device_scope scope = {-1, NULL};
     s->status = IFN_OK;
     s->failure[0] = 0;
@@ -5533,7 +5731,7 @@ static ifn_device_scope ifn_am_engine_runtime_enter(ifn_session *s) {
     return scope;
 }
 
-static ifn_status ifn_am_engine_runtime_leave(ifn_session *s, const ifn_device_scope *scope) {
+static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_leave(ifn_session *s, const ifn_device_scope *scope) {
     if (scope->device >= 0) {
         int restore = s->weights->backend.leave(s->weights->backend.context, scope);
         /* A normal cancellation must not hide context-restoration failure. */
@@ -5545,45 +5743,45 @@ static ifn_status ifn_am_engine_runtime_leave(ifn_session *s, const ifn_device_s
         ifn_prefix_invalidate(s);
         s->poisoned = true;
     }
-    return ifn_am_engine_runtime_result(s);
+    return ifn_am_engine_runtime_ifn_engine_runtime_local_result(s);
 }
 
-static void ifn_am_engine_runtime_reset_device(ifn_session *s) {
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_reset_device(ifn_session *s) {
     s->position = 0;
     s->use_mtp = s->verifying = false;
     if (s->status != IFN_OK)
         return;
-    ifn_ar_check(s, squid_cuda_memset_async(s->d_pos, 0, 4, s->stream), "reset position");
+    ifn_ar_check(s, ifn_cuda_memset_async(s->d_pos, 0, 4, s->stream), "reset position");
     for (unsigned i = 0; i < 48 && s->status == IFN_OK; i++) {
-        ifn_ar_check(s, squid_cuda_memset_async(s->k_ring[i], 0, 16 * 1024 * 4, s->stream),
+        ifn_ar_check(s, ifn_cuda_memset_async(s->k_ring[i], 0, 16 * 1024 * 4, s->stream),
                      "reset K ring");
-        ifn_ar_check(s, squid_cuda_memset_async(s->v_ring[i], 0, 16 * 1024 * 4, s->stream),
+        ifn_ar_check(s, ifn_cuda_memset_async(s->v_ring[i], 0, 16 * 1024 * 4, s->stream),
                      "reset V ring");
-        ifn_ar_check(s, squid_cuda_memset_async(s->attn_ring[i], 0, 16 * 2304 * 4, s->stream),
+        ifn_ar_check(s, ifn_cuda_memset_async(s->attn_ring[i], 0, 16 * 2304 * 4, s->stream),
                      "reset attention ring");
-        ifn_ar_check(s, squid_cuda_memset_async(s->mlp_ring[i], 0, 16 * 2304 * 4, s->stream),
+        ifn_ar_check(s, ifn_cuda_memset_async(s->mlp_ring[i], 0, 16 * 2304 * 4, s->stream),
                      "reset MLP ring");
     }
     if (s->ds_f_ring) {
-        ifn_ar_check(s, squid_cuda_memset_async(s->ds_f_ring, 0, 16 * 2304 * 4, s->stream),
+        ifn_ar_check(s, ifn_cuda_memset_async(s->ds_f_ring, 0, 16 * 2304 * 4, s->stream),
                      "reset DSpark ring");
-        ifn_ar_check(s, squid_cuda_memset_async(s->d_draft_is_delta, 0, 4, s->stream),
+        ifn_ar_check(s, ifn_cuda_memset_async(s->d_draft_is_delta, 0, 4, s->stream),
                      "reset draft mode");
     }
-    CSampleConfig cfg = {0};
+    ifn_cuda_c_sample_config cfg = {0};
     cfg.top_p = 1;
-    CLoopCDConfig loop = {0};
+    ifn_cuda_c_loop_cd_config loop = {0};
     loop.ref_pass = 1;
-    ifn_am_engine_runtime_copy(s, s->d_sample_cfg, &cfg, sizeof cfg, 0);
-    ifn_am_engine_runtime_copy(s, s->d_loopcd_cfg, &loop, sizeof loop, 0);
-    ifn_am_engine_runtime_sync(s);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_sample_cfg, &cfg, sizeof cfg, 0);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_loopcd_cfg, &loop, sizeof loop, 0);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
 }
 
-static bool ifn_am_engine_runtime_image_lock(ifn_gpu_weights *w) {
+static bool ifn_am_engine_runtime_ifn_engine_runtime_local_image_lock(ifn_gpu_weights *w) {
     return !atomic_flag_test_and_set_explicit(&w->busy, memory_order_acquire);
 }
 
-static void ifn_am_engine_runtime_image_unlock(ifn_gpu_weights *w) {
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_image_unlock(ifn_gpu_weights *w) {
     atomic_flag_clear_explicit(&w->busy, memory_order_release);
 }
 
@@ -5607,16 +5805,17 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *inpu
     ifn_status rc = ifn_options_resolve(options, &allocator);
     if (rc != IFN_OK)
         return rc;
-    if (!ifn_am_engine_runtime_image_lock(w))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_image_lock(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
-    if (!w->ready || atomic_flag_test_and_set_explicit(&ifn_am_engine_runtime_live_session, memory_order_acquire)) {
-        ifn_am_engine_runtime_image_unlock(w);
+    if (!w->ready || atomic_flag_test_and_set_explicit(&ifn_am_engine_runtime_ifn_engine_runtime_local_live_session,
+                                                       memory_order_acquire)) {
+        ifn_am_engine_runtime_ifn_engine_runtime_local_image_unlock(w);
         return ifn_error(IFN_BUSY, "image not ready or another session exists");
     }
     ifn_session *s = allocator.allocate(allocator.context, sizeof *s);
     if (!s) {
-        atomic_flag_clear_explicit(&ifn_am_engine_runtime_live_session, memory_order_release);
-        ifn_am_engine_runtime_image_unlock(w);
+        atomic_flag_clear_explicit(&ifn_am_engine_runtime_ifn_engine_runtime_local_live_session, memory_order_release);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_image_unlock(w);
         return ifn_error(IFN_OUT_OF_MEMORY, "allocate session bookkeeping");
     }
     memset(s, 0, sizeof *s);
@@ -5628,7 +5827,7 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *inpu
     atomic_init(&s->cancelled, false);
     w->session_users++;
     rc = ifn_ar_bind(w, &s->model);
-    ifn_am_engine_runtime_image_unlock(w);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_image_unlock(w);
     *out = s;
     if (rc != IFN_OK) {
         s->poisoned = true;
@@ -5647,7 +5846,7 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *inpu
         }
         ifn_adaptive_init(s->adaptive_state);
     }
-    size_t groups = squid_sizeof_expert_groups();
+    size_t groups = ifn_sizeof_expert_groups();
     if (!groups || groups > 1048576) {
         s->poisoned = true;
         return ifn_error(IFN_UNSUPPORTED, "unsupported expert group workspace");
@@ -5658,7 +5857,7 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *inpu
         s->poisoned = true;
         return ifn_error(s->status, "session layout overflow");
     }
-    ifn_device_scope scope = ifn_am_engine_runtime_enter(s);
+    ifn_device_scope scope = ifn_am_engine_runtime_ifn_engine_runtime_local_enter(s);
     const ifn_weight_backend *b = &w->backend;
     size_t available = 0;
     if (s->status == IFN_OK)
@@ -5672,7 +5871,7 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *inpu
     if (s->status == IFN_OK)
         ifn_ar_check(s, b->allocate(b->context, &s->arena, s->capacity), "allocate session arena");
     if (s->status == IFN_OK && w->config.with_mtp) {
-        ifn_ar_check(s, squid_cuda_malloc_host_pinned(&s->pinned, 17 * 4, 0),
+        ifn_ar_check(s, ifn_cuda_malloc_host_pinned(&s->pinned, 17 * 4, 0),
                      "allocate adaptive pinned outputs");
         if (s->pinned) {
             s->h_accepted = s->pinned;
@@ -5680,41 +5879,41 @@ ifn_status ifn_session_create(ifn_gpu_weights *w, const ifn_session_config *inpu
             s->h_width = (int32_t *)s->pinned + 9;
         }
         if (s->status == IFN_OK)
-            ifn_ar_check(s, squid_cuda_event_create(&s->done_event, 1),
+            ifn_ar_check(s, ifn_cuda_event_create(&s->done_event, 1),
                          "create adaptive completion event");
     }
     if (s->status == IFN_OK) {
         ifn_ar_layout(s, groups);
         if (s->offset != s->capacity)
             s->status = IFN_LIMIT;
-        ifn_am_engine_runtime_reset_device(s);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_reset_device(s);
     }
-    rc = ifn_am_engine_runtime_leave(s, &scope);
+    rc = ifn_am_engine_runtime_ifn_engine_runtime_local_leave(s, &scope);
     s->ready = rc == IFN_OK;
     return rc;
 }
 
-static ifn_status ifn_am_engine_runtime_begin(ifn_session *s, ifn_device_scope *scope) {
+static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_begin(ifn_session *s, ifn_device_scope *scope) {
     if (!s)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing session");
-    if (!ifn_am_engine_runtime_lock(s))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_lock(s))
         return ifn_error(IFN_BUSY, "session operation already active");
     if (!s->ready || s->poisoned) {
-        ifn_am_engine_runtime_unlock(s);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
         return ifn_error(IFN_GPU_ERROR, "session is not ready; destroy it");
     }
     atomic_store_explicit(&s->cancelled, false, memory_order_release);
-    *scope = ifn_am_engine_runtime_enter(s);
+    *scope = ifn_am_engine_runtime_ifn_engine_runtime_local_enter(s);
     return IFN_OK;
 }
 
-static ifn_status ifn_am_engine_runtime_end(ifn_session *s, const ifn_device_scope *scope) {
-    ifn_status rc = ifn_am_engine_runtime_leave(s, scope);
-    ifn_am_engine_runtime_unlock(s);
+static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_end(ifn_session *s, const ifn_device_scope *scope) {
+    ifn_status rc = ifn_am_engine_runtime_ifn_engine_runtime_local_leave(s, scope);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
     return rc;
 }
 
-static bool ifn_am_engine_runtime_tokens_valid(const int32_t *tokens, size_t n) {
+static bool ifn_am_engine_runtime_ifn_engine_runtime_local_tokens_valid(const int32_t *tokens, size_t n) {
     if (!tokens || !n)
         return false;
     for (size_t i = 0; i < n; i++)
@@ -5723,29 +5922,30 @@ static bool ifn_am_engine_runtime_tokens_valid(const int32_t *tokens, size_t n) 
     return true;
 }
 
-static bool ifn_am_engine_runtime_cancelled(ifn_session *s) {
+static bool ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(ifn_session *s) {
     return atomic_load_explicit(&s->cancelled, memory_order_acquire) ||
            (s->request_control && s->request_control->cancelled(s->request_control->context));
 }
 
-static void ifn_am_engine_runtime_run(ifn_session *s, const int32_t *tokens, int32_t n, bool lm) {
-    ifn_am_engine_runtime_copy(s, s->d_tokens, tokens, (size_t)n * 4, 0);
-    ifn_am_engine_runtime_copy(s, s->d_pos, &s->position, 4, 0);
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_run(ifn_session *s, const int32_t *tokens, int32_t n,
+                                         bool lm) {
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_tokens, tokens, (size_t)n * 4, 0);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_pos, &s->position, 4, 0);
     if (s->status == IFN_OK) {
         ifn_ar_forward(s, n, lm);
         ifn_ar_check(s, ifn_cuda_launch_status(), "target forward launch");
-        ifn_am_engine_runtime_sync(s);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
         if (s->status == IFN_OK)
             s->position += n;
     }
 }
 
-static void ifn_am_engine_runtime_cancel_result(ifn_session *s) {
+static void ifn_am_engine_runtime_ifn_engine_runtime_local_cancel_result(ifn_session *s) {
     /* Cancellation can arrive during the final snapshot after prefix_finish's
      * flag read. Invalidate here too, before reset destroys live local state. */
     ifn_prefix_invalidate(s);
     if (s->status == IFN_OK) {
-        ifn_am_engine_runtime_reset_device(s);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_reset_device(s);
         if (s->status == IFN_OK) {
             s->status = IFN_CANCELLED;
             (void)snprintf(s->failure, sizeof s->failure, "generation cancelled");
@@ -5755,15 +5955,15 @@ static void ifn_am_engine_runtime_cancel_result(ifn_session *s) {
 
 ifn_status ifn_session_reset(ifn_session *s) {
     ifn_device_scope scope;
-    ifn_status rc = ifn_am_engine_runtime_begin(s, &scope);
+    ifn_status rc = ifn_am_engine_runtime_ifn_engine_runtime_local_begin(s, &scope);
     if (rc != IFN_OK)
         return rc;
     ifn_prefix_invalidate(s);
     s->prefix_info = (ifn_prefix_info)IFN_PREFIX_INFO_INIT;
-    ifn_am_engine_runtime_reset_device(s);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_reset_device(s);
     ifn_lookup_reset(&s->lookup);
     s->decode_info = (ifn_decode_info)IFN_DECODE_INFO_INIT;
-    return ifn_am_engine_runtime_end(s, &scope);
+    return ifn_am_engine_runtime_ifn_engine_runtime_local_end(s, &scope);
 }
 
 ifn_status ifn_session_cancel(ifn_session *s) {
@@ -5775,31 +5975,32 @@ ifn_status ifn_session_cancel(ifn_session *s) {
 
 ifn_status ifn_session_logits(ifn_session *s, const int32_t *tokens, size_t n, uint32_t reset,
                               float *out, size_t capacity) {
-    if (!s || n > 8 || reset > 1 || !out || capacity < 200058 || !ifn_am_engine_runtime_tokens_valid(tokens, n))
+    if (!s || n > 8 || reset > 1 || !out || capacity < 200058 ||
+        !ifn_am_engine_runtime_ifn_engine_runtime_local_tokens_valid(tokens, n))
         return ifn_error(IFN_INVALID_ARGUMENT,
                          "logits needs 1..8 valid IDs and 200058 output floats");
     ifn_device_scope scope;
-    ifn_status rc = ifn_am_engine_runtime_begin(s, &scope);
+    ifn_status rc = ifn_am_engine_runtime_ifn_engine_runtime_local_begin(s, &scope);
     if (rc != IFN_OK)
         return rc;
     if (n > s->config.context_tokens - (reset ? 0 : (uint32_t)s->position)) {
-        ifn_status restore = ifn_am_engine_runtime_end(s, &scope);
+        ifn_status restore = ifn_am_engine_runtime_ifn_engine_runtime_local_end(s, &scope);
         return restore == IFN_OK ? ifn_error(IFN_LIMIT, "logits context limit") : restore;
     }
     ifn_prefix_invalidate(s);
     s->use_mtp = s->verifying = false;
     if (reset)
-        ifn_am_engine_runtime_reset_device(s);
-    CSampleConfig cfg = {0};
+        ifn_am_engine_runtime_ifn_engine_runtime_local_reset_device(s);
+    ifn_cuda_c_sample_config cfg = {0};
     cfg.inv_temp = -1;
     cfg.top_p = 1;
-    ifn_am_engine_runtime_copy(s, s->d_sample_cfg, &cfg, sizeof cfg, 0);
-    ifn_am_engine_runtime_run(s, tokens, (int32_t)n, true);
-    ifn_am_engine_runtime_copy(s, out, s->lm_logits + (n - 1) * 200058, 200058 * 4, 1);
-    ifn_am_engine_runtime_sync(s);
-    if (ifn_am_engine_runtime_cancelled(s))
-        ifn_am_engine_runtime_cancel_result(s);
-    return ifn_am_engine_runtime_end(s, &scope);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_sample_cfg, &cfg, sizeof cfg, 0);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_run(s, tokens, (int32_t)n, true);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, out, s->lm_logits + (n - 1) * 200058, 200058 * 4, 1);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
+    if (ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s))
+        ifn_am_engine_runtime_ifn_engine_runtime_local_cancel_result(s);
+    return ifn_am_engine_runtime_ifn_engine_runtime_local_end(s, &scope);
 }
 
 ifn_status ifn_session_generate(ifn_session *s, const int32_t *tokens, size_t n, size_t max_new,
@@ -5814,8 +6015,9 @@ ifn_status ifn_session_generate(ifn_session *s, const int32_t *tokens, size_t n,
     return rc;
 }
 
-static bool ifn_am_engine_runtime_emit(ifn_session *s, int32_t token, int32_t *out, ifn_token_callback callback,
-                 void *context, ifn_generate_stats *stats) {
+static bool ifn_am_engine_runtime_ifn_engine_runtime_local_emit(ifn_session *s, int32_t token, int32_t *out,
+                                          ifn_token_callback callback, void *context,
+                                          ifn_generate_stats *stats) {
     if (token < 0 || token >= 200058) {
         ifn_ar_check(s, 1, "invalid generated token");
         return false;
@@ -5835,10 +6037,10 @@ static bool ifn_am_engine_runtime_emit(ifn_session *s, int32_t token, int32_t *o
     return true;
 }
 
-static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int32_t *tokens, size_t n, size_t max_new,
-                                const ifn_decode_options *input, int32_t *out, size_t capacity,
-                                ifn_token_callback callback, void *context,
-                                ifn_decode_stats *detail, const ifn_run_control *control) {
+static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_generate_impl(
+    ifn_session *s, const int32_t *tokens, size_t n, size_t max_new,
+    const ifn_decode_options *input, int32_t *out, size_t capacity, ifn_token_callback callback,
+    void *context, ifn_decode_stats *detail, const ifn_run_control *control) {
     if (detail)
         memset(detail, 0, sizeof *detail);
     ifn_decode_options options;
@@ -5847,38 +6049,38 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
         return rc;
     if (!s || !max_new || (!control && (max_new > capacity || !out)) || !detail ||
         n > s->config.context_tokens || max_new > s->config.context_tokens - n ||
-        !ifn_am_engine_runtime_tokens_valid(tokens, n))
+        !ifn_am_engine_runtime_ifn_engine_runtime_local_tokens_valid(tokens, n))
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid generation bounds or token IDs");
     if (options.adaptive && !s->config.use_graphs)
         return ifn_error(IFN_UNSUPPORTED, "adaptive decoding requires CUDA graphs");
     if (options.draft_tokens && !s->model.dspark.loaded)
         return ifn_error(IFN_UNSUPPORTED, "DSpark requires MTP weights; load them explicitly");
     ifn_device_scope scope;
-    rc = ifn_am_engine_runtime_begin(s, &scope);
+    rc = ifn_am_engine_runtime_ifn_engine_runtime_local_begin(s, &scope);
     if (rc != IFN_OK)
         return rc;
     s->request_control = control;
-    if (ifn_am_engine_runtime_cancelled(s)) {
+    if (ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s)) {
         ifn_prefix_invalidate(s);
         if (s->status == IFN_OK) {
             s->status = IFN_CANCELLED;
             (void)snprintf(s->failure, sizeof s->failure, "request cancelled before generation");
         }
         s->request_control = NULL;
-        return ifn_am_engine_runtime_end(s, &scope);
+        return ifn_am_engine_runtime_ifn_engine_runtime_local_end(s, &scope);
     }
     uint32_t start_pos =
         ifn_prefix_begin(s, tokens, (uint32_t)n, (uint32_t)max_new, options.draft_tokens != 0);
     if (!start_pos)
-        ifn_am_engine_runtime_reset_device(s);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_reset_device(s);
     s->decode_info = (ifn_decode_info)IFN_DECODE_INFO_INIT;
     s->use_mtp = options.draft_tokens != 0;
-    CSampleConfig sample = {0};
+    ifn_cuda_c_sample_config sample = {0};
     sample.inv_temp = options.temperature >= 1e-4f ? 1.0f / options.temperature : 0;
     sample.top_p = options.top_p;
     sample.top_k = options.top_k;
     sample.seed = options.seed;
-    ifn_am_engine_runtime_copy(s, s->d_sample_cfg, &sample, sizeof sample, 0);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_sample_cfg, &sample, sizeof sample, 0);
     ifn_generate_stats *stats = &detail->generation;
     stats->prompt_tokens = (uint32_t)n;
     stats->last_token = -1;
@@ -5900,10 +6102,12 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
         }
     }
     size_t offset = start_pos;
-    for (unsigned target = 0; target < 2 && s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s); target++) {
+    for (unsigned target = 0;
+         target < 2 && s->status == IFN_OK && !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s); target++) {
         if (!targets[target])
             continue;
-        while (offset < targets[target] && s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s)) {
+        while (offset < targets[target] && s->status == IFN_OK &&
+               !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s)) {
             size_t remain = targets[target] - offset;
             if (remain >= 32) {
                 int32_t chunk = (int32_t)(remain > 2048 ? 2048 : remain & ~(size_t)7);
@@ -5911,15 +6115,16 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
                 offset += (size_t)chunk;
             } else {
                 int32_t chunk = (int32_t)(remain > 8 ? 8 : remain);
-                ifn_am_engine_runtime_run(s, tokens + offset, chunk, false);
+                ifn_am_engine_runtime_ifn_engine_runtime_local_run(s, tokens + offset, chunk, false);
                 offset += (size_t)chunk;
             }
         }
-        if (!ifn_am_engine_runtime_cancelled(s))
+        if (!ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s))
             ifn_prefix_save(s, slots[target], (uint32_t)offset);
     }
     int32_t last_batch = 0;
-    for (size_t i = offset; i < n && s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s);) {
+    for (size_t i = offset;
+         i < n && s->status == IFN_OK && !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s);) {
         if (n - i > 32) {
             size_t avail = (n - i - 1) & ~(size_t)7;
             int32_t chunk = (int32_t)(avail > 2048 ? 2048 : avail);
@@ -5927,22 +6132,23 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
             i += (size_t)chunk;
         } else {
             last_batch = (int32_t)(n - i > 8 ? 8 : n - i);
-            ifn_am_engine_runtime_run(s, tokens + i, last_batch, i + (size_t)last_batch == n);
+            ifn_am_engine_runtime_ifn_engine_runtime_local_run(s, tokens + i, last_batch, i + (size_t)last_batch == n);
             i += (size_t)last_batch;
         }
     }
-    if (!ifn_am_engine_runtime_cancelled(s))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s))
         ifn_prefix_prompt(s, tokens, (uint32_t)n, options.draft_tokens != 0);
     int32_t token = -1;
-    if (!ifn_am_engine_runtime_cancelled(s))
-        ifn_am_engine_runtime_copy(s, &token, s->d_next_tokens + (last_batch ? last_batch - 1 : 0), 4, 1);
-    ifn_am_engine_runtime_sync(s);
-    bool keep =
-        s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s) && ifn_am_engine_runtime_emit(s, token, out, callback, context, stats);
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s))
+        ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, &token,
+                                      s->d_next_tokens + (last_batch ? last_batch - 1 : 0), 4, 1);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
+    bool keep = s->status == IFN_OK && !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s) &&
+                ifn_am_engine_runtime_ifn_engine_runtime_local_emit(s, token, out, callback, context, stats);
     uint32_t drafts = options.draft_tokens;
     if (keep && drafts && stats->generated_tokens < max_new) {
-        ifn_am_engine_runtime_copy(s, s->d_anchor, &token, 4, 0);
-        ifn_am_engine_runtime_copy(s, s->d_pos, &s->position, 4, 0);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_anchor, &token, 4, 0);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_pos, &s->position, 4, 0);
         if (options.prompt_lookup) {
             ifn_lookup_reset(&s->lookup);
             size_t start = n > 8192 ? n - 8192 : 0;
@@ -5950,7 +6156,8 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
                 ifn_lookup_push(&s->lookup, tokens[i]);
             ifn_lookup_push(&s->lookup, token);
         }
-        while (stats->generated_tokens < max_new && s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s) &&
+        while (stats->generated_tokens < max_new && s->status == IFN_OK &&
+               !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s) &&
                (uint32_t)s->position + drafts + 1 <= s->config.context_tokens) {
             int32_t accepted[8] = {0}, count = 0, width = (int32_t)drafts + 1;
             bool lookup = false;
@@ -5965,9 +6172,9 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
                 }
             } else {
                 ifn_spec_step(s, drafts);
-                ifn_am_engine_runtime_copy(s, &count, s->d_num_acc, 4, 1);
-                ifn_am_engine_runtime_copy(s, accepted, s->d_accepted, (drafts + 1) * 4, 1);
-                ifn_am_engine_runtime_sync(s);
+                ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, &count, s->d_num_acc, 4, 1);
+                ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, accepted, s->d_accepted, (drafts + 1) * 4, 1);
+                ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
             }
             if (s->status != IFN_OK)
                 break;
@@ -5992,12 +6199,13 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
             for (int32_t i = 0; i < count; i++)
                 ifn_prefix_feed(s, i == 0 ? token : accepted[i - 1]);
             s->position += count;
-            for (int32_t i = 0; i < count && stats->generated_tokens < max_new && !ifn_am_engine_runtime_cancelled(s);
+            for (int32_t i = 0; i < count && stats->generated_tokens < max_new &&
+                                !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s);
                  i++) {
                 token = accepted[i];
                 if (options.prompt_lookup)
                     ifn_lookup_push(&s->lookup, token);
-                keep = ifn_am_engine_runtime_emit(s, token, out, callback, context, stats);
+                keep = ifn_am_engine_runtime_ifn_engine_runtime_local_emit(s, token, out, callback, context, stats);
                 if (!keep)
                     break;
             }
@@ -6007,49 +6215,50 @@ static ifn_status ifn_am_engine_runtime_generate_impl(ifn_session *s, const int3
     }
     ifn_adaptive_drain(s);
     if (keep && !drafts && stats->generated_tokens < max_new && s->status == IFN_OK &&
-        !ifn_am_engine_runtime_cancelled(s) && s->config.use_graphs && !s->graph) {
-        ifn_ar_check(s, squid_cuda_graph_begin(s->stream), "begin AR graph");
+        !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s) && s->config.use_graphs && !s->graph) {
+        ifn_ar_check(s, ifn_cuda_graph_begin(s->stream), "begin AR graph");
         if (s->status == IFN_OK) {
             ifn_ar_forward(s, 1, true);
             ifn_ar_check(s, ifn_cuda_launch_status(), "capture target forward");
-            ifn_ar_check(s, squid_cuda_graph_end_instantiate(s->stream, &s->graph),
+            ifn_ar_check(s, ifn_cuda_graph_end_instantiate(s->stream, &s->graph),
                          "instantiate AR graph");
         }
     }
     /* Speculation uses eager B=1 at the context boundary, exactly as Zig. */
-    while (keep && stats->generated_tokens < max_new && s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s)) {
+    while (keep && stats->generated_tokens < max_new && s->status == IFN_OK &&
+           !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s)) {
         int32_t fed = token;
         if (s->config.use_graphs && !drafts) {
-            ifn_am_engine_runtime_copy(s, s->d_tokens, &token, 4, 0);
-            ifn_am_engine_runtime_copy(s, s->d_pos, &s->position, 4, 0);
+            ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_tokens, &token, 4, 0);
+            ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, s->d_pos, &s->position, 4, 0);
             if (s->status == IFN_OK)
-                ifn_ar_check(s, squid_cuda_graph_launch(s->graph, s->stream), "launch AR graph");
-            ifn_am_engine_runtime_sync(s);
+                ifn_ar_check(s, ifn_cuda_graph_launch(s->graph, s->stream), "launch AR graph");
+            ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
             if (s->status == IFN_OK)
                 s->position++;
         } else
-            ifn_am_engine_runtime_run(s, &token, 1, true);
+            ifn_am_engine_runtime_ifn_engine_runtime_local_run(s, &token, 1, true);
         ifn_prefix_feed(s, fed);
-        ifn_am_engine_runtime_copy(s, &token, s->d_next_tokens, 4, 1);
-        ifn_am_engine_runtime_sync(s);
-        if (s->status == IFN_OK && !ifn_am_engine_runtime_cancelled(s))
-            keep = ifn_am_engine_runtime_emit(s, token, out, callback, context, stats);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_copy(s, &token, s->d_next_tokens, 4, 1);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
+        if (s->status == IFN_OK && !ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s))
+            keep = ifn_am_engine_runtime_ifn_engine_runtime_local_emit(s, token, out, callback, context, stats);
     }
-    ifn_prefix_finish(s, ifn_am_engine_runtime_cancelled(s));
-    if (ifn_am_engine_runtime_cancelled(s)) {
+    ifn_prefix_finish(s, ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s));
+    if (ifn_am_engine_runtime_ifn_engine_runtime_local_cancelled(s)) {
         stats->finish_reason = IFN_FINISH_CANCELLED;
-        ifn_am_engine_runtime_cancel_result(s);
+        ifn_am_engine_runtime_ifn_engine_runtime_local_cancel_result(s);
     }
     s->request_control = NULL;
-    return ifn_am_engine_runtime_end(s, &scope);
+    return ifn_am_engine_runtime_ifn_engine_runtime_local_end(s, &scope);
 }
 
 ifn_status ifn_session_generate_ex(ifn_session *s, const int32_t *tokens, size_t n, size_t max_new,
                                    const ifn_decode_options *input, int32_t *out, size_t capacity,
                                    ifn_token_callback callback, void *context,
                                    ifn_decode_stats *detail) {
-    return ifn_am_engine_runtime_generate_impl(s, tokens, n, max_new, input, out, capacity, callback, context, detail,
-                         NULL);
+    return ifn_am_engine_runtime_ifn_engine_runtime_local_generate_impl(s, tokens, n, max_new, input, out, capacity,
+                                                  callback, context, detail, NULL);
 }
 
 ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens, size_t n,
@@ -6059,7 +6268,8 @@ ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens
                                            const ifn_run_control *control) {
     if (!control || !control->cancelled)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing request cancellation control");
-    return ifn_am_engine_runtime_generate_impl(s, tokens, n, max_new, input, NULL, 0, callback, context, detail, control);
+    return ifn_am_engine_runtime_ifn_engine_runtime_local_generate_impl(s, tokens, n, max_new, input, NULL, 0, callback,
+                                                  context, detail, control);
 }
 
 ifn_status ifn_session_owned_plan(ifn_gpu_weights *weights, const ifn_session_config *config,
@@ -6073,7 +6283,7 @@ ifn_status ifn_session_owned_plan(ifn_gpu_weights *weights, const ifn_session_co
     memset(s, 0, sizeof *s);
     s->weights = weights;
     s->config = *config;
-    size_t groups = squid_sizeof_expert_groups();
+    size_t groups = ifn_sizeof_expert_groups();
     if (!groups || groups > 1048576) {
         options->release(options->context, s);
         return ifn_error(IFN_UNSUPPORTED, "unsupported expert group size");
@@ -6086,7 +6296,7 @@ ifn_status ifn_session_owned_plan(ifn_gpu_weights *weights, const ifn_session_co
     return rc;
 }
 
-static bool ifn_am_engine_runtime_has_graphs(const ifn_session *s) {
+static bool ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(const ifn_session *s) {
     if (s->graph || s->draft_graph || s->lookup_graph ||
         (s->adaptive_state && ifn_adaptive_live(s->adaptive_state)))
         return true;
@@ -6099,7 +6309,7 @@ static bool ifn_am_engine_runtime_has_graphs(const ifn_session *s) {
 ifn_status ifn_session_prefix_cache(ifn_session *s, uint32_t enabled) {
     if (!s || enabled > 1)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid prefix cache configuration");
-    if (!ifn_am_engine_runtime_lock(s))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_lock(s))
         return ifn_error(IFN_BUSY, "session operation already active");
     ifn_status rc = IFN_OK;
     if (!s->ready || s->poisoned)
@@ -6115,32 +6325,32 @@ ifn_status ifn_session_prefix_cache(ifn_session *s, uint32_t enabled) {
         s->prefix_info = (ifn_prefix_info)IFN_PREFIX_INFO_INIT;
         rc = ifn_error(IFN_OK, "");
     }
-    ifn_am_engine_runtime_unlock(s);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
     return rc;
 }
 
 ifn_status ifn_session_prefix_info(ifn_session *s, ifn_prefix_info *out) {
     if (!s || !out || out->struct_size < sizeof *out || out->api_version != IFN_API_VERSION)
         return ifn_error(IFN_INVALID_ARGUMENT, "initialize prefix info size/version");
-    if (!ifn_am_engine_runtime_lock(s))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_lock(s))
         return ifn_error(IFN_BUSY, "session operation already active");
     *out = s->prefix_info;
     out->struct_size = sizeof *out;
     out->api_version = IFN_API_VERSION;
     out->host_bytes = s->prefix.host_bytes;
-    ifn_am_engine_runtime_unlock(s);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
     return ifn_error(IFN_OK, "");
 }
 
 ifn_status ifn_session_decode_info(ifn_session *s, ifn_decode_info *out) {
     if (!s || !out || out->struct_size < sizeof *out || out->api_version != IFN_API_VERSION)
         return ifn_error(IFN_INVALID_ARGUMENT, "initialize decode info size/version");
-    if (!ifn_am_engine_runtime_lock(s))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_lock(s))
         return ifn_error(IFN_BUSY, "session operation already active");
     *out = s->decode_info;
     out->struct_size = sizeof *out;
     out->api_version = IFN_API_VERSION;
-    ifn_am_engine_runtime_unlock(s);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
     return ifn_error(IFN_OK, "");
 }
 
@@ -6150,7 +6360,7 @@ ifn_status ifn_session_destroy(ifn_session **handle) {
     ifn_session *s = *handle;
     if (!s)
         return ifn_error(IFN_OK, "");
-    if (!ifn_am_engine_runtime_lock(s))
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_lock(s))
         return ifn_error(IFN_BUSY, "session operation already active");
     s->ready = false;
     if (s->adaptive_state && !ifn_adaptive_live(s->adaptive_state)) {
@@ -6160,12 +6370,12 @@ ifn_status ifn_session_destroy(ifn_session **handle) {
     const ifn_weight_backend *b = &s->weights->backend;
     s->status = IFN_OK;
     s->failure[0] = 0;
-    if (s->arena || s->stream || ifn_am_engine_runtime_has_graphs(s) || s->blas || s->adaptive_state || s->pinned ||
-        s->done_event) {
-        ifn_device_scope scope = ifn_am_engine_runtime_enter(s);
+    if (s->arena || s->stream || ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s) || s->blas ||
+        s->adaptive_state || s->pinned || s->done_event) {
+        ifn_device_scope scope = ifn_am_engine_runtime_ifn_engine_runtime_local_enter(s);
         if (s->status == IFN_OK) {
             if (s->stream)
-                ifn_am_engine_runtime_sync(s);
+                ifn_am_engine_runtime_ifn_engine_runtime_local_sync(s);
             if (s->adaptive_state) {
                 int e = ifn_adaptive_cleanup(s->adaptive_state);
                 if (!e) {
@@ -6177,76 +6387,76 @@ ifn_status ifn_session_destroy(ifn_session **handle) {
             void **extra[2] = {&s->draft_graph, &s->lookup_graph};
             for (unsigned i = 0; i < 2; i++)
                 if (*extra[i]) {
-                    int e = squid_cuda_graph_destroy(*extra[i]);
+                    int e = ifn_cuda_graph_destroy(*extra[i]);
                     if (!e)
                         *extra[i] = NULL;
                     ifn_ar_check(s, e, "destroy adaptive component graph");
                 }
             for (unsigned i = 1; i < 8; i++)
                 if (s->spec_graph[i]) {
-                    int e = squid_cuda_graph_destroy(s->spec_graph[i]);
+                    int e = ifn_cuda_graph_destroy(s->spec_graph[i]);
                     if (!e)
                         s->spec_graph[i] = NULL;
                     ifn_ar_check(s, e, "destroy DSpark graph");
                 }
             if (s->graph) {
-                int e = squid_cuda_graph_destroy(s->graph);
+                int e = ifn_cuda_graph_destroy(s->graph);
                 if (!e)
                     s->graph = NULL;
                 ifn_ar_check(s, e, "destroy AR graph");
             }
-            if (s->blas && !ifn_am_engine_runtime_has_graphs(s)) {
+            if (s->blas && !ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s)) {
                 int e = ifn_blas_destroy(s->blas);
                 if (!e)
                     s->blas = NULL;
                 ifn_ar_check(s, e, "destroy session cuBLAS");
             }
-            if (s->arena && !ifn_am_engine_runtime_has_graphs(s) && !s->blas) {
+            if (s->arena && !ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s) && !s->blas) {
                 int e = b->release(b->context, s->arena);
                 if (!e)
                     s->arena = NULL;
                 ifn_ar_check(s, e, "free session arena");
             }
-            if (s->pinned && !ifn_am_engine_runtime_has_graphs(s)) {
-                int e = squid_cuda_free_host(s->pinned);
+            if (s->pinned && !ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s)) {
+                int e = ifn_cuda_free_host(s->pinned);
                 if (!e)
                     s->pinned = NULL;
                 ifn_ar_check(s, e, "free adaptive pinned outputs");
             }
-            if (s->done_event && !ifn_am_engine_runtime_has_graphs(s)) {
-                int e = squid_cuda_event_destroy(s->done_event);
+            if (s->done_event && !ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s)) {
+                int e = ifn_cuda_event_destroy(s->done_event);
                 if (!e)
                     s->done_event = NULL;
                 ifn_ar_check(s, e, "destroy adaptive completion event");
             }
-            if (s->stream && !s->arena && !ifn_am_engine_runtime_has_graphs(s) && !s->blas && !s->pinned &&
-                !s->done_event) {
+            if (s->stream && !s->arena && !ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s) && !s->blas &&
+                !s->pinned && !s->done_event) {
                 int e = b->stream_destroy(b->context, s->stream);
                 if (!e)
                     s->stream = NULL;
                 ifn_ar_check(s, e, "destroy session stream");
             }
         }
-        (void)ifn_am_engine_runtime_leave(s, &scope);
+        (void)ifn_am_engine_runtime_ifn_engine_runtime_local_leave(s, &scope);
     }
-    ifn_status rc = ifn_am_engine_runtime_result(s);
-    if (s->arena || s->stream || ifn_am_engine_runtime_has_graphs(s) || s->blas || s->adaptive_state || s->pinned ||
-        s->done_event) {
-        ifn_am_engine_runtime_unlock(s);
+    ifn_status rc = ifn_am_engine_runtime_ifn_engine_runtime_local_result(s);
+    if (s->arena || s->stream || ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s) || s->blas ||
+        s->adaptive_state || s->pinned || s->done_event) {
+        ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
         return rc;
     }
-    if (!ifn_am_engine_runtime_image_lock(s->weights)) {
-        ifn_am_engine_runtime_unlock(s);
+    if (!ifn_am_engine_runtime_ifn_engine_runtime_local_image_lock(s->weights)) {
+        ifn_am_engine_runtime_ifn_engine_runtime_local_unlock(s);
         return ifn_error(IFN_BUSY, "weight operation active; retry session destroy");
     }
     if (s->retained)
         s->weights->session_users--;
-    ifn_am_engine_runtime_image_unlock(s->weights);
+    ifn_am_engine_runtime_ifn_engine_runtime_local_image_unlock(s->weights);
     ifn_prefix_free(s);
     ifn_options allocator = s->allocator;
     *handle = NULL;
     allocator.release(allocator.context, s);
-    atomic_flag_clear_explicit(&ifn_am_engine_runtime_live_session, memory_order_release);
+    atomic_flag_clear_explicit(&ifn_am_engine_runtime_ifn_engine_runtime_local_live_session, memory_order_release);
     return rc;
 }
 
@@ -6256,86 +6466,99 @@ ifn_status ifn_session_destroy(ifn_session **handle) {
 
 
 
-static int ifn_am_gpu_cuda_enter(void *c, int d, ifn_device_scope *old) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_enter(void *c, int d, ifn_device_scope *old) {
     (void)c;
     return ifn_cuda_enter(d, old);
 }
 
-static int ifn_am_gpu_cuda_leave(void *c, const ifn_device_scope *d) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_leave(void *c, const ifn_device_scope *d) {
     (void)c;
     return ifn_cuda_leave(d);
 }
 
-static int ifn_am_gpu_cuda_available(void *c, size_t *n) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_available(void *c, size_t *n) {
     (void)c;
     return ifn_cuda_available(n);
 }
 
-static int ifn_am_gpu_cuda_allocate(void *c, void **p, size_t n) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_allocate(void *c, void **p, size_t n) {
     (void)c;
-    return squid_cuda_malloc(p, n);
+    return ifn_cuda_malloc(p, n);
 }
 
-static int ifn_am_gpu_cuda_release(void *c, void *p) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_release(void *c, void *p) {
     (void)c;
-    return squid_cuda_free(p);
+    return ifn_cuda_free(p);
 }
 
-static int ifn_am_gpu_cuda_stream_create(void *c, void **p) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_stream_create(void *c, void **p) {
     (void)c;
-    return squid_cuda_stream_create(p);
+    return ifn_cuda_stream_create(p);
 }
 
-static int ifn_am_gpu_cuda_stream_destroy(void *c, void *p) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_stream_destroy(void *c, void *p) {
     (void)c;
-    return squid_cuda_stream_destroy(p);
+    return ifn_cuda_stream_destroy(p);
 }
 
-static int ifn_am_gpu_cuda_sync_stream(void *c, void *s) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_sync_stream(void *c, void *s) {
     (void)c;
-    return squid_cuda_stream_sync(s);
+    return ifn_cuda_stream_sync(s);
 }
 
-static int ifn_am_gpu_cuda_copy(void *c, void *out, const void *in, size_t n, int kind, void *s) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_copy(void *c, void *out, const void *in, size_t n, int kind,
+                                   void *s) {
     (void)c;
     /* H2D can borrow stack-derived scales; completion before return is required. */
-    int rc = kind == 0   ? squid_cuda_memcpy_h2d_async(out, in, n, s)
-             : kind == 1 ? squid_cuda_memcpy_d2h_async(out, in, n, s)
-                         : squid_cuda_memcpy_d2d_async(out, in, n, s);
+    int rc = kind == 0   ? ifn_cuda_memcpy_h2d_async(out, in, n, s)
+             : kind == 1 ? ifn_cuda_memcpy_d2h_async(out, in, n, s)
+                         : ifn_cuda_memcpy_d2d_async(out, in, n, s);
     if (!rc && kind == 0)
-        rc = squid_cuda_stream_sync(s);
+        rc = ifn_cuda_stream_sync(s);
     return rc;
 }
 
-static int ifn_am_gpu_cuda_pack(void *c, const void *a, void *b, void *d, void *e, int r, int k, int kind,
-                float *scale, void *s) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_pack(void *c, const void *a, void *b, void *d, void *e, int r, int k,
+                                   int kind, float *scale, void *s) {
     (void)c;
     return ifn_cuda_pack(a, b, d, e, r, k, kind, scale, s);
 }
 
-static int ifn_am_gpu_cuda_expert(void *c, const void *a, const void *b, void *d, void *e, void *f, int n, int r,
-                  int k, void *s) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_expert(void *c, const void *a, const void *b, void *d, void *e,
+                                     void *f, int n, int r, int k, void *s) {
     (void)c;
     return ifn_cuda_expert(a, b, d, e, f, n, r, k, s);
 }
 
-static int ifn_am_gpu_cuda_rnn(void *c, const void *a, void *b, void *d, void *e, void *s) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_rnn(void *c, const void *a, void *b, void *d, void *e, void *s) {
     (void)c;
     return ifn_cuda_rnn(a, b, d, e, s);
 }
 
-static int ifn_am_gpu_cuda_fold(void *c, const void *a, const void *b, const void *d, void *e, void *f, void *s) {
+static int ifn_am_gpu_cuda_ifn_gpu_cuda_local_fold(void *c, const void *a, const void *b, const void *d, void *e,
+                                   void *f, void *s) {
     (void)c;
     return ifn_cuda_fold(a, b, d, e, f, 200058, s);
 }
 
-static const ifn_weight_backend ifn_am_gpu_cuda_backend = {
-    NULL,           ifn_am_gpu_cuda_enter,       ifn_am_gpu_cuda_leave, ifn_am_gpu_cuda_available, ifn_am_gpu_cuda_allocate, ifn_am_gpu_cuda_release, ifn_am_gpu_cuda_stream_create,
-    ifn_am_gpu_cuda_stream_destroy, ifn_am_gpu_cuda_sync_stream, ifn_am_gpu_cuda_copy,  ifn_am_gpu_cuda_pack,      ifn_am_gpu_cuda_expert,   ifn_am_gpu_cuda_rnn,     ifn_am_gpu_cuda_fold};
+static const ifn_weight_backend ifn_am_gpu_cuda_ifn_gpu_cuda_local_backend = {NULL,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_enter,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_leave,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_available,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_allocate,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_release,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_stream_create,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_stream_destroy,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_sync_stream,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_copy,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_pack,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_expert,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_rnn,
+                                                              ifn_am_gpu_cuda_ifn_gpu_cuda_local_fold};
 
 ifn_status ifn_gpu_weights_create(const ifn_weight_config *c, const ifn_options *a,
                                   ifn_gpu_weights **out) {
-    return ifn_weights_create(c, a, &ifn_am_gpu_cuda_backend, out);
+    return ifn_weights_create(c, a, &ifn_am_gpu_cuda_ifn_gpu_cuda_local_backend, out);
 }
 
 ifn_status ifn_gpu_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *c) {
@@ -6377,12 +6600,12 @@ typedef union {
     struct {
         size_t bytes;
     } value;
-} si_allocation;
+} ifn_infer_allocation;
 
-static void *ifn_am_infer_budget_allocate(void *context, size_t bytes) {
-    si_budget *b = context;
+static void *ifn_am_infer_ifn_infer_local_budget_allocate(void *context, size_t bytes) {
+    ifn_infer_budget *b = context;
     size_t total;
-    if (!ifn_size_add(sizeof(si_allocation), bytes, &total))
+    if (!ifn_size_add(sizeof(ifn_infer_allocation), bytes, &total))
         return NULL;
     uint_fast64_t old = atomic_load_explicit(&b->live, memory_order_relaxed);
     do {
@@ -6390,7 +6613,7 @@ static void *ifn_am_infer_budget_allocate(void *context, size_t bytes) {
             return NULL;
     } while (!atomic_compare_exchange_weak_explicit(&b->live, &old, old + total,
                                                     memory_order_relaxed, memory_order_relaxed));
-    si_allocation *p = b->upstream.allocate(b->upstream.context, total);
+    ifn_infer_allocation *p = b->upstream.allocate(b->upstream.context, total);
     if (!p) {
         atomic_fetch_sub_explicit(&b->live, total, memory_order_relaxed);
         return NULL;
@@ -6399,44 +6622,45 @@ static void *ifn_am_infer_budget_allocate(void *context, size_t bytes) {
     return p + 1;
 }
 
-static void ifn_am_infer_budget_release(void *context, void *ptr) {
+static void ifn_am_infer_ifn_infer_local_budget_release(void *context, void *ptr) {
     if (!ptr)
         return;
-    si_budget *b = context;
-    si_allocation *p = (si_allocation *)ptr - 1;
+    ifn_infer_budget *b = context;
+    ifn_infer_allocation *p = (ifn_infer_allocation *)ptr - 1;
     size_t total = p->value.bytes;
     b->upstream.release(b->upstream.context, p);
     atomic_fetch_sub_explicit(&b->live, total, memory_order_relaxed);
 }
 
-void si_budget_init(si_budget *b, const ifn_options *upstream, uint64_t limit, ifn_options *out) {
+void ifn_infer_budget_init(ifn_infer_budget *b, const ifn_options *upstream, uint64_t limit,
+                           ifn_options *out) {
     b->upstream = *upstream;
     b->limit = limit;
     atomic_init(&b->live, 0);
     *out = (ifn_options)IFN_OPTIONS_INIT;
     out->context = b;
-    out->allocate = ifn_am_infer_budget_allocate;
-    out->release = ifn_am_infer_budget_release;
+    out->allocate = ifn_am_infer_ifn_infer_local_budget_allocate;
+    out->release = ifn_am_infer_ifn_infer_local_budget_release;
 }
 
-void *si_alloc(const ifn_options *a, size_t n) {
+void *ifn_infer_alloc(const ifn_options *a, size_t n) {
     return a->allocate(a->context, n);
 }
 
-void si_free(const ifn_options *a, void *p) {
+void ifn_infer_free(const ifn_options *a, void *p) {
     if (p)
         a->release(a->context, p);
 }
 
-bool si_lock(atomic_flag *f) {
+bool ifn_infer_lock(atomic_flag *f) {
     return !atomic_flag_test_and_set_explicit(f, memory_order_acquire);
 }
 
-void si_unlock(atomic_flag *f) {
+void ifn_infer_unlock(atomic_flag *f) {
     atomic_flag_clear_explicit(f, memory_order_release);
 }
 
-ifn_status si_input(const void *record, size_t known) {
+ifn_status ifn_infer_input(const void *record, size_t known) {
     if (!record)
         return IFN_INVALID_ARGUMENT;
     ifn_infer_in h;
@@ -6450,7 +6674,7 @@ ifn_status si_input(const void *record, size_t known) {
     return IFN_OK;
 }
 
-ifn_status si_output(void *out, const void *value, size_t known) {
+ifn_status ifn_infer_output(void *out, const void *value, size_t known) {
     if (!out)
         return IFN_INVALID_ARGUMENT;
     ifn_infer_out *h = out;
@@ -6463,7 +6687,8 @@ ifn_status si_output(void *out, const void *value, size_t known) {
     return IFN_OK;
 }
 
-ifn_status si_error(ifn_infer_error_v1 *out, ifn_status status, uint32_t stage, const char *text) {
+ifn_status ifn_infer_error(ifn_infer_error_v1 *out, ifn_status status, uint32_t stage,
+                           const char *text) {
     if (out) {
         ifn_infer_error_v1 e = {0};
         e.status = status;
@@ -6472,68 +6697,69 @@ ifn_status si_error(ifn_infer_error_v1 *out, ifn_status status, uint32_t stage, 
             (void)snprintf(e.message, sizeof e.message, "%s", text);
             e.message_bytes = (uint32_t)strlen(e.message);
         }
-        (void)si_output(out, &e, sizeof e);
+        (void)ifn_infer_output(out, &e, sizeof e);
     }
     return status;
 }
 
-ifn_status si_native_error(ifn_infer_error_v1 *e, ifn_status rc, uint32_t stage) {
+ifn_status ifn_infer_native_error(ifn_infer_error_v1 *e, ifn_status rc, uint32_t stage) {
     /* Backend diagnostics contain operation names/codes, never input contents. */
-    ifn_status status = si_error(e, rc, stage, rc ? ifn_status_string(rc) : "");
+    ifn_status status = ifn_infer_error(e, rc, stage, rc ? ifn_status_string(rc) : "");
     if (e && e->hdr.struct_size >= sizeof *e && e->hdr.struct_size <= IFN_INFER_RECORD_MAX_BYTES &&
         rc && stage == IFN_STAGE_CLOSE)
         e->flags |= IFN_INFER_ERR_CLEANUP_PENDING;
     return status;
 }
 
-bool si_span(ifn_infer_bytes s, size_t max) {
+bool ifn_infer_span(ifn_infer_bytes s, size_t max) {
     return s.bytes <= max && (!s.bytes || s.data);
 }
 
-bool si_equal(ifn_infer_bytes s, const char *text) {
-    return si_span(s, 4096) && s.bytes == strlen(text) &&
+bool ifn_infer_equal(ifn_infer_bytes s, const char *text) {
+    return ifn_infer_span(s, 4096) && s.bytes == strlen(text) &&
            (!s.bytes || !memcmp(s.data, text, (size_t)s.bytes));
 }
 
-ifn_infer_bytes si_text(const char *s) {
+ifn_infer_bytes ifn_infer_text(const char *s) {
     return (ifn_infer_bytes){s, strlen(s)};
 }
 
-ifn_status si_no_extensions(ifn_infer_array a) {
+ifn_status ifn_infer_no_extensions(ifn_infer_array a) {
     return a.reserved             ? IFN_INVALID_ARGUMENT
            : a.count              ? IFN_UNSUPPORTED
            : (a.data || a.stride) ? IFN_INVALID_ARGUMENT
                                   : IFN_OK;
 }
 
-uint64_t si_now(void) {
+uint64_t ifn_infer_now(void) {
     struct timespec t;
     if (clock_gettime(CLOCK_MONOTONIC, &t))
         return 0;
     return (uint64_t)t.tv_sec * UINT64_C(1000000000) + (uint64_t)t.tv_nsec;
 }
 
-ifn_status si_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {
     size_t size = kind == IFN_DEFAULT_MODEL     ? sizeof(ifn_infer_model_config_v1)
                   : kind == IFN_DEFAULT_SESSION ? sizeof(ifn_infer_session_config_v1)
                   : kind == IFN_DEFAULT_REQUEST ? sizeof(ifn_infer_request_config_v1)
                                                 : 0;
     if (!size || !out || ((ifn_infer_in *)out)->struct_size < size ||
         ((ifn_infer_in *)out)->struct_size > IFN_INFER_RECORD_MAX_BYTES)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "invalid defaults record");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                               "invalid defaults record");
     uint32_t capacity = ((ifn_infer_in *)out)->struct_size;
     memset(out, 0, size);
     ((ifn_infer_in *)out)->struct_size = capacity;
     if (kind == IFN_DEFAULT_MODEL) {
         ifn_infer_model_config_v1 *c = out;
         c->max_owned_host_bytes = c->max_owned_device_bytes = UINT64_MAX;
-        c->device_id = si_text("0");
-        c->weight_profile = si_text("nvfp4-ar");
+        c->device_id = ifn_infer_text("0");
+        c->weight_profile = ifn_infer_text("nvfp4-ar");
     } else if (kind == IFN_DEFAULT_SESSION) {
         ifn_infer_session_config_v1 *c = out;
         c->max_owned_host_bytes = c->max_owned_device_bytes = UINT64_MAX;
         c->context_tokens = 8192;
-        c->execution_profile = si_text("fp8-graph");
+        c->execution_profile = ifn_infer_text("fp8-graph");
     } else {
         ifn_infer_request_config_v1 *c = out;
         c->max_output_tokens = 256;
@@ -6541,55 +6767,45 @@ ifn_status si_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {
         c->output_kind = IFN_OUTPUT_TEXT;
         c->max_event_bytes = 4096;
     }
-    return si_error(e, IFN_OK, 0, NULL);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
-ifn_status si_backend_info(ifn_infer_backend_info_v1 *out, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_backend_info(ifn_infer_backend_info_v1 *out, ifn_infer_error_v1 *e) {
     ifn_infer_backend_info_v1 v = {0};
-    v.backend_id = si_text("artalis.inkleberry");
+    v.backend_id = ifn_infer_text("artalis.inkleberry");
     v.engine_revision =
-        si_text("upstream:d10c0abb2c8990be81c08ba84c66a8333a691b33;infer:1.0-experimental");
-    v.compiled_features = SI_FEATURES;
+        ifn_infer_text("upstream:d10c0abb2c8990be81c08ba84c66a8333a691b33;infer:1.0-experimental");
+    v.compiled_features = IFN_INFER_FEATURES;
     v.pointer_bits = sizeof(void *) * 8;
     v.limit_scope = IFN_LIMIT_PROVIDER_PROCESS;
     v.max_prepared_sessions = v.max_active_runs = 1;
-    return si_error(e, si_output(out, &v, sizeof v), IFN_STAGE_VALIDATE, "invalid backend output");
+    return ifn_infer_error(e, ifn_infer_output(out, &v, sizeof v), IFN_STAGE_VALIDATE,
+                           "invalid backend output");
 }
 
-static ifn_status ifn_am_infer_query_extension(uint64_t id, uint32_t version, const void **out,
-                                  ifn_infer_error_v1 *e) {
+static ifn_status ifn_am_infer_ifn_infer_local_query_extension(uint64_t id, uint32_t version, const void **out,
+                                                  ifn_infer_error_v1 *e) {
     (void)id;
     (void)version;
     if (out)
         *out = NULL;
-    return si_error(e, out ? IFN_UNSUPPORTED : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
-                    "no extension function table");
+    return ifn_infer_error(e, out ? IFN_UNSUPPORTED : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                           "no extension function table");
 }
 
-static const ifn_infer_api_v1 ifn_am_infer_api = {sizeof(ifn_infer_api_v1),
-                                     IFN_INFER_ABI_MAJOR,
-                                     IFN_INFER_ABI_MINOR,
-                                     0,
-                                     si_backend_info,
-                                     si_defaults,
-                                     si_model_create,
-                                     si_model_plan,
-                                     si_model_load,
-                                     si_model_info,
-                                     si_model_close,
-                                     si_session_create,
-                                     si_session_plan,
-                                     si_session_prepare,
-                                     si_session_info,
-                                     si_session_clear,
-                                     si_session_close,
-                                     si_request_create,
-                                     si_request_run,
-                                     si_request_cancel,
-                                     si_request_progress,
-                                     si_request_result,
-                                     si_request_close,
-                                     ifn_am_infer_query_extension};
+static const ifn_infer_api_v1 ifn_am_infer_ifn_infer_local_api = {
+    sizeof(ifn_infer_api_v1),   IFN_INFER_ABI_MAJOR,
+    IFN_INFER_ABI_MINOR,        0,
+    ifn_infer_backend_info,     ifn_infer_defaults,
+    ifn_infer_model_create,     ifn_infer_model_plan,
+    ifn_infer_model_load,       ifn_infer_model_info,
+    ifn_infer_model_close,      ifn_infer_session_create,
+    ifn_infer_session_plan,     ifn_infer_session_prepare,
+    ifn_infer_session_info,     ifn_infer_session_clear,
+    ifn_infer_session_close,    ifn_infer_request_create,
+    ifn_infer_request_run,      ifn_infer_request_cancel,
+    ifn_infer_request_progress, ifn_infer_request_result,
+    ifn_infer_request_close,    ifn_am_infer_ifn_infer_local_query_extension};
 
 ifn_status ifn_infer_get_api(uint32_t major, uint32_t minor, const void **out) {
     if (!out)
@@ -6597,7 +6813,7 @@ ifn_status ifn_infer_get_api(uint32_t major, uint32_t minor, const void **out) {
     *out = NULL;
     if (sizeof(void *) != 8 || major != IFN_INFER_ABI_MAJOR || minor > IFN_INFER_ABI_MINOR)
         return IFN_INFER_ABI_MISMATCH;
-    *out = &ifn_am_infer_api;
+    *out = &ifn_am_infer_ifn_infer_local_api;
     return IFN_OK;
 }
 
@@ -6607,16 +6823,19 @@ ifn_status ifn_infer_get_api(uint32_t major, uint32_t minor, const void **out) {
 
 #include <stdio.h>
 
-static uint64_t ifn_am_infer_model_features(const ifn_infer_model *m) {
-    return m->weights_config.with_mtp ? SI_FEATURES : SI_FEATURES & ~IFN_INFER_CAP_SPECULATION;
+static uint64_t ifn_am_infer_model_ifn_infer_model_local_features(const ifn_infer_model *m) {
+    return m->weights_config.with_mtp ? IFN_INFER_FEATURES
+                                      : IFN_INFER_FEATURES & ~IFN_INFER_CAP_SPECULATION;
 }
 
-static ifn_status ifn_am_infer_model_source_paths(const ifn_infer_source_v1 *s, char paths[3][4096]) {
-    ifn_status rc = si_input(s, sizeof *s);
+static ifn_status ifn_am_infer_model_ifn_infer_model_local_source_paths(const ifn_infer_source_v1 *s,
+                                                     char paths[3][4096]) {
+    ifn_status rc = ifn_infer_input(s, sizeof *s);
     if (rc)
         return rc;
-    if (!si_equal(s->format_id, "inkling-safetensors") || !si_span(s->directory, 4000) ||
-        !s->directory.bytes || memchr(s->directory.data, 0, (size_t)s->directory.bytes))
+    if (!ifn_infer_equal(s->format_id, "inkling-safetensors") ||
+        !ifn_infer_span(s->directory, 4000) || !s->directory.bytes ||
+        memchr(s->directory.data, 0, (size_t)s->directory.bytes))
         return IFN_INVALID_ARGUMENT;
     const char *names[] = {"tokenizer.json", "model-00001-of-00001.safetensors", "mtp.safetensors"};
     for (size_t i = 0; i < 3; i++) {
@@ -6628,18 +6847,18 @@ static ifn_status ifn_am_infer_model_source_paths(const ifn_infer_source_v1 *s, 
     return IFN_OK;
 }
 
-ifn_status si_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_model **out,
-                           ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_model **out,
+                                  ifn_infer_error_v1 *e) {
     if (out)
         *out = NULL;
-    ifn_status rc = si_input(c, sizeof *c);
+    ifn_status rc = ifn_infer_input(c, sizeof *c);
     if (rc || !out)
-        return si_error(e, rc ? rc : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
-                        "invalid model configuration");
-    rc = si_no_extensions(c->extensions);
-    if (rc || (c->required_features & ~SI_FEATURES))
-        return si_error(e, rc ? rc : IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
-                        "unsupported model features");
+        return ifn_infer_error(e, rc ? rc : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                               "invalid model configuration");
+    rc = ifn_infer_no_extensions(c->extensions);
+    if (rc || (c->required_features & ~IFN_INFER_FEATURES))
+        return ifn_infer_error(e, rc ? rc : IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
+                               "unsupported model features");
     ifn_options a = IFN_OPTIONS_INIT;
     a.context = c->allocator.context;
     a.allocate = c->allocator.allocate;
@@ -6648,40 +6867,40 @@ ifn_status si_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_model *
     rc = ifn_options_resolve(&a, &resolved);
     a = resolved;
     if (rc)
-        return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+        return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
     if (c->max_owned_host_bytes < sizeof(ifn_infer_model))
-        return si_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE, "model host budget too small");
+        return ifn_infer_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE, "model host budget too small");
     ifn_weight_config wc = IFN_WEIGHT_CONFIG_INIT;
     wc.with_mtp = 0;
     const char *profiles[] = {"exact-ar",  "fp8-ar",  "nvfp4-ar",
                               "exact-mtp", "fp8-mtp", "nvfp4-mtp"};
     const char *profile = NULL;
     for (uint32_t i = 0; i < 6; i++)
-        if (si_equal(c->weight_profile, profiles[i])) {
+        if (ifn_infer_equal(c->weight_profile, profiles[i])) {
             wc.mode = i % 3;
             wc.with_mtp = i / 3;
             profile = profiles[i];
         }
-    if (!profile || !si_span(c->device_id, 10) || !c->device_id.bytes)
-        return si_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
-                        "unknown weight profile or device identifier");
+    if (!profile || !ifn_infer_span(c->device_id, 10) || !c->device_id.bytes)
+        return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
+                               "unknown weight profile or device identifier");
     uint32_t device = 0;
     for (size_t i = 0; i < c->device_id.bytes; i++) {
         unsigned char ch = ((const unsigned char *)c->device_id.data)[i];
         if (ch < '0' || ch > '9' || device > 214748364u || (device == 214748364u && ch > '7'))
-            return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
-                            "device must be a nonnegative CUDA ordinal");
+            return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                                   "device must be a nonnegative CUDA ordinal");
         device = device * 10 + (uint32_t)(ch - '0');
     }
     wc.device = (int32_t)device;
     if (!wc.with_mtp && (c->required_features & IFN_INFER_CAP_SPECULATION))
-        return si_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
-                        "speculation requires an MTP profile");
-    ifn_infer_model *m = si_alloc(&a, sizeof *m);
+        return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
+                               "speculation requires an MTP profile");
+    ifn_infer_model *m = ifn_infer_alloc(&a, sizeof *m);
     if (!m)
-        return si_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate model");
+        return ifn_infer_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate model");
     memset(m, 0, sizeof *m);
-    si_budget_init(&m->budget, &a, c->max_owned_host_bytes - sizeof *m, &m->allocator);
+    ifn_infer_budget_init(&m->budget, &a, c->max_owned_host_bytes - sizeof *m, &m->allocator);
     atomic_flag_clear(&m->busy);
     (void)snprintf(m->device_id, sizeof m->device_id, "%u", device);
     m->weights_config = wc;
@@ -6689,17 +6908,17 @@ ifn_status si_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_model *
     m->required = c->required_features;
     m->device_budget = c->max_owned_device_bytes;
     *out = m;
-    return si_error(e, IFN_OK, 0, NULL);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
-ifn_status si_model_plan(ifn_infer_model *m, const ifn_infer_source_v1 *s,
-                         ifn_infer_memory_plan_v1 *out, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_model_plan(ifn_infer_model *m, const ifn_infer_source_v1 *s,
+                                ifn_infer_memory_plan_v1 *out, ifn_infer_error_v1 *e) {
     if (!m)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing model");
-    if (!si_lock(&m->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing model");
+    if (!ifn_infer_lock(&m->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
     char paths[3][4096];
-    ifn_status rc = ifn_am_infer_model_source_paths(s, paths);
+    ifn_status rc = ifn_am_infer_model_ifn_infer_model_local_source_paths(s, paths);
     ifn_weight_plan plan = {0};
     if (!rc)
         rc = ifn_weights_plan(&m->weights_config, &m->allocator, &plan);
@@ -6709,30 +6928,31 @@ ifn_status si_model_plan(ifn_infer_model *m, const ifn_infer_source_v1 *s,
         v.owned_device_bytes = plan.arena_bytes;
         v.peak_owned_device_bytes = plan.peak_device_bytes;
         /* Tokenizer/maps and vendor allocations are not known before loading. */
-        v.unknown_fields = UINT64_C(3) | SI_UNKNOWN_VENDOR;
-        rc = si_output(out, &v, sizeof v);
+        v.unknown_fields = UINT64_C(3) | IFN_INFER_UNKNOWN_VENDOR;
+        rc = ifn_infer_output(out, &v, sizeof v);
     }
-    si_unlock(&m->busy);
-    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+    ifn_infer_unlock(&m->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s,
+                                ifn_infer_error_v1 *e) {
     if (!m)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_LOAD, "missing model");
-    if (!si_lock(&m->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_LOAD, "model busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_LOAD, "missing model");
+    if (!ifn_infer_lock(&m->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_LOAD, "model busy");
     ifn_status rc = m->state == IFN_HANDLE_CREATED ? IFN_OK : IFN_INFER_INVALID_STATE;
     char paths[3][4096];
     if (!rc)
-        rc = ifn_am_infer_model_source_paths(s, paths);
+        rc = ifn_am_infer_model_ifn_infer_model_local_source_paths(s, paths);
     ifn_weight_plan plan;
     if (!rc)
         rc = ifn_weights_plan(&m->weights_config, &m->allocator, &plan);
     if (!rc && plan.peak_device_bytes > m->device_budget)
         rc = IFN_LIMIT;
     if (rc) {
-        si_unlock(&m->busy);
-        return si_native_error(e, rc, IFN_STAGE_LOAD);
+        ifn_infer_unlock(&m->busy);
+        return ifn_infer_native_error(e, rc, IFN_STAGE_LOAD);
     }
     m->state = IFN_HANDLE_PREPARING;
     rc = ifn_tokenizer_open(paths[0], &m->allocator, &m->tokenizer);
@@ -6750,69 +6970,72 @@ ifn_status si_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s, ifn_i
     /* On failure retain mapped input until native cleanup has succeeded. Even
      * a failed stream synchronization must not shorten borrowed DMA lifetime. */
     m->state = rc ? IFN_HANDLE_FAILED : IFN_HANDLE_READY;
-    si_unlock(&m->busy);
-    return si_native_error(e, rc, IFN_STAGE_LOAD);
+    ifn_infer_unlock(&m->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_LOAD);
 }
 
-ifn_status si_model_info(ifn_infer_model *m, ifn_infer_model_info_v1 *out, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_model_info(ifn_infer_model *m, ifn_infer_model_info_v1 *out,
+                                ifn_infer_error_v1 *e) {
     if (!m)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing model");
-    if (!si_lock(&m->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing model");
+    if (!ifn_infer_lock(&m->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
     ifn_infer_model_info_v1 v = {0};
     v.state = m->state;
     v.max_prepared_sessions = 1;
-    v.supported_features = ifn_am_infer_model_features(m);
-    v.enabled_features =
-        m->state == IFN_HANDLE_READY ? ifn_am_infer_model_features(m) & ~IFN_INFER_CAP_PREFIX_CACHE : 0;
+    v.supported_features = ifn_am_infer_model_ifn_infer_model_local_features(m);
+    v.enabled_features = m->state == IFN_HANDLE_READY
+                             ? ifn_am_infer_model_ifn_infer_model_local_features(m) & ~IFN_INFER_CAP_PREFIX_CACHE
+                             : 0;
     v.max_context_tokens = 1048576;
     v.max_messages = 1024;
-    v.max_input_bytes = SI_MAX_INPUT;
+    v.max_input_bytes = IFN_INFER_MAX_INPUT;
     v.max_stops = 8;
     v.max_stop_bytes = 64;
     v.max_event_bytes = 65536;
-    v.model_id = si_text("inkling-2-mini");
-    v.resolved_weight_profile = si_text(m->profile);
-    v.resolved_device_id = si_text(m->device_id);
-    v.tokenizer_id = si_text("inkling-bpe");
-    v.template_id = si_text("inkling-text-v1");
+    v.model_id = ifn_infer_text("inkling-2-mini");
+    v.resolved_weight_profile = ifn_infer_text(m->profile);
+    v.resolved_device_id = ifn_infer_text(m->device_id);
+    v.tokenizer_id = ifn_infer_text("inkling-bpe");
+    v.template_id = ifn_infer_text("inkling-text-v1");
     /* No invented artifact hash: fingerprint_verified remains false. */
-    ifn_status rc = si_output(out, &v, sizeof v);
-    si_unlock(&m->busy);
-    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+    ifn_status rc = ifn_infer_output(out, &v, sizeof v);
+    ifn_infer_unlock(&m->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_model_close(ifn_infer_model **ptr, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_model_close(ifn_infer_model **ptr, ifn_infer_error_v1 *e) {
     if (!ptr)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
     ifn_infer_model *m = *ptr;
     if (!m)
-        return si_error(e, IFN_OK, 0, NULL);
-    if (!si_lock(&m->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model busy");
+        return ifn_infer_error(e, IFN_OK, 0, NULL);
+    if (!ifn_infer_lock(&m->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model busy");
     if (m->children) {
-        si_unlock(&m->busy);
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model has sessions");
+        ifn_infer_unlock(&m->busy);
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model has sessions");
     }
     m->state = IFN_HANDLE_CLOSING;
     ifn_status rc = ifn_gpu_weights_destroy(&m->weights);
     if (rc) {
-        si_unlock(&m->busy);
-        return si_native_error(e, rc, IFN_STAGE_CLOSE);
+        ifn_infer_unlock(&m->busy);
+        return ifn_infer_native_error(e, rc, IFN_STAGE_CLOSE);
     }
     ifn_inkling_checkpoint_close(m->checkpoint);
     ifn_tokenizer_close(m->tokenizer);
     ifn_options a = m->budget.upstream;
-    si_free(&a, m);
+    ifn_infer_free(&a, m);
     *ptr = NULL;
-    return si_error(e, IFN_OK, 0, NULL);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
 
 /* Module: src/infer_session.c */
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 
-static ifn_status ifn_am_infer_session_plan_locked(ifn_infer_session *s, ifn_infer_memory_plan_v1 *v) {
+static ifn_status ifn_am_infer_session_ifn_infer_session_local_plan_locked(ifn_infer_session *s,
+                                                      ifn_infer_memory_plan_v1 *v) {
     uint64_t bytes = 0;
     ifn_status rc = ifn_session_owned_plan(s->model->weights, &s->config, &s->allocator, &bytes);
     if (rc)
@@ -6820,84 +7043,86 @@ static ifn_status ifn_am_infer_session_plan_locked(ifn_infer_session *s, ifn_inf
     memset(v, 0, sizeof *v);
     v->owned_host_bytes = sizeof *s + atomic_load(&s->budget.live);
     v->owned_device_bytes = v->peak_owned_device_bytes = bytes;
-    v->unknown_fields = UINT64_C(1) | SI_UNKNOWN_VENDOR;
+    v->unknown_fields = UINT64_C(1) | IFN_INFER_UNKNOWN_VENDOR;
     return IFN_OK;
 }
 
-ifn_status si_session_create(ifn_infer_model *m, const ifn_infer_session_config_v1 *c,
-                             ifn_infer_session **out, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_session_create(ifn_infer_model *m, const ifn_infer_session_config_v1 *c,
+                                    ifn_infer_session **out, ifn_infer_error_v1 *e) {
     if (out)
         *out = NULL;
-    ifn_status rc = si_input(c, sizeof *c);
+    ifn_status rc = ifn_infer_input(c, sizeof *c);
     if (rc || !out || !m)
-        return si_error(e, rc ? rc : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
-                        "invalid session arguments");
-    rc = si_no_extensions(c->extensions);
+        return ifn_infer_error(e, rc ? rc : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                               "invalid session arguments");
+    rc = ifn_infer_no_extensions(c->extensions);
     if (rc)
-        return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+        return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
     ifn_session_config sc = IFN_SESSION_CONFIG_INIT;
     if (c->context_tokens < 64 || c->context_tokens > 1048576 ||
         c->max_owned_host_bytes < sizeof(ifn_infer_session))
-        return si_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE, "session context or host budget invalid");
+        return ifn_infer_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE,
+                               "session context or host budget invalid");
     sc.context_tokens = (uint32_t)c->context_tokens;
     const char *profiles[] = {"bf16-eager", "fp8-eager", "q4-eager",
                               "bf16-graph", "fp8-graph", "q4-graph"};
     const char *profile = NULL;
     for (uint32_t i = 0; i < 6; i++)
-        if (si_equal(c->execution_profile, profiles[i])) {
+        if (ifn_infer_equal(c->execution_profile, profiles[i])) {
             sc.kv_format = i % 3;
             sc.use_graphs = i / 3;
             profile = profiles[i];
         }
     if (!profile)
-        return si_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE, "unknown execution profile");
-    if (!si_lock(&m->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
+        return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE, "unknown execution profile");
+    if (!ifn_infer_lock(&m->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
     if (m->state != IFN_HANDLE_READY || m->children == UINT32_MAX) {
-        si_unlock(&m->busy);
-        return si_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "model not ready");
+        ifn_infer_unlock(&m->busy);
+        return ifn_infer_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "model not ready");
     }
-    ifn_infer_session *s = si_alloc(&m->allocator, sizeof *s);
+    ifn_infer_session *s = ifn_infer_alloc(&m->allocator, sizeof *s);
     if (!s) {
-        si_unlock(&m->busy);
-        return si_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate session");
+        ifn_infer_unlock(&m->busy);
+        return ifn_infer_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate session");
     }
     memset(s, 0, sizeof *s);
     s->model = m;
     s->config = sc;
     s->profile = profile;
     s->device_budget = c->max_owned_device_bytes;
-    si_budget_init(&s->budget, &m->allocator, c->max_owned_host_bytes - sizeof *s, &s->allocator);
+    ifn_infer_budget_init(&s->budget, &m->allocator, c->max_owned_host_bytes - sizeof *s,
+                          &s->allocator);
     atomic_flag_clear(&s->busy);
     m->children++;
-    si_unlock(&m->busy);
+    ifn_infer_unlock(&m->busy);
     *out = s;
-    return si_error(e, IFN_OK, 0, NULL);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
-ifn_status si_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1 *out,
-                           ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1 *out,
+                                  ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
     ifn_infer_memory_plan_v1 v;
-    ifn_status rc = ifn_am_infer_session_plan_locked(s, &v);
+    ifn_status rc = ifn_am_infer_session_ifn_infer_session_local_plan_locked(s, &v);
     if (!rc)
-        rc = si_output(out, &v, sizeof v);
-    si_unlock(&s->busy);
-    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+        rc = ifn_infer_output(out, &v, sizeof v);
+    ifn_infer_unlock(&s->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_PREPARE, "missing session");
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_PREPARE, "session busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_PREPARE, "missing session");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_PREPARE, "session busy");
     ifn_status rc = s->state == IFN_HANDLE_CREATED ? IFN_OK : IFN_INFER_INVALID_STATE;
     ifn_infer_memory_plan_v1 v;
     if (!rc)
-        rc = ifn_am_infer_session_plan_locked(s, &v);
+        rc = ifn_am_infer_session_ifn_infer_session_local_plan_locked(s, &v);
     if (!rc && v.peak_owned_device_bytes > s->device_budget)
         rc = IFN_LIMIT;
     if (!rc) {
@@ -6906,74 +7131,74 @@ ifn_status si_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e) {
         s->state = rc ? ((rc == IFN_BUSY && !s->native) ? IFN_HANDLE_CREATED : IFN_HANDLE_FAILED)
                       : IFN_HANDLE_READY;
     }
-    si_unlock(&s->busy);
-    return si_native_error(e, rc, IFN_STAGE_PREPARE);
+    ifn_infer_unlock(&s->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_PREPARE);
 }
 
-ifn_status si_session_info(ifn_infer_session *s, ifn_infer_session_info_v1 *out,
-                           ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_session_info(ifn_infer_session *s, ifn_infer_session_info_v1 *out,
+                                  ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
     ifn_infer_session_info_v1 v = {0};
     v.state = s->state;
     v.max_active_runs = 1;
     v.context_tokens = s->config.context_tokens;
     v.enabled_features =
-        s->state == IFN_HANDLE_READY ? SI_FEATURES & ~IFN_INFER_CAP_PREFIX_CACHE : 0;
+        s->state == IFN_HANDLE_READY ? IFN_INFER_FEATURES & ~IFN_INFER_CAP_PREFIX_CACHE : 0;
     if (!s->model->weights_config.with_mtp)
         v.enabled_features &= ~IFN_INFER_CAP_SPECULATION;
     if (s->cache_scope_bytes)
         v.enabled_features |= IFN_INFER_CAP_PREFIX_CACHE;
-    v.resolved_execution_profile = si_text(s->profile);
-    ifn_status rc = si_output(out, &v, sizeof v);
-    si_unlock(&s->busy);
-    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+    v.resolved_execution_profile = ifn_infer_text(s->profile);
+    ifn_status rc = ifn_infer_output(out, &v, sizeof v);
+    ifn_infer_unlock(&s->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
     ifn_status rc =
         s->state == IFN_HANDLE_READY ? ifn_session_prefix_cache(s->native, 0) : IFN_INFER_NOT_READY;
     if (!rc)
         s->cache_scope_bytes = 0;
-    si_unlock(&s->busy);
-    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+    ifn_infer_unlock(&s->busy);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *e) {
     if (!ptr)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
     ifn_infer_session *s = *ptr;
     if (!s)
-        return si_error(e, IFN_OK, 0, NULL);
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session busy");
+        return ifn_infer_error(e, IFN_OK, 0, NULL);
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session busy");
     if (s->children) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session has requests");
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session has requests");
     }
     ifn_infer_model *m = s->model;
-    if (!si_lock(&m->busy)) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model busy");
+    if (!ifn_infer_lock(&m->busy)) {
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model busy");
     }
     s->state = IFN_HANDLE_CLOSING;
     ifn_status rc = ifn_session_destroy(&s->native);
     if (rc) {
-        si_unlock(&m->busy);
-        si_unlock(&s->busy);
-        return si_native_error(e, rc, IFN_STAGE_CLOSE);
+        ifn_infer_unlock(&m->busy);
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_native_error(e, rc, IFN_STAGE_CLOSE);
     }
     m->children--;
-    si_free(&m->allocator, s);
+    ifn_infer_free(&m->allocator, s);
     *ptr = NULL;
-    si_unlock(&m->busy);
-    return si_error(e, IFN_OK, 0, NULL);
+    ifn_infer_unlock(&m->busy);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
 
@@ -6982,12 +7207,13 @@ ifn_status si_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *e) {
 
 #include <math.h>
 
-static bool ifn_am_infer_request_cancelled(void *context) {
+static bool ifn_am_infer_request_ifn_infer_request_local_cancelled(void *context) {
     ifn_infer_request *r = context;
-    return (atomic_load_explicit(&r->control, memory_order_acquire) & SI_CANCEL) != 0;
+    return (atomic_load_explicit(&r->control, memory_order_acquire) & IFN_INFER_CANCEL) != 0;
 }
 
-static ifn_status ifn_am_infer_request_array_valid(ifn_infer_array a, size_t element, size_t maximum) {
+static ifn_status ifn_am_infer_request_ifn_infer_request_local_array_valid(ifn_infer_array a, size_t element,
+                                                      size_t maximum) {
     if (a.reserved || a.count > maximum || (a.count && (!a.data || a.stride < element)) ||
         (a.count && a.count > SIZE_MAX / a.stride))
         return IFN_INVALID_ARGUMENT;
@@ -6996,12 +7222,13 @@ static ifn_status ifn_am_infer_request_array_valid(ifn_infer_array a, size_t ele
     return IFN_OK;
 }
 
-static ifn_status ifn_am_infer_request_request_options(ifn_infer_request *r, const ifn_infer_request_config_v1 *c,
-                                  ifn_chat_options *chat) {
-    ifn_status rc = si_input(c, sizeof *c);
+static ifn_status ifn_am_infer_request_ifn_infer_request_local_request_options(ifn_infer_request *r,
+                                                          const ifn_infer_request_config_v1 *c,
+                                                          ifn_chat_options *chat) {
+    ifn_status rc = ifn_infer_input(c, sizeof *c);
     if (rc)
         return rc;
-    uint64_t supported = SI_FEATURES;
+    uint64_t supported = IFN_INFER_FEATURES;
     if (!r->session->model->weights_config.with_mtp)
         supported &= ~IFN_INFER_CAP_SPECULATION;
     if (c->required_features & ~supported)
@@ -7012,9 +7239,9 @@ static ifn_status ifn_am_infer_request_request_options(ifn_infer_request *r, con
         c->output_kind > IFN_OUTPUT_DISCARD || c->max_event_bytes < 4 ||
         c->max_event_bytes > 65536 || c->reserved ||
         (c->output_flags & ~IFN_INFER_OUTPUT_REASONING) || c->history_policy > 1 ||
-        !si_span(c->cache_scope, sizeof r->scope))
+        !ifn_infer_span(c->cache_scope, sizeof r->scope))
         return IFN_INVALID_ARGUMENT;
-    rc = ifn_am_infer_request_array_valid(c->extensions, sizeof(ifn_infer_extension_v1), 16);
+    rc = ifn_am_infer_request_ifn_infer_request_local_array_valid(c->extensions, sizeof(ifn_infer_extension_v1), 16);
     if (rc)
         return rc;
     if (c->extensions.count > 1)
@@ -7034,7 +7261,7 @@ static ifn_status ifn_am_infer_request_request_options(ifn_infer_request *r, con
         /* Read headers/tails as bytes, including padded array elements. */
         if (ext.hdr.struct_size > c->extensions.stride)
             return IFN_INVALID_ARGUMENT;
-        rc = si_input(p, sizeof ext);
+        rc = ifn_infer_input(p, sizeof ext);
         if (rc)
             return rc;
         if (ext.id != IFN_INFER_EXT_INKLING_REQUEST || ext.version != 1 ||
@@ -7045,7 +7272,7 @@ static ifn_status ifn_am_infer_request_request_options(ifn_infer_request *r, con
         memcpy(&v, ext.payload, sizeof v);
         if (v.hdr.struct_size > ext.payload_bytes)
             return IFN_INVALID_ARGUMENT;
-        rc = si_input(ext.payload, sizeof v);
+        rc = ifn_infer_input(ext.payload, sizeof v);
         if (rc)
             return rc;
         if (v.draft_tokens > 7 || v.adaptive > 1 || v.prompt_lookup > 1 ||
@@ -7076,12 +7303,12 @@ static ifn_status ifn_am_infer_request_request_options(ifn_infer_request *r, con
     return IFN_OK;
 }
 
-static ifn_status ifn_am_infer_request_encode(ifn_infer_request *r, const ifn_infer_input_v1 *in,
-                         const ifn_chat_options *chat) {
-    ifn_status rc = si_input(in, sizeof *in);
+static ifn_status ifn_am_infer_request_ifn_infer_request_local_encode(ifn_infer_request *r, const ifn_infer_input_v1 *in,
+                                                 const ifn_chat_options *chat) {
+    ifn_status rc = ifn_infer_input(in, sizeof *in);
     if (rc)
         return rc;
-    if (in->reserved || !si_span(in->text, SI_MAX_INPUT))
+    if (in->reserved || !ifn_infer_span(in->text, IFN_INFER_MAX_INPUT))
         return IFN_INVALID_ARGUMENT;
     if (in->kind != IFN_INPUT_CHAT &&
         (chat->effort || chat->enable_thinking || chat->keep_history_thinking))
@@ -7092,12 +7319,12 @@ static ifn_status ifn_am_infer_request_encode(ifn_infer_request *r, const ifn_in
     size_t bytes;
     if (!ifn_size_mul(capacity, sizeof(int32_t), &bytes))
         return IFN_LIMIT;
-    r->tokens = si_alloc(&r->allocator, bytes);
+    r->tokens = ifn_infer_alloc(&r->allocator, bytes);
     if (!r->tokens)
         return IFN_OUT_OF_MEMORY;
     if (in->kind == IFN_INPUT_TOKENS) {
-        if (in->text.data || in->text.bytes || si_no_extensions(in->messages) || !in->tokens ||
-            !in->token_count || in->token_count > capacity ||
+        if (in->text.data || in->text.bytes || ifn_infer_no_extensions(in->messages) ||
+            !in->tokens || !in->token_count || in->token_count > capacity ||
             r->config.output_kind == IFN_OUTPUT_TEXT)
             return IFN_INVALID_ARGUMENT;
         for (size_t i = 0; i < in->token_count; i++) {
@@ -7115,19 +7342,20 @@ static ifn_status ifn_am_infer_request_encode(ifn_infer_request *r, const ifn_in
     if (rc)
         return rc;
     if (in->kind == IFN_INPUT_RAW_TEXT) {
-        if (si_no_extensions(in->messages))
+        if (ifn_infer_no_extensions(in->messages))
             rc = IFN_INVALID_ARGUMENT;
         else
             rc = ifn_tokenizer_encode(r->session->model->tokenizer, in->text.data,
                                       (size_t)in->text.bytes, 0, scratch, r->tokens, capacity,
                                       &r->token_count);
     } else if (in->kind == IFN_INPUT_CHAT) {
-        rc = ifn_am_infer_request_array_valid(in->messages, sizeof(ifn_infer_message_v1), 1024);
+        rc = ifn_am_infer_request_ifn_infer_request_local_array_valid(in->messages, sizeof(ifn_infer_message_v1), 1024);
         if (in->text.data || in->text.bytes || !in->messages.count)
             rc = IFN_INVALID_ARGUMENT;
         ifn_chat_message *messages = NULL;
         if (!rc) {
-            messages = si_alloc(&r->allocator, (size_t)in->messages.count * sizeof *messages);
+            messages =
+                ifn_infer_alloc(&r->allocator, (size_t)in->messages.count * sizeof *messages);
             if (!messages)
                 rc = IFN_OUT_OF_MEMORY;
         }
@@ -7141,18 +7369,18 @@ static ifn_status ifn_am_infer_request_encode(ifn_infer_request *r, const ifn_in
                 rc = IFN_INVALID_ARGUMENT;
                 break;
             }
-            rc = si_input(p, sizeof m);
+            rc = ifn_infer_input(p, sizeof m);
             if (rc)
                 break;
             if (m.content_present > 1 || m.role < IFN_ROLE_SYSTEM || m.role > IFN_ROLE_ASSISTANT ||
-                !si_span(m.content, SI_MAX_INPUT) || !si_span(m.reasoning, SI_MAX_INPUT) ||
-                !si_span(m.name, 128) ||
+                !ifn_infer_span(m.content, IFN_INFER_MAX_INPUT) ||
+                !ifn_infer_span(m.reasoning, IFN_INFER_MAX_INPUT) || !ifn_infer_span(m.name, 128) ||
                 (!m.content_present && (m.content.data || m.content.bytes))) {
                 rc = IFN_INVALID_ARGUMENT;
                 break;
             }
             total += m.content.bytes + m.reasoning.bytes + m.name.bytes;
-            if (total > SI_MAX_INPUT) {
+            if (total > IFN_INFER_MAX_INPUT) {
                 rc = IFN_LIMIT;
                 break;
             }
@@ -7170,16 +7398,17 @@ static ifn_status ifn_am_infer_request_encode(ifn_infer_request *r, const ifn_in
             rc = ifn_chat_encode(r->session->model->tokenizer, messages, (size_t)in->messages.count,
                                  chat, scratch, r->tokens, capacity, &r->token_count,
                                  &r->decode.system_prefix_tokens);
-        si_free(&r->allocator, messages);
+        ifn_infer_free(&r->allocator, messages);
     } else
         rc = IFN_UNSUPPORTED;
     ifn_tokenizer_scratch_destroy(scratch);
     return !rc && !r->token_count ? IFN_INVALID_ARGUMENT : rc;
 }
 
-static uint32_t ifn_am_infer_request_emit_event(ifn_infer_request *r, uint32_t kind, const void *text, size_t bytes,
-                           const int32_t *tokens, size_t count) {
-    if (ifn_am_infer_request_cancelled(r))
+static uint32_t ifn_am_infer_request_ifn_infer_request_local_emit_event(ifn_infer_request *r, uint32_t kind,
+                                                   const void *text, size_t bytes,
+                                                   const int32_t *tokens, size_t count) {
+    if (ifn_am_infer_request_ifn_infer_request_local_cancelled(r))
         return IFN_CALLBACK_CANCEL;
     ifn_infer_event_v1 v = {0};
     v.hdr.struct_size = v.hdr.written_size = sizeof v;
@@ -7194,7 +7423,7 @@ static uint32_t ifn_am_infer_request_emit_event(ifn_infer_request *r, uint32_t k
         r->result.content_bytes += bytes;
     if (kind == IFN_EVENT_REASONING)
         r->result.reasoning_bytes += bytes;
-    uint64_t now = si_now();
+    uint64_t now = ifn_infer_now();
     if (now && r->started) {
         if (kind == IFN_EVENT_CONTENT && !(r->result.timing_valid & IFN_INFER_TIME_FIRST_CONTENT)) {
             r->result.first_content_ns = now - r->started;
@@ -7212,16 +7441,17 @@ static uint32_t ifn_am_infer_request_emit_event(ifn_infer_request *r, uint32_t k
     }
     if (action == IFN_CALLBACK_CANCEL) {
         uint32_t disposition;
-        (void)si_request_cancel(r, &disposition, NULL);
+        (void)ifn_infer_request_cancel(r, &disposition, NULL);
     }
     if (action)
         r->callback_action = action;
     return action;
 }
 
-static int ifn_am_infer_request_text_event(void *context, uint32_t channel, const char *p, size_t n) {
+static int ifn_am_infer_request_ifn_infer_request_local_text_event(void *context, uint32_t channel, const char *p,
+                                              size_t n) {
     ifn_infer_request *r = context;
-    if (ifn_am_infer_request_cancelled(r))
+    if (ifn_am_infer_request_ifn_infer_request_local_cancelled(r))
         return 0;
     if (channel == IFN_STREAM_REASONING && !(r->config.output_flags & IFN_INFER_OUTPUT_REASONING))
         return 1;
@@ -7234,8 +7464,9 @@ static int ifn_am_infer_request_text_event(void *context, uint32_t channel, cons
             r->callback_status = IFN_FORMAT;
             return 0;
         }
-        if (ifn_am_infer_request_emit_event(r, channel == IFN_STREAM_REASONING ? IFN_EVENT_REASONING : IFN_EVENT_CONTENT,
-                       p, take, NULL, 0))
+        if (ifn_am_infer_request_ifn_infer_request_local_emit_event(
+                r, channel == IFN_STREAM_REASONING ? IFN_EVENT_REASONING : IFN_EVENT_CONTENT, p,
+                take, NULL, 0))
             return 0;
         p += take;
         n -= take;
@@ -7243,13 +7474,14 @@ static int ifn_am_infer_request_text_event(void *context, uint32_t channel, cons
     return 1;
 }
 
-static int ifn_am_infer_request_token_event(void *context, int32_t token) {
+static int ifn_am_infer_request_ifn_infer_request_local_token_event(void *context, int32_t token) {
     ifn_infer_request *r = context;
     atomic_fetch_add_explicit(&r->generated, 1, memory_order_relaxed);
-    if (ifn_am_infer_request_cancelled(r))
+    if (ifn_am_infer_request_ifn_infer_request_local_cancelled(r))
         return 0;
     if (r->config.output_kind == IFN_OUTPUT_RAW_TOKENS)
-        return ifn_am_infer_request_emit_event(r, IFN_EVENT_TOKENS, NULL, 0, &token, 1) == IFN_CALLBACK_CONTINUE;
+        return ifn_am_infer_request_ifn_infer_request_local_emit_event(r, IFN_EVENT_TOKENS, NULL, 0, &token, 1) ==
+               IFN_CALLBACK_CONTINUE;
     if (r->config.output_kind == IFN_OUTPUT_DISCARD)
         return 1;
     ifn_status rc = ifn_stream_push_token(r->stream, token);
@@ -7266,31 +7498,32 @@ static int ifn_am_infer_request_token_event(void *context, int32_t token) {
     return info.finish_reason == IFN_STREAM_RUNNING;
 }
 
-static void ifn_am_infer_request_release_request(ifn_infer_request *r) {
+static void ifn_am_infer_request_ifn_infer_request_local_release_request(ifn_infer_request *r) {
     (void)ifn_stream_destroy(&r->stream);
-    si_free(&r->allocator, r->tokens);
+    ifn_infer_free(&r->allocator, r->tokens);
     ifn_options a = r->allocator;
-    si_free(&a, r);
+    ifn_infer_free(&a, r);
 }
 
-ifn_status si_request_create(ifn_infer_session *s, const ifn_infer_input_v1 *input,
-                             const ifn_infer_request_config_v1 *config, ifn_infer_request **out,
-                             ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_request_create(ifn_infer_session *s, const ifn_infer_input_v1 *input,
+                                    const ifn_infer_request_config_v1 *config,
+                                    ifn_infer_request **out, ifn_infer_error_v1 *e) {
     if (out)
         *out = NULL;
     if (!s || !out)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "invalid request arguments");
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                               "invalid request arguments");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
     if (s->state != IFN_HANDLE_READY || s->children == UINT32_MAX) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "session not ready");
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "session not ready");
     }
-    uint64_t start = si_now();
-    ifn_infer_request *r = si_alloc(&s->allocator, sizeof *r);
+    uint64_t start = ifn_infer_now();
+    ifn_infer_request *r = ifn_infer_alloc(&s->allocator, sizeof *r);
     if (!r) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate request");
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate request");
     }
     memset(r, 0, sizeof *r);
     r->session = s;
@@ -7302,19 +7535,19 @@ ifn_status si_request_create(ifn_infer_session *s, const ifn_infer_input_v1 *inp
     atomic_init(&r->processed, 0);
     IFN_INFER_INIT(r->terminal_error);
     ifn_chat_options chat;
-    ifn_status rc = ifn_am_infer_request_request_options(r, config, &chat);
+    ifn_status rc = ifn_am_infer_request_ifn_infer_request_local_request_options(r, config, &chat);
     if (!rc)
-        rc = ifn_am_infer_request_encode(r, input, &chat);
+        rc = ifn_am_infer_request_ifn_infer_request_local_encode(r, input, &chat);
     ifn_text_span stops[8];
     if (!rc)
-        rc = ifn_am_infer_request_array_valid(config->stops, sizeof(ifn_infer_bytes), 8);
+        rc = ifn_am_infer_request_ifn_infer_request_local_array_valid(config->stops, sizeof(ifn_infer_bytes), 8);
     if (!rc && config->output_kind != IFN_OUTPUT_TEXT && config->stops.count)
         rc = IFN_UNSUPPORTED;
     for (size_t i = 0; !rc && i < config->stops.count; i++) {
         ifn_infer_bytes span;
         memcpy(&span, (const unsigned char *)config->stops.data + i * config->stops.stride,
                sizeof span);
-        if (!si_span(span, 64) || !span.bytes) {
+        if (!ifn_infer_span(span, 64) || !span.bytes) {
             rc = IFN_INVALID_ARGUMENT;
             break;
         }
@@ -7325,28 +7558,28 @@ ifn_status si_request_create(ifn_infer_session *s, const ifn_infer_input_v1 *inp
         options.parse_chat = input->kind == IFN_INPUT_CHAT;
         options.stops = stops;
         options.stop_count = (size_t)config->stops.count;
-        rc = ifn_stream_create(s->model->tokenizer, &options, &r->allocator, ifn_am_infer_request_text_event, r,
-                               &r->stream);
+        rc = ifn_stream_create(s->model->tokenizer, &options, &r->allocator,
+                               ifn_am_infer_request_ifn_infer_request_local_text_event, r, &r->stream);
     }
     if (rc) {
-        ifn_am_infer_request_release_request(r);
-        si_unlock(&s->busy);
-        return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+        ifn_am_infer_request_ifn_infer_request_local_release_request(r);
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
     }
     s->children++;
-    uint64_t now = si_now();
+    uint64_t now = ifn_infer_now();
     if (start && now) {
         r->result.prepare_ns = now - start;
         r->result.timing_valid |= IFN_INFER_TIME_PREPARE;
     }
     r->result.input_tokens = r->token_count;
-    r->result.resolved_execution_profile = si_text(s->profile);
+    r->result.resolved_execution_profile = ifn_infer_text(s->profile);
     *out = r;
-    si_unlock(&s->busy);
-    return si_error(e, IFN_OK, 0, NULL);
+    ifn_infer_unlock(&s->busy);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
-static ifn_status ifn_am_infer_request_scope_begin(ifn_infer_request *r) {
+static ifn_status ifn_am_infer_request_ifn_infer_request_local_scope_begin(ifn_infer_request *r) {
     ifn_infer_session *s = r->session;
     bool same = r->scope_bytes && r->scope_bytes == s->cache_scope_bytes &&
                 !memcmp(r->scope, s->cache_scope, r->scope_bytes);
@@ -7366,38 +7599,39 @@ static ifn_status ifn_am_infer_request_scope_begin(ifn_infer_request *r) {
     return IFN_OK;
 }
 
-ifn_status si_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, void *context,
-                          ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, void *context,
+                                 ifn_infer_error_v1 *e) {
     if (!r || (!emit && r->config.output_kind != IFN_OUTPUT_DISCARD))
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
-                        "missing request or output callback");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                               "missing request or output callback");
     ifn_infer_session *s = r->session;
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session already executing");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session already executing");
     if (atomic_load_explicit(&r->phase, memory_order_acquire) != IFN_REQUEST_PREPARED) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_INFER_INVALID_STATE, IFN_STAGE_VALIDATE, "request is one-shot");
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_INFER_INVALID_STATE, IFN_STAGE_VALIDATE,
+                               "request is one-shot");
     }
     if (s->state != IFN_HANDLE_READY) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "session not ready");
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "session not ready");
     }
     atomic_store_explicit(&r->running, true, memory_order_release);
     atomic_store_explicit(&r->phase, IFN_REQUEST_RUNNING, memory_order_release);
     r->emit = emit;
     r->context = context;
-    r->started = si_now();
+    r->started = ifn_infer_now();
     ifn_status rc = IFN_OK;
     bool native_called = false;
     ifn_decode_stats stats = {0};
-    if (!ifn_am_infer_request_cancelled(r))
-        rc = ifn_am_infer_request_scope_begin(r);
-    if (!rc && !ifn_am_infer_request_cancelled(r)) {
+    if (!ifn_am_infer_request_ifn_infer_request_local_cancelled(r))
+        rc = ifn_am_infer_request_ifn_infer_request_local_scope_begin(r);
+    if (!rc && !ifn_am_infer_request_ifn_infer_request_local_cancelled(r)) {
         native_called = true;
-        ifn_run_control control = {ifn_am_infer_request_cancelled, r};
-        rc = ifn_session_generate_controlled(s->native, r->tokens, r->token_count,
-                                             (size_t)r->config.max_output_tokens, &r->decode,
-                                             ifn_am_infer_request_token_event, r, &stats, &control);
+        ifn_run_control control = {ifn_am_infer_request_ifn_infer_request_local_cancelled, r};
+        rc = ifn_session_generate_controlled(
+            s->native, r->tokens, r->token_count, (size_t)r->config.max_output_tokens, &r->decode,
+            ifn_am_infer_request_ifn_infer_request_local_token_event, r, &stats, &control);
         if (rc && rc != IFN_CANCELLED)
             s->state = IFN_HANDLE_POISONED;
         if (!rc || rc == IFN_CANCELLED) {
@@ -7410,15 +7644,15 @@ ifn_status si_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, void *co
         atomic_store_explicit(&r->processed, r->token_count, memory_order_relaxed);
     if (!rc && r->callback_status)
         rc = r->callback_status;
-    if (!rc && !ifn_am_infer_request_cancelled(r) && r->stream) {
+    if (!rc && !ifn_am_infer_request_ifn_infer_request_local_cancelled(r) && r->stream) {
         rc = ifn_stream_finish(r->stream, IFN_STREAM_LENGTH);
         if (!rc && r->callback_status)
             rc = r->callback_status;
     }
     /* One atomic seal is the cancellation/completion linearization point.
      * Session lease stays held through all cancellation/error invalidation. */
-    unsigned sealed = atomic_fetch_or_explicit(&r->control, SI_SEALED, memory_order_acq_rel);
-    bool was_cancelled = (sealed & SI_CANCEL) != 0 || rc == IFN_CANCELLED;
+    unsigned sealed = atomic_fetch_or_explicit(&r->control, IFN_INFER_SEALED, memory_order_acq_rel);
+    bool was_cancelled = (sealed & IFN_INFER_CANCEL) != 0 || rc == IFN_CANCELLED;
     ifn_status cleanup = IFN_OK;
     if ((was_cancelled || rc) && s->state == IFN_HANDLE_READY) {
         cleanup = ifn_session_reset(s->native);
@@ -7432,7 +7666,7 @@ ifn_status si_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, void *co
     if (!rc && was_cancelled)
         rc = IFN_CANCELLED;
     r->result.status = rc;
-    r->result.cancel_requested = (sealed & SI_CANCEL) != 0;
+    r->result.cancel_requested = (sealed & IFN_INFER_CANCEL) != 0;
     r->result.generated_tokens = atomic_load_explicit(&r->generated, memory_order_relaxed);
     r->result.finish_reason = rc == IFN_CANCELLED ? IFN_FINISH_CANCELLED_V1
                               : rc                ? IFN_FINISH_ERROR_V1
@@ -7450,12 +7684,12 @@ ifn_status si_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, void *co
                 r->result.finish_reason = IFN_FINISH_EOS_V1;
         }
     }
-    uint64_t now = si_now();
+    uint64_t now = ifn_infer_now();
     if (now && r->started) {
         r->result.run_ns = now - r->started;
         r->result.timing_valid |= IFN_INFER_TIME_RUN;
     }
-    (void)si_native_error(&r->terminal_error, rc, IFN_STAGE_DECODE);
+    (void)ifn_infer_native_error(&r->terminal_error, rc, IFN_STAGE_DECODE);
     if (s->state == IFN_HANDLE_POISONED)
         r->terminal_error.flags |= IFN_INFER_ERR_SESSION_POISONED;
     if (r->sequence)
@@ -7474,80 +7708,82 @@ ifn_status si_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, void *co
                                               : IFN_REQUEST_COMPLETED,
                           memory_order_release);
     if (e)
-        (void)si_output(e, &r->terminal_error, sizeof r->terminal_error);
+        (void)ifn_infer_output(e, &r->terminal_error, sizeof r->terminal_error);
     /* No access to r after releasing session: close holds the same lease. */
     atomic_store_explicit(&r->running, false, memory_order_release);
-    si_unlock(&s->busy);
+    ifn_infer_unlock(&s->busy);
     return rc;
 }
 
-ifn_status si_request_cancel(ifn_infer_request *r, uint32_t *disposition, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_request_cancel(ifn_infer_request *r, uint32_t *disposition,
+                                    ifn_infer_error_v1 *e) {
     if (disposition)
         *disposition = 0;
     if (!r || !disposition)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
-                        "missing cancellation arguments");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                               "missing cancellation arguments");
     unsigned old = atomic_load_explicit(&r->control, memory_order_acquire);
     for (;;) {
-        if (old & SI_SEALED) {
+        if (old & IFN_INFER_SEALED) {
             *disposition = IFN_CANCEL_TOO_LATE;
             break;
         }
-        if (old & SI_CANCEL) {
+        if (old & IFN_INFER_CANCEL) {
             *disposition = IFN_CANCEL_ALREADY_REQUESTED;
             break;
         }
-        if (atomic_compare_exchange_weak_explicit(&r->control, &old, old | SI_CANCEL,
+        if (atomic_compare_exchange_weak_explicit(&r->control, &old, old | IFN_INFER_CANCEL,
                                                   memory_order_acq_rel, memory_order_acquire)) {
             *disposition = IFN_CANCEL_ACCEPTED;
             break;
         }
     }
-    return si_error(e, IFN_OK, 0, NULL);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
-ifn_status si_request_progress(const ifn_infer_request *r, ifn_infer_progress_v1 *out,
-                               ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_request_progress(const ifn_infer_request *r, ifn_infer_progress_v1 *out,
+                                      ifn_infer_error_v1 *e) {
     if (!r)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing request");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing request");
     ifn_infer_progress_v1 v = {0};
     v.state = atomic_load_explicit(&r->phase, memory_order_acquire);
-    v.cancel_requested = (atomic_load_explicit(&r->control, memory_order_acquire) & SI_CANCEL) != 0;
+    v.cancel_requested =
+        (atomic_load_explicit(&r->control, memory_order_acquire) & IFN_INFER_CANCEL) != 0;
     v.generated_tokens = atomic_load_explicit(&r->generated, memory_order_relaxed);
     v.prompt_tokens_processed = atomic_load_explicit(&r->processed, memory_order_relaxed);
-    return si_native_error(e, si_output(out, &v, sizeof v), IFN_STAGE_VALIDATE);
+    return ifn_infer_native_error(e, ifn_infer_output(out, &v, sizeof v), IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_request_result(const ifn_infer_request *r, ifn_infer_result_v1 *out,
-                             ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_request_result(const ifn_infer_request *r, ifn_infer_result_v1 *out,
+                                    ifn_infer_error_v1 *e) {
     if (!r)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing request");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing request");
     unsigned phase = atomic_load_explicit(&r->phase, memory_order_acquire);
     if (phase == IFN_REQUEST_PREPARED || phase == IFN_REQUEST_RUNNING)
-        return si_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE,
-                        "request has no terminal result");
-    ifn_status rc = si_output(out, &r->result, sizeof r->result);
-    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+        return ifn_infer_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE,
+                               "request has no terminal result");
+    ifn_status rc = ifn_infer_output(out, &r->result, sizeof r->result);
+    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-ifn_status si_request_close(ifn_infer_request **ptr, ifn_infer_error_v1 *e) {
+ifn_status ifn_infer_request_close(ifn_infer_request **ptr, ifn_infer_error_v1 *e) {
     if (!ptr)
-        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
+        return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
     ifn_infer_request *r = *ptr;
     if (!r)
-        return si_error(e, IFN_OK, 0, NULL);
+        return ifn_infer_error(e, IFN_OK, 0, NULL);
     ifn_infer_session *s = r->session;
-    if (!si_lock(&s->busy))
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session busy");
+    if (!ifn_infer_lock(&s->busy))
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session busy");
     if (atomic_load_explicit(&r->running, memory_order_acquire)) {
-        si_unlock(&s->busy);
-        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "request running");
+        ifn_infer_unlock(&s->busy);
+        return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "request running");
     }
     s->children--;
-    ifn_am_infer_request_release_request(r);
+    ifn_am_infer_request_ifn_infer_request_local_release_request(r);
     *ptr = NULL;
-    si_unlock(&s->busy);
-    return si_error(e, IFN_OK, 0, NULL);
+    ifn_infer_unlock(&s->busy);
+    return ifn_infer_error(e, IFN_OK, 0, NULL);
 }
 
 #endif /* IFN_ENABLE_CUDA */

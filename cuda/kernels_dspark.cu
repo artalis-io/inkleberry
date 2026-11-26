@@ -1,13 +1,14 @@
+// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
 #include "kernels.hpp"
 #include "kernels_common.cuh"
 
-namespace squid {
+namespace ifn_cuda {
 
 namespace {
 
 // Mix 4 target taps [4, B, HIDDEN] using fuse_alpha[m, 0..3], RMSNorm + dflare_norm -> out_mix[m, b, HIDDEN]
 // m = 0,1,2 -> draft layers 0..2; m = 3 -> markov f stored into f_ring[(pos+b) & 15]
-__global__ void dspark_mix_kernel(
+__global__ void ifn_cuda_dspark_mix_kernel(
     const float* __restrict__ taps,       // [4, B, HIDDEN]
     int B,
     const float* __restrict__ fuse_alpha, // [4, 4]
@@ -26,19 +27,19 @@ __global__ void dspark_mix_kernel(
     const float a2 = fuse_alpha[m * 4 + 2];
     const float a3 = fuse_alpha[m * 4 + 3];
 
-    const float* t0 = taps + ((size_t)0 * B + b) * HIDDEN;
-    const float* t1 = taps + ((size_t)1 * B + b) * HIDDEN;
-    const float* t2 = taps + ((size_t)2 * B + b) * HIDDEN;
-    const float* t3 = taps + ((size_t)3 * B + b) * HIDDEN;
+    const float* t0 = taps + ((size_t)0 * B + b) * IFN_CUDA_HIDDEN;
+    const float* t1 = taps + ((size_t)1 * B + b) * IFN_CUDA_HIDDEN;
+    const float* t2 = taps + ((size_t)2 * B + b) * IFN_CUDA_HIDDEN;
+    const float* t3 = taps + ((size_t)3 * B + b) * IFN_CUDA_HIDDEN;
 
-    __shared__ float buf[HIDDEN];
+    __shared__ float buf[IFN_CUDA_HIDDEN];
     float sum_sq = 0.0f;
-    for (int d = tid; d < HIDDEN; d += 256) {
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
         float v = a0 * t0[d] + a1 * t1[d] + a2 * t2[d] + a3 * t3[d];
         buf[d] = v;
         sum_sq = fmaf(v, v, sum_sq);
     }
-    sum_sq = warp_sum(sum_sq);
+    sum_sq = ifn_cuda_warp_sum(sum_sq);
     __shared__ float sm[8];
     if ((tid & 31) == 0) sm[tid >> 5] = sum_sq;
     __syncthreads();
@@ -46,16 +47,16 @@ __global__ void dspark_mix_kernel(
     if (tid == 0) {
         float tot = 0.0f;
         for (int i = 0; i < 8; ++i) tot += sm[i];
-        inv_rms = rsqrtf(tot / float(HIDDEN) + RMS_EPS);
+        inv_rms = rsqrtf(tot / float(IFN_CUDA_HIDDEN) + IFN_CUDA_RMS_EPS);
     }
     __syncthreads();
 
     const __nv_bfloat16* nw = (m == 0) ? n0 : (m == 1 ? n1 : (m == 2 ? n2 : n3));
     float* dst = (m < 3)
-        ? (out_mix + ((size_t)m * B + b) * HIDDEN)
-        : (f_ring + (size_t)(((*d_pos) + b) & 15) * HIDDEN);
+        ? (out_mix + ((size_t)m * B + b) * IFN_CUDA_HIDDEN)
+        : (f_ring + (size_t)(((*d_pos) + b) & 15) * IFN_CUDA_HIDDEN);
     float s = inv_rms;
-    for (int d = tid; d < HIDDEN; d += 256) {
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
         dst[d] = buf[d] * s * __bfloat162float(nw[d]);
     }
 }
@@ -63,7 +64,7 @@ __global__ void dspark_mix_kernel(
 // NeoX RoPE (theta = 1e6) + per-head RMSNorm -> store ctx K & V into draft KV cache (BF16/FP8/Q4!)
 // Input kv [B, 2*KV_DIM] (K at 0..1023, V at 1024..2047)
 template <int KV_FMT>
-__global__ void dspark_store_ctx_kv_kernel(
+__global__ void ifn_cuda_dspark_store_ctx_kv_kernel(
     const float* __restrict__ kv,
     const __nv_bfloat16* __restrict__ k_norm, // [128]
     void* __restrict__ k_cache,
@@ -78,32 +79,32 @@ __global__ void dspark_store_ctx_kv_kernel(
     int pos = (*d_pos) + b;
     int slot = pos % cap;
 
-    const float* kp = kv + (size_t)b * (2 * KV_DIM) + h * HEAD_DIM;
-    const float* vp = kv + (size_t)b * (2 * KV_DIM) + KV_DIM + h * HEAD_DIM;
+    const float* kp = kv + (size_t)b * (2 * IFN_CUDA_KV_DIM) + h * IFN_CUDA_HEAD_DIM;
+    const float* vp = kv + (size_t)b * (2 * IFN_CUDA_KV_DIM) + IFN_CUDA_KV_DIM + h * IFN_CUDA_HEAD_DIM;
 
     __shared__ float sm[4];
     // Store V
-    store_kv_head_128<KV_FMT>(vp[tid], slot, h, tid, v_cache, v_scale, sm);
+    ifn_cuda_store_kv_head_128<KV_FMT>(vp[tid], slot, h, tid, v_cache, v_scale, sm);
     __syncthreads();
 
     // RMSNorm K per head
     float kv_val = kp[tid];
-    float sq = warp_sum(kv_val * kv_val);
+    float sq = ifn_cuda_warp_sum(kv_val * kv_val);
     if ((tid & 31) == 0) sm[tid >> 5] = sq;
     __syncthreads();
     __shared__ float inv_rms;
     if (tid == 0) {
-        inv_rms = rsqrtf((sm[0] + sm[1] + sm[2] + sm[3]) / float(HEAD_DIM) + RMS_EPS);
+        inv_rms = rsqrtf((sm[0] + sm[1] + sm[2] + sm[3]) / float(IFN_CUDA_HEAD_DIM) + IFN_CUDA_RMS_EPS);
     }
     __syncthreads();
 
-    __shared__ float kn[HEAD_DIM];
+    __shared__ float kn[IFN_CUDA_HEAD_DIM];
     kn[tid] = kv_val * inv_rms * __bfloat162float(k_norm[tid]);
     __syncthreads();
 
     // NeoX RoPE: pair (i, i + 64) for i in 0..63
     if (tid < 64) {
-        float freq = 1.0f / powf(MTP_ROPE_THETA, float(2 * tid) / float(HEAD_DIM));
+        float freq = 1.0f / powf(IFN_CUDA_MTP_ROPE_THETA, float(2 * tid) / float(IFN_CUDA_HEAD_DIM));
         float ang = float(pos) * freq;
         float c = cosf(ang), s = sinf(ang);
         float x0 = kn[tid], x1 = kn[tid + 64];
@@ -111,11 +112,11 @@ __global__ void dspark_store_ctx_kv_kernel(
         kn[tid + 64] = x0 * s + x1 * c;
     }
     __syncthreads();
-    store_kv_head_128<KV_FMT>(kn[tid], slot, h, tid, k_cache, k_scale, sm);
+    ifn_cuda_store_kv_head_128<KV_FMT>(kn[tid], slot, h, tid, k_cache, k_scale, sm);
 }
 
 // Initialize DSpark 8-row block: row 0 = embed_norm(anchor), rows 1..7 = mask_embed
-__global__ void dspark_init_block_kernel(
+__global__ void ifn_cuda_dspark_init_block_kernel(
     const __nv_bfloat16* __restrict__ embed,
     const __nv_bfloat16* __restrict__ embed_norm,
     const __nv_bfloat16* __restrict__ mask_embed,
@@ -123,16 +124,16 @@ __global__ void dspark_init_block_kernel(
     float* __restrict__ block_x) { // [8, HIDDEN]
     int r = blockIdx.x; // 0..7
     int tid = threadIdx.x; // 256
-    float* dst = block_x + (size_t)r * HIDDEN;
+    float* dst = block_x + (size_t)r * IFN_CUDA_HIDDEN;
     if (r == 0) {
         int tok = *d_anchor;
-        const __nv_bfloat16* row = embed + (size_t)tok * HIDDEN;
+        const __nv_bfloat16* row = embed + (size_t)tok * IFN_CUDA_HIDDEN;
         float sum_sq = 0.0f;
-        for (int d = tid; d < HIDDEN; d += 256) {
+        for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
             float v = __bfloat162float(row[d]);
             sum_sq = fmaf(v, v, sum_sq);
         }
-        sum_sq = warp_sum(sum_sq);
+        sum_sq = ifn_cuda_warp_sum(sum_sq);
         __shared__ float sm[8];
         if ((tid & 31) == 0) sm[tid >> 5] = sum_sq;
         __syncthreads();
@@ -140,15 +141,15 @@ __global__ void dspark_init_block_kernel(
         if (tid == 0) {
             float tot = 0.0f;
             for (int i = 0; i < 8; ++i) tot += sm[i];
-            inv_rms = rsqrtf(tot / float(HIDDEN) + RMS_EPS);
+            inv_rms = rsqrtf(tot / float(IFN_CUDA_HIDDEN) + IFN_CUDA_RMS_EPS);
         }
         __syncthreads();
         float s = inv_rms;
-        for (int d = tid; d < HIDDEN; d += 256) {
+        for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
             dst[d] = __bfloat162float(row[d]) * s * __bfloat162float(embed_norm[d]);
         }
     } else {
-        for (int d = tid; d < HIDDEN; d += 256) {
+        for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
             dst[d] = __bfloat162float(mask_embed[d]);
         }
     }
@@ -156,7 +157,7 @@ __global__ void dspark_init_block_kernel(
 
 // DSpark Q/K RMSNorm + NeoX RoPE on the 8-row block (positions p..p+7)
 // qkv layout: [8, 5120] (Q: 0..3071, K: 3072..4095, V: 4096..5119)
-__global__ void dspark_block_qk_rope_kernel(
+__global__ void ifn_cuda_dspark_block_qk_rope_kernel(
     float* __restrict__ qkv,
     const __nv_bfloat16* __restrict__ q_norm,
     const __nv_bfloat16* __restrict__ k_norm,
@@ -165,28 +166,28 @@ __global__ void dspark_block_qk_rope_kernel(
     int h = blockIdx.y; // 0..23: Q, 24..31: K
     int tid = threadIdx.x; // 0..127
     int pos = (*d_pos) + r;
-    constexpr int QKV_STRIDE = Q_DIM + 2 * KV_DIM;
+    constexpr int QKV_STRIDE = IFN_CUDA_Q_DIM + 2 * IFN_CUDA_KV_DIM;
 
     float* vec = (h < 24)
-        ? (qkv + (size_t)r * QKV_STRIDE + h * HEAD_DIM)
-        : (qkv + (size_t)r * QKV_STRIDE + Q_DIM + (h - 24) * HEAD_DIM);
+        ? (qkv + (size_t)r * QKV_STRIDE + h * IFN_CUDA_HEAD_DIM)
+        : (qkv + (size_t)r * QKV_STRIDE + IFN_CUDA_Q_DIM + (h - 24) * IFN_CUDA_HEAD_DIM);
     const __nv_bfloat16* nw = (h < 24) ? q_norm : k_norm;
 
     float val = vec[tid];
-    float sq = warp_sum(val * val);
+    float sq = ifn_cuda_warp_sum(val * val);
     __shared__ float sm[4];
     if ((tid & 31) == 0) sm[tid >> 5] = sq;
     __syncthreads();
     __shared__ float inv_rms;
-    if (tid == 0) inv_rms = rsqrtf((sm[0] + sm[1] + sm[2] + sm[3]) / float(HEAD_DIM) + RMS_EPS);
+    if (tid == 0) inv_rms = rsqrtf((sm[0] + sm[1] + sm[2] + sm[3]) / float(IFN_CUDA_HEAD_DIM) + IFN_CUDA_RMS_EPS);
     __syncthreads();
 
-    __shared__ float vn[HEAD_DIM];
+    __shared__ float vn[IFN_CUDA_HEAD_DIM];
     vn[tid] = val * inv_rms * __bfloat162float(nw[tid]);
     __syncthreads();
 
     if (tid < 64) {
-        float freq = 1.0f / powf(MTP_ROPE_THETA, float(2 * tid) / float(HEAD_DIM));
+        float freq = 1.0f / powf(IFN_CUDA_MTP_ROPE_THETA, float(2 * tid) / float(IFN_CUDA_HEAD_DIM));
         float ang = float(pos) * freq;
         float c = cosf(ang), s = sinf(ang);
         float x0 = vn[tid], x1 = vn[tid + 64];
@@ -196,17 +197,17 @@ __global__ void dspark_block_qk_rope_kernel(
 }
 
 // Fast RMSNorm producing __half directly for DSpark's NVFP4 linear_h layers!
-__global__ void dspark_rmsnorm_h_kernel(
+__global__ void ifn_cuda_dspark_rmsnorm_h_kernel(
     const float* __restrict__ x,
     const __nv_bfloat16* __restrict__ w,
     float* __restrict__ out_f,
     __half* __restrict__ out_h) {
     int r = blockIdx.x;
     int tid = threadIdx.x;
-    const float* xb = x + (size_t)r * HIDDEN;
+    const float* xb = x + (size_t)r * IFN_CUDA_HIDDEN;
     float sq = 0.0f;
-    for (int d = tid; d < HIDDEN; d += 256) { float v = xb[d]; sq = fmaf(v, v, sq); }
-    sq = warp_sum(sq);
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) { float v = xb[d]; sq = fmaf(v, v, sq); }
+    sq = ifn_cuda_warp_sum(sq);
     __shared__ float sm[8];
     if ((tid & 31) == 0) sm[tid >> 5] = sq;
     __syncthreads();
@@ -214,13 +215,13 @@ __global__ void dspark_rmsnorm_h_kernel(
     if (tid == 0) {
         float tot = 0;
         for (int i = 0; i < 8; ++i) tot += sm[i];
-        inv_rms = rsqrtf(tot / float(HIDDEN) + RMS_EPS);
+        inv_rms = rsqrtf(tot / float(IFN_CUDA_HIDDEN) + IFN_CUDA_RMS_EPS);
     }
     __syncthreads();
     float ir = inv_rms;
-    float* of = out_f ? (out_f + (size_t)r * HIDDEN) : nullptr;
-    __half* oh = out_h + (size_t)r * HIDDEN;
-    for (int d = tid; d < HIDDEN; d += 256) {
+    float* of = out_f ? (out_f + (size_t)r * IFN_CUDA_HIDDEN) : nullptr;
+    __half* oh = out_h + (size_t)r * IFN_CUDA_HIDDEN;
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
         float v = xb[d] * ir * __bfloat162float(w[d]);
         oh[d] = __float2half(v);
         if (of) of[d] = v;
@@ -231,7 +232,7 @@ __global__ void dspark_rmsnorm_h_kernel(
 // Reads each global context KV token ONCE across all 24 DSpark queries (24x less BW, ~350 TFLOPS TC!).
 template <int KV_FMT>
 __global__ void __launch_bounds__(128)
-dspark_global_attn_bulk_splitk_kernel(
+ifn_cuda_dspark_global_attn_bulk_splitk_kernel(
     const float* __restrict__ qkv, // [8, 5120]
     const void* __restrict__ ck,
     const void* __restrict__ cv,
@@ -245,16 +246,16 @@ dspark_global_attn_bulk_splitk_kernel(
 
     // Reserve MTP_MAX_DRAFTS (7) slots of ring slack so rejected future draft tokens
     // written ahead of *d_pos are never read as valid history when p > cap.
-    int max_win = max(0, cap - MTP_MAX_DRAFTS);
+    int max_win = max(0, cap - IFN_CUDA_MTP_MAX_DRAFTS);
     int first = (p > max_win) ? (p - max_win) : 0;
     int total_len = p - first;
     int split = blockIdx.y;
-    int chunk = (total_len + KV_SPLIT_K - 1) / KV_SPLIT_K;
+    int chunk = (total_len + IFN_CUDA_KV_SPLIT_K - 1) / IFN_CUDA_KV_SPLIT_K;
     int t_start = first + split * chunk;
     int t_end = min(p, t_start + chunk);
 
-    constexpr int QKV_STRIDE = Q_DIM + 2 * KV_DIM;
-    run_tc_bulk_splitk<KV_FMT, 24, QKV_STRIDE, 128>(
+    constexpr int QKV_STRIDE = IFN_CUDA_Q_DIM + 2 * IFN_CUDA_KV_DIM;
+    ifn_cuda_run_tc_bulk_splitk<KV_FMT, 24, QKV_STRIDE, 128>(
         qkv, ck, cv, cks, cvs, cap, blockIdx.x, split, t_start, t_end, split_buf);
 }
 
@@ -262,7 +263,7 @@ dspark_global_attn_bulk_splitk_kernel(
 // Local layers (window > 0): BF16 SWA context + 8 bidirectional block rows.
 // Global layer (window == 0): 8 bidirectional block rows + exact merge of 24 bulk Split-K partials!
 __global__ void __launch_bounds__(256)
-dspark_block_attn_kernel(
+ifn_cuda_dspark_block_attn_kernel(
     const float* __restrict__ qkv,
     const __nv_bfloat16* __restrict__ ck,
     const __nv_bfloat16* __restrict__ cv,
@@ -276,15 +277,15 @@ dspark_block_attn_kernel(
     int tid = threadIdx.x;
     int warp = tid >> 5;
     int lane = tid & 31;
-    int kvh = h / GQA_RATIO;
-    constexpr int QKV_STRIDE = Q_DIM + 2 * KV_DIM;
+    int kvh = h / IFN_CUDA_GQA_RATIO;
+    constexpr int QKV_STRIDE = IFN_CUDA_Q_DIM + 2 * IFN_CUDA_KV_DIM;
 
     int p = *d_pos;
     bool has_bulk = (window == 0 && split_buf != nullptr && p > 0);
     int first = (window > 0 && p > window) ? (p - window) : 0;
 
     int d_off = lane * 4;
-    const float* qp = qkv + (size_t)r * QKV_STRIDE + h * HEAD_DIM;
+    const float* qp = qkv + (size_t)r * QKV_STRIDE + h * IFN_CUDA_HEAD_DIM;
     float4 qv = *reinterpret_cast<const float4*>(qp + d_off);
     float acc0 = 0.0f, acc1 = 0.0f, acc2 = 0.0f, acc3 = 0.0f;
     float m_val = -1e30f, d_val = 0.0f;
@@ -293,14 +294,14 @@ dspark_block_attn_kernel(
     if (!has_bulk && window > 0) {
         for (int t = first + warp; t < p; t += 8) {
             int slot = t % cap;
-            uint2 k4 = __ldg(reinterpret_cast<const uint2*>(ck + (size_t)slot * KV_DIM + kvh * HEAD_DIM + d_off));
-            uint2 v4 = __ldg(reinterpret_cast<const uint2*>(cv + (size_t)slot * KV_DIM + kvh * HEAD_DIM + d_off));
+            uint2 k4 = __ldg(reinterpret_cast<const uint2*>(ck + (size_t)slot * IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM + d_off));
+            uint2 v4 = __ldg(reinterpret_cast<const uint2*>(cv + (size_t)slot * IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM + d_off));
             const __nv_bfloat162* kb = reinterpret_cast<const __nv_bfloat162*>(&k4);
             const __nv_bfloat162* vb = reinterpret_cast<const __nv_bfloat162*>(&v4);
             float2 kf0 = __bfloat1622float2(kb[0]), kf1 = __bfloat1622float2(kb[1]);
             float2 vf0 = __bfloat1622float2(vb[0]), vf1 = __bfloat1622float2(vb[1]);
             float dot = fmaf(qv.x, kf0.x, fmaf(qv.y, kf0.y, fmaf(qv.z, kf1.x, qv.w * kf1.y)));
-            float score = warp_sum(dot) * INV_SQRT_HEAD_DIM;
+            float score = ifn_cuda_warp_sum(dot) * IFN_CUDA_INV_SQRT_HEAD_DIM;
             float m_new = fmaxf(m_val, score);
             float alpha = __expf(m_val - m_new);
             float pw = __expf(score - m_new);
@@ -315,10 +316,10 @@ dspark_block_attn_kernel(
 
     // 2. Bidirectional block KV (all 8 rows: warp `w` handles block row `w`!)
     {
-        float4 bkv = *reinterpret_cast<const float4*>(qkv + (size_t)warp * QKV_STRIDE + Q_DIM + kvh * HEAD_DIM + d_off);
-        float4 bvv = *reinterpret_cast<const float4*>(qkv + (size_t)warp * QKV_STRIDE + Q_DIM + KV_DIM + kvh * HEAD_DIM + d_off);
+        float4 bkv = *reinterpret_cast<const float4*>(qkv + (size_t)warp * QKV_STRIDE + IFN_CUDA_Q_DIM + kvh * IFN_CUDA_HEAD_DIM + d_off);
+        float4 bvv = *reinterpret_cast<const float4*>(qkv + (size_t)warp * QKV_STRIDE + IFN_CUDA_Q_DIM + IFN_CUDA_KV_DIM + kvh * IFN_CUDA_HEAD_DIM + d_off);
         float dot = fmaf(qv.x, bkv.x, fmaf(qv.y, bkv.y, fmaf(qv.z, bkv.z, qv.w * bkv.w)));
-        float score = warp_sum(dot) * INV_SQRT_HEAD_DIM;
+        float score = ifn_cuda_warp_sum(dot) * IFN_CUDA_INV_SQRT_HEAD_DIM;
         float m_new = fmaxf(m_val, score);
         float alpha = __expf(m_val - m_new);
         float pw = __expf(score - m_new);
@@ -330,7 +331,7 @@ dspark_block_attn_kernel(
         m_val = m_new;
     }
 
-    __shared__ float sm_m[8], sm_d[8], sm_acc[8][HEAD_DIM];
+    __shared__ float sm_m[8], sm_d[8], sm_acc[8][IFN_CUDA_HEAD_DIM];
     if (lane == 0) { sm_m[warp] = m_val; sm_d[warp] = d_val; }
     sm_acc[warp][d_off + 0] = acc0;
     sm_acc[warp][d_off + 1] = acc1;
@@ -338,18 +339,18 @@ dspark_block_attn_kernel(
     sm_acc[warp][d_off + 3] = acc3;
     __syncthreads();
 
-    if (tid < HEAD_DIM) {
+    if (tid < IFN_CUDA_HEAD_DIM) {
         float g_m = sm_m[0];
         #pragma unroll
         for (int w = 1; w < 8; ++w) g_m = fmaxf(g_m, sm_m[w]);
 
-        int base_hr = (h * MAX_VERIFY_B + r) * KV_TOTAL_SPLITS;
-        const float* s_m_in = split_buf + SPLIT_M_OFF;
-        const float* s_d_in = split_buf + SPLIT_D_OFF;
-        const float* s_o_in = split_buf + SPLIT_O_OFF;
+        int base_hr = (h * IFN_CUDA_MAX_VERIFY_B + r) * IFN_CUDA_KV_TOTAL_SPLITS;
+        const float* s_m_in = split_buf + IFN_CUDA_SPLIT_M_OFF;
+        const float* s_d_in = split_buf + IFN_CUDA_SPLIT_D_OFF;
+        const float* s_o_in = split_buf + IFN_CUDA_SPLIT_O_OFF;
         if (has_bulk) {
             #pragma unroll
-            for (int s = 0; s < KV_SPLIT_K; ++s) {
+            for (int s = 0; s < IFN_CUDA_KV_SPLIT_K; ++s) {
                 g_m = fmaxf(g_m, s_m_in[base_hr + s]);
             }
         }
@@ -365,32 +366,32 @@ dspark_block_attn_kernel(
         }
         if (has_bulk) {
             #pragma unroll
-            for (int s = 0; s < KV_SPLIT_K; ++s) {
+            for (int s = 0; s < IFN_CUDA_KV_SPLIT_K; ++s) {
                 float sd = s_d_in[base_hr + s];
                 if (sd > 0.0f) {
                     float sc = __expf(s_m_in[base_hr + s] - g_m);
                     g_d += sd * sc;
-                    g_o += s_o_in[(size_t)(base_hr + s) * HEAD_DIM + tid] * sc;
+                    g_o += s_o_in[(size_t)(base_hr + s) * IFN_CUDA_HEAD_DIM + tid] * sc;
                 }
             }
         }
         float val = g_o / g_d;
-        size_t oidx = (size_t)r * Q_DIM + h * HEAD_DIM + tid;
+        size_t oidx = (size_t)r * IFN_CUDA_Q_DIM + h * IFN_CUDA_HEAD_DIM + tid;
         if (out) out[oidx] = val;
         if (out_h) out_h[oidx] = __float2half(val);
     }
 }
 
 // Standard SwiGLU for DSpark MLP writing __half directly for w_down linear_h!
-__global__ void dspark_swiglu_kernel(const float* __restrict__ gu, float* __restrict__ out, __half* __restrict__ out_h, int B) {
+__global__ void ifn_cuda_dspark_swiglu_kernel(const float* __restrict__ gu, float* __restrict__ out, __half* __restrict__ out_h, int B) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int total = B * MTP_INTERMEDIATE;
+    int total = B * IFN_CUDA_MTP_INTERMEDIATE;
     if (idx >= total) return;
-    int b = idx / MTP_INTERMEDIATE;
-    int j = idx % MTP_INTERMEDIATE;
-    float g = gu[(size_t)b * (2 * MTP_INTERMEDIATE) + j];
-    float u = gu[(size_t)b * (2 * MTP_INTERMEDIATE) + MTP_INTERMEDIATE + j];
-    float v = (g * fast_sigmoid(g)) * u;
+    int b = idx / IFN_CUDA_MTP_INTERMEDIATE;
+    int j = idx % IFN_CUDA_MTP_INTERMEDIATE;
+    float g = gu[(size_t)b * (2 * IFN_CUDA_MTP_INTERMEDIATE) + j];
+    float u = gu[(size_t)b * (2 * IFN_CUDA_MTP_INTERMEDIATE) + IFN_CUDA_MTP_INTERMEDIATE + j];
+    float v = (g * ifn_cuda_fast_sigmoid(g)) * u;
     if (out) out[idx] = v;
     if (out_h) out_h[idx] = __float2half(v);
 }
@@ -399,7 +400,7 @@ __global__ void dspark_swiglu_kernel(const float* __restrict__ gu, float* __rest
 // raw[768] = rnn_bias + c_h[i] + c_f + rnn_w_sp @ [state; w1[prev_tok]]
 // Grid: 24 blocks, Block: 128 threads (4 warps/block -> 8 rows/warp = 768 rows, 100% coalesced uint4!)
 __global__ void __launch_bounds__(128)
-markov_rnn_proj_kernel(
+ifn_cuda_markov_rnn_proj_kernel(
     const __nv_bfloat16* __restrict__ rnn_w_sp,  // [768, 512]
     const __nv_bfloat16* __restrict__ rnn_bias,  // [768]
     const __nv_bfloat16* __restrict__ markov_w1, // [201024, 256]
@@ -411,7 +412,7 @@ markov_rnn_proj_kernel(
     __shared__ float sp[512];
     int tid = threadIdx.x;
     int prev_tok = *prev_tok_ptr;
-    const __nv_bfloat16* w1_row = markov_w1 + (size_t)prev_tok * MTP_MARKOV_RANK;
+    const __nv_bfloat16* w1_row = markov_w1 + (size_t)prev_tok * IFN_CUDA_MTP_MARKOV_RANK;
     sp[tid]       = state[tid];
     sp[128 + tid] = state[128 + tid];
     sp[256 + tid] = __bfloat162float(w1_row[tid]);
@@ -440,7 +441,7 @@ markov_rnn_proj_kernel(
             acc = fmaf(wf2.x, x1.x, acc); acc = fmaf(wf2.y, x1.y, acc);
             acc = fmaf(wf3.x, x1.z, acc); acc = fmaf(wf3.y, x1.w, acc);
         }
-        float val = warp_sum(acc);
+        float val = ifn_cuda_warp_sum(acc);
         if (lane == 0) {
             out_raw[r] = val + __bfloat162float(rnn_bias[r]) + c_h_i[r] + c_f[r];
         }
@@ -448,11 +449,11 @@ markov_rnn_proj_kernel(
 }
 
 // Persistent 680-block SMEM NVFP4 base_logits[K, Vd] = unembed_draft @ normed_h + fold_b (HALF-WARP -> 0% idle!)
-constexpr int DSPARK_UNEMBED_BLOCKS = 680;
+constexpr int IFN_CUDA_DSPARK_UNEMBED_BLOCKS = 680;
 
 template <int K_CONST>
 __global__ void __launch_bounds__(256)
-dspark_base_logits_nvfp4_kernel(
+ifn_cuda_dspark_base_logits_nvfp4_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float gscale,
@@ -460,9 +461,9 @@ dspark_base_logits_nvfp4_kernel(
     const float* __restrict__ fold_b,    // [V]
     float* __restrict__ out_base,        // [K_CONST, V]
     int V) {
-    __shared__ __half s_xh[K_CONST * HIDDEN];
+    __shared__ __half s_xh[K_CONST * IFN_CUDA_HIDDEN];
     int tid = threadIdx.x;
-    int total_x = K_CONST * HIDDEN;
+    int total_x = K_CONST * IFN_CUDA_HIDDEN;
     for (int i = tid; i < total_x; i += 256) s_xh[i] = normed_h[i];
     __syncthreads();
 
@@ -472,8 +473,8 @@ dspark_base_logits_nvfp4_kernel(
     int total_r = gridDim.x * 16;
 
     for (int row = global_r; row < V; row += total_r) {
-        const uint2* wr = reinterpret_cast<const uint2*>(w_data + (size_t)row * (HIDDEN >> 1));
-        const uint8_t* sr = w_scales + (size_t)row * (HIDDEN >> 4);
+        const uint2* wr = reinterpret_cast<const uint2*>(w_data + (size_t)row * (IFN_CUDA_HIDDEN >> 1));
+        const uint8_t* sr = w_scales + (size_t)row * (IFN_CUDA_HIDDEN >> 4);
         float acc[K_CONST];
         #pragma unroll
         for (int k = 0; k < K_CONST; ++k) acc[k] = 0.0f;
@@ -482,14 +483,14 @@ dspark_base_logits_nvfp4_kernel(
         for (int iter = 0; iter < 9; ++iter) {
             int blk = lane + iter * 16;
             uint2 w8 = __ldg(wr + blk);
-            float sc = cvt_e4m3_to_float(__ldg(sr + blk));
+            float sc = ifn_cuda_cvt_e4m3_to_float(__ldg(sr + blk));
             __half2 wh[8];
-            cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
-            cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
+            ifn_cuda_cvt_e2m1x8_to_half2x4(w8.x, wh[0], wh[1], wh[2], wh[3]);
+            ifn_cuda_cvt_e2m1x8_to_half2x4(w8.y, wh[4], wh[5], wh[6], wh[7]);
             int koff = blk << 4;
             #pragma unroll
             for (int k = 0; k < K_CONST; ++k) {
-                const __half2* xb = reinterpret_cast<const __half2*>(s_xh + k * HIDDEN + koff);
+                const __half2* xb = reinterpret_cast<const __half2*>(s_xh + k * IFN_CUDA_HIDDEN + koff);
                 __half2 p0 = __hmul2(wh[0], xb[0]), p1 = __hmul2(wh[1], xb[1]);
                 p0 = __hfma2(wh[2], xb[2], p0); p1 = __hfma2(wh[3], xb[3], p1);
                 p0 = __hfma2(wh[4], xb[4], p0); p1 = __hfma2(wh[5], xb[5], p1);
@@ -501,7 +502,7 @@ dspark_base_logits_nvfp4_kernel(
         float fb = (lane == 0 && fold_b) ? fold_b[row] : 0.0f;
         #pragma unroll
         for (int k = 0; k < K_CONST; ++k) {
-            float val = half_warp_sum(acc[k]) * gscale;
+            float val = ifn_cuda_half_warp_sum(acc[k]) * gscale;
             if (lane == 0) out_base[(size_t)k * V + row] = val + fb;
         }
     }
@@ -511,7 +512,7 @@ dspark_base_logits_nvfp4_kernel(
 // 192 threads (SPLITK=6 warps, U=3 steps of 128 cols/warp = 2304 exact), persistent across V!
 template <int K_CONST>
 __global__ void __launch_bounds__(192)
-dspark_base_logits_nvfp4_mma_kernel(
+ifn_cuda_dspark_base_logits_nvfp4_mma_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     float gscale,
@@ -521,9 +522,9 @@ dspark_base_logits_nvfp4_mma_kernel(
     int V, uint32_t zero) {
     constexpr int SPLITK = 6;
     constexpr int U = 3;
-    constexpr int CB = HIDDEN >> 1;
-    constexpr int SB = HIDDEN >> 4;
-    __shared__ __half s_xh[K_CONST][HIDDEN];
+    constexpr int CB = IFN_CUDA_HIDDEN >> 1;
+    constexpr int SB = IFN_CUDA_HIDDEN >> 4;
+    __shared__ __half s_xh[K_CONST][IFN_CUDA_HIDDEN];
     __shared__ float cs[SPLITK][16][8];
 
     const int tid = threadIdx.x;
@@ -533,12 +534,12 @@ dspark_base_logits_nvfp4_mma_kernel(
     const int t = lane & 3;
     const int c_base = warp * (4 * U) + t;
 
-    pdl_wait_fenced(zero);
-    pdl_trigger();
+    ifn_cuda_pdl_wait_fenced(zero);
+    ifn_cuda_pdl_trigger();
 
-    int total_x = K_CONST * HIDDEN;
+    int total_x = K_CONST * IFN_CUDA_HIDDEN;
     for (int i = tid; i < total_x; i += 192) {
-        s_xh[i / HIDDEN][i % HIDDEN] = normed_h[i];
+        s_xh[i / IFN_CUDA_HIDDEN][i % IFN_CUDA_HIDDEN] = normed_h[i];
     }
     __syncthreads();
 
@@ -562,13 +563,13 @@ dspark_base_logits_nvfp4_mma_kernel(
     }
 
     auto decode32 = [](uint4 q, uint16_t s, uint32_t (&o)[16]) {
-        const __half2 sc = cvt_e4m3x2_to_half2(s);
+        const __half2 sc = ifn_cuda_cvt_e4m3x2_to_half2(s);
         const __half2 slo = __low2half2(sc), shi = __high2half2(sc);
         const uint32_t words[4] = {q.x, q.y, q.z, q.w};
         #pragma unroll
         for (int w = 0; w < 4; ++w) {
             __half2 h0, h1, h2, h3;
-            cvt_e2m1x8_to_half2x4(words[w], h0, h1, h2, h3);
+            ifn_cuda_cvt_e2m1x8_to_half2x4(words[w], h0, h1, h2, h3);
             const __half2 sm = (w < 2) ? slo : shi;
             __half2 p0 = __hmul2(h0, sm), p1 = __hmul2(h1, sm), p2 = __hmul2(h2, sm), p3 = __hmul2(h3, sm);
             o[4 * w + 0] = *reinterpret_cast<uint32_t*>(&p0);
@@ -590,12 +591,12 @@ dspark_base_logits_nvfp4_mma_kernel(
         for (int u = 0; u < U; ++u) {
             int c = c_base + 4 * u;
             if (la) {
-                aq[u] = ld_stream_u4(w_data + (size_t)ra * CB + (size_t)c * 16);
-                as[u] = ld_scale_u16(w_scales + (size_t)ra * SB + (size_t)c * 2);
+                aq[u] = ifn_cuda_ld_stream_u4(w_data + (size_t)ra * CB + (size_t)c * 16);
+                as[u] = ifn_cuda_ld_scale_u16(w_scales + (size_t)ra * SB + (size_t)c * 2);
             } else { aq[u] = make_uint4(0, 0, 0, 0); as[u] = 0; }
             if (lb) {
-                bq[u] = ld_stream_u4(w_data + (size_t)rb * CB + (size_t)c * 16);
-                bs[u] = ld_scale_u16(w_scales + (size_t)rb * SB + (size_t)c * 2);
+                bq[u] = ifn_cuda_ld_stream_u4(w_data + (size_t)rb * CB + (size_t)c * 16);
+                bs[u] = ifn_cuda_ld_scale_u16(w_scales + (size_t)rb * SB + (size_t)c * 2);
             } else { bq[u] = make_uint4(0, 0, 0, 0); bs[u] = 0; }
         }
         uint32_t dep = 0;
@@ -611,7 +612,7 @@ dspark_base_logits_nvfp4_mma_kernel(
             decode32(bq[u], bs[u], b);
             #pragma unroll
             for (int i = 0; i < 8; ++i) {
-                mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
+                ifn_cuda_mma_m16n8k16_f32_f16(d[0], d[1], d[2], d[3],
                                      a[2 * i], b[2 * i], a[2 * i + 1], b[2 * i + 1],
                                      xw[u][2 * i] ^ dep, xw[u][2 * i + 1],
                                      d[0], d[1], d[2], d[3]);
@@ -638,11 +639,11 @@ dspark_base_logits_nvfp4_mma_kernel(
     }
 }
 
-constexpr int MARKOV_BLOCKS = 340; // 2 blocks/SM (16 rows/block = 5440 concurrent rows -> 0% tail!)
+constexpr int IFN_CUDA_MARKOV_BLOCKS = 340; // 2 blocks/SM (16 rows/block = 5440 concurrent rows -> 0% tail!)
 
 template <int KIND> // 0=BF16, 2=NVFP4
 __global__ void __launch_bounds__(256)
-markov_fold_argmax_stage1_kernel(
+ifn_cuda_markov_fold_argmax_stage1_kernel(
     const void* __restrict__ fold_data,
     const uint8_t* __restrict__ fold_scales,
     float fold_gscale,
@@ -655,18 +656,18 @@ markov_fold_argmax_stage1_kernel(
     float* __restrict__ blk_cm,
     float* __restrict__ blk_csum,
     float* __restrict__ out_step_probs,
-    const SampleConfig* __restrict__ sample_cfg,
+    const ifn_cuda_sample_config* __restrict__ sample_cfg,
     int V) {
     const bool write_logits = (out_step_probs != nullptr) && (sample_cfg != nullptr && sample_cfg->inv_temp > 0.0f);
     __shared__ __half s_lh[256];
     __shared__ float s_lf[256];
     int tid = threadIdx.x;
-    float lat_v = fast_tanh(raw_rnn[512 + tid]);
+    float lat_v = ifn_cuda_fast_tanh(raw_rnn[512 + tid]);
     s_lf[tid] = lat_v;
     s_lh[tid] = __float2half(lat_v);
     if (blockIdx.x == 0) {
-        float gate = fast_sigmoid(raw_rnn[tid]);
-        float cand = fast_tanh(raw_rnn[256 + tid]);
+        float gate = ifn_cuda_fast_sigmoid(raw_rnn[tid]);
+        float cand = ifn_cuda_fast_tanh(raw_rnn[256 + tid]);
         state[tid] = gate * state[tid] + (1.0f - gate) * cand;
     }
     __syncthreads();
@@ -691,9 +692,9 @@ markov_fold_argmax_stage1_kernel(
                 static_cast<const uint8_t*>(fold_data) + (size_t)row * 128);
             const uint8_t* sr = fold_scales + (size_t)row * 16;
             uint2 w8 = __ldg(wr + lane);
-            float sc = cvt_e4m3_to_float(__ldg(sr + lane));
+            float sc = ifn_cuda_cvt_e4m3_to_float(__ldg(sr + lane));
             const __half2* xh = reinterpret_cast<const __half2*>(s_lh + (lane << 4));
-            acc = half_warp_sum(nvfp4_block16_dot(w8, xh) * sc) * fold_gscale;
+            acc = ifn_cuda_half_warp_sum(ifn_cuda_nvfp4_block16_dot(w8, xh) * sc) * fold_gscale;
         } else {
             // BF16: K = 256 -> 32 uint4 vectors (1 per lane!)
             const uint4* wr = reinterpret_cast<const uint4*>(
@@ -710,12 +711,12 @@ markov_fold_argmax_stage1_kernel(
             acc = fmaf(wf1.x, x0.z, acc); acc = fmaf(wf1.y, x0.w, acc);
             acc = fmaf(wf2.x, x1.x, acc); acc = fmaf(wf2.y, x1.y, acc);
             acc = fmaf(wf3.x, x1.z, acc); acc = fmaf(wf3.y, x1.w, acc);
-            acc = warp_sum(acc);
+            acc = ifn_cuda_warp_sum(acc);
         }
         if (lane == 0) {
             float total = base_logits[row] + (fold_b ? fold_b[row] : 0.0f) + acc;
             if (total > bv) { bv = total; bi = row; }
-            float cap = fast_tanh(total * (1.0f / FINAL_SOFTCAP)) * FINAL_SOFTCAP;
+            float cap = ifn_cuda_fast_tanh(total * (1.0f / IFN_CUDA_FINAL_SOFTCAP)) * IFN_CUDA_FINAL_SOFTCAP;
             if (write_logits) out_step_probs[row] = cap;
             if (cap > cm) {
                 csum = (csum > 0.0f) ? (csum * __expf(cm - cap) + 1.0f) : 1.0f;
@@ -747,7 +748,7 @@ markov_fold_argmax_stage1_kernel(
     }
 }
 
-__global__ void markov_fold_argmax_stage2_kernel(
+__global__ void ifn_cuda_markov_fold_argmax_stage2_kernel(
     const float* __restrict__ blk_val,
     const int32_t* __restrict__ blk_idx,
     const float* __restrict__ blk_cm,
@@ -758,7 +759,7 @@ __global__ void markov_fold_argmax_stage2_kernel(
     float* __restrict__ out_step_probs,
     float* __restrict__ out_q_sel,
     int32_t* __restrict__ d_draft_is_delta,
-    const SampleConfig* __restrict__ sample_cfg,
+    const ifn_cuda_sample_config* __restrict__ sample_cfg,
     const int32_t* __restrict__ d_pos,
     int step_idx,
     int V) {
@@ -767,7 +768,7 @@ __global__ void markov_fold_argmax_stage2_kernel(
     int32_t bi = 0;
     float cm = -1e30f;
     float csum = 0.0f;
-    for (int i = tid; i < MARKOV_BLOCKS; i += 256) {
+    for (int i = tid; i < IFN_CUDA_MARKOV_BLOCKS; i += 256) {
         float v = blk_val[i];
         int32_t idx = blk_idx[i];
         if (v > bv || (v == bv && idx < bi)) { bv = v; bi = idx; }
@@ -911,13 +912,13 @@ __global__ void markov_fold_argmax_stage2_kernel(
             float e = __expf((l - max_cap) * inv_temp);
             out_step_probs[row] = e;
             local_z += e;
-            float sc = (l - max_cap) * inv_temp + hash_gumbel(draft_seed, pos, row);
+            float sc = (l - max_cap) * inv_temp + ifn_cuda_hash_gumbel(draft_seed, pos, row);
             if (sc > best_s) { best_s = sc; best_t = row; }
         } else {
             out_step_probs[row] = 0.0f;
         }
     }
-    local_z = warp_sum(local_z);
+    local_z = ifn_cuda_warp_sum(local_z);
     #pragma unroll
     for (int off = 16; off > 0; off >>= 1) {
         float os = __shfl_xor_sync(0xffffffffu, best_s, off);
@@ -952,18 +953,18 @@ __global__ void markov_fold_argmax_stage2_kernel(
     }
 }
 
-__global__ void copy_f_prev_zero_state_kernel(
+__global__ void ifn_cuda_copy_f_prev_zero_state_kernel(
     const float* __restrict__ f_ring, const int32_t* __restrict__ d_pos,
     float* __restrict__ out_f, float* __restrict__ state) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < HIDDEN) {
+    if (i < IFN_CUDA_HIDDEN) {
         int prev_p = (*d_pos) - 1;
-        out_f[i] = (prev_p >= 0) ? f_ring[(size_t)(prev_p & 15) * HIDDEN + i] : 0.0f;
+        out_f[i] = (prev_p >= 0) ? f_ring[(size_t)(prev_p & 15) * IFN_CUDA_HIDDEN + i] : 0.0f;
     }
-    if (i < MTP_MARKOV_RANK) state[i] = 0.0f;
+    if (i < IFN_CUDA_MTP_MARKOV_RANK) state[i] = 0.0f;
 }
 
-__global__ void spec_verify_kernel(
+__global__ void ifn_cuda_spec_verify_kernel(
     const int32_t* __restrict__ target_preds,
     const int32_t* __restrict__ draft_tokens,
     int B,
@@ -993,171 +994,171 @@ __global__ void spec_verify_kernel(
 
 } // namespace
 
-void launch_dspark_commit(
-    const DsparkWeights& dw, const float* taps,
-    void* ctx_k[MTP_LAYERS], void* ctx_v[MTP_LAYERS],
-    __half* ctx_ks[MTP_LAYERS], __half* ctx_vs[MTP_LAYERS],
-    int ctx_cap[MTP_LAYERS], KVFormat global_kv_fmt,
+void ifn_cuda_launch_dspark_commit(
+    const ifn_cuda_dspark_weights& dw, const float* taps,
+    void* ctx_k[IFN_CUDA_MTP_LAYERS], void* ctx_v[IFN_CUDA_MTP_LAYERS],
+    __half* ctx_ks[IFN_CUDA_MTP_LAYERS], __half* ctx_vs[IFN_CUDA_MTP_LAYERS],
+    int ctx_cap[IFN_CUDA_MTP_LAYERS], ifn_cuda_kv_format global_kv_fmt,
     float* f_ring, float* scratch_mix, float* scratch_kv,
     int B, const int32_t* d_pos, cudaStream_t stream) {
-    dspark_mix_kernel<<<dim3(B, 4), 256, 0, stream>>>(
+    ifn_cuda_dspark_mix_kernel<<<dim3(B, 4), 256, 0, stream>>>(
         taps, B, dw.fuse_alpha,
         dw.layers[0].dflare_norm, dw.layers[1].dflare_norm, dw.layers[2].dflare_norm,
         dw.markov_dflare_norm, scratch_mix, f_ring, d_pos);
-    for (int l = 0; l < MTP_LAYERS; ++l) {
-        const float* mix_l = scratch_mix + (size_t)l * B * HIDDEN;
-        launch_linear(dw.layers[l].w_kv_ctx, mix_l, scratch_kv, B, false, stream);
-        KVFormat lfmt = dw.layers[l].is_local ? KVFormat::BF16 : global_kv_fmt;
-        if (lfmt == KVFormat::FP8) {
-            dspark_store_ctx_kv_kernel<1><<<dim3(B, NUM_KV_HEADS), HEAD_DIM, 0, stream>>>(
+    for (int l = 0; l < IFN_CUDA_MTP_LAYERS; ++l) {
+        const float* mix_l = scratch_mix + (size_t)l * B * IFN_CUDA_HIDDEN;
+        ifn_cuda_launch_linear(dw.layers[l].w_kv_ctx, mix_l, scratch_kv, B, false, stream);
+        ifn_cuda_kv_format lfmt = dw.layers[l].is_local ? ifn_cuda_kv_format::IFN_CUDA_BF16 : global_kv_fmt;
+        if (lfmt == ifn_cuda_kv_format::IFN_CUDA_FP8) {
+            ifn_cuda_dspark_store_ctx_kv_kernel<1><<<dim3(B, IFN_CUDA_NUM_KV_HEADS), IFN_CUDA_HEAD_DIM, 0, stream>>>(
                 scratch_kv, dw.layers[l].k_norm_ctx, ctx_k[l], ctx_v[l], ctx_ks[l], ctx_vs[l], ctx_cap[l], d_pos);
-        } else if (lfmt == KVFormat::Q4) {
-            dspark_store_ctx_kv_kernel<2><<<dim3(B, NUM_KV_HEADS), HEAD_DIM, 0, stream>>>(
+        } else if (lfmt == ifn_cuda_kv_format::IFN_CUDA_Q4) {
+            ifn_cuda_dspark_store_ctx_kv_kernel<2><<<dim3(B, IFN_CUDA_NUM_KV_HEADS), IFN_CUDA_HEAD_DIM, 0, stream>>>(
                 scratch_kv, dw.layers[l].k_norm_ctx, ctx_k[l], ctx_v[l], ctx_ks[l], ctx_vs[l], ctx_cap[l], d_pos);
         } else {
-            dspark_store_ctx_kv_kernel<0><<<dim3(B, NUM_KV_HEADS), HEAD_DIM, 0, stream>>>(
+            ifn_cuda_dspark_store_ctx_kv_kernel<0><<<dim3(B, IFN_CUDA_NUM_KV_HEADS), IFN_CUDA_HEAD_DIM, 0, stream>>>(
                 scratch_kv, dw.layers[l].k_norm_ctx, ctx_k[l], ctx_v[l], ctx_ks[l], ctx_vs[l], ctx_cap[l], d_pos);
         }
     }
 }
 
-void launch_dspark_draft(
-    const ModelWeights& mw, const int32_t* d_anchor_token, const int32_t* d_pos, int num_drafts,
-    void* ctx_k[MTP_LAYERS], void* ctx_v[MTP_LAYERS],
-    const __half* ctx_ks[MTP_LAYERS], const __half* ctx_vs[MTP_LAYERS],
-    int ctx_cap[MTP_LAYERS], KVFormat global_kv_fmt, float* split_buf,
+void ifn_cuda_launch_dspark_draft(
+    const ifn_cuda_model_weights& mw, const int32_t* d_anchor_token, const int32_t* d_pos, int num_drafts,
+    void* ctx_k[IFN_CUDA_MTP_LAYERS], void* ctx_v[IFN_CUDA_MTP_LAYERS],
+    const __half* ctx_ks[IFN_CUDA_MTP_LAYERS], const __half* ctx_vs[IFN_CUDA_MTP_LAYERS],
+    int ctx_cap[IFN_CUDA_MTP_LAYERS], ifn_cuda_kv_format global_kv_fmt, float* split_buf,
     const float* f_ring, float* ws, int32_t* out_draft_tokens, float* out_draft_conf,
-    const SampleConfig* sample_cfg, float* out_draft_probs, float* out_draft_q_sel,
+    const ifn_cuda_sample_config* sample_cfg, float* out_draft_probs, float* out_draft_q_sel,
     int32_t* out_draft_is_delta, cudaStream_t stream) {
-    const DsparkWeights& dw = mw.dspark;
+    const ifn_cuda_dspark_weights& dw = mw.dspark;
 
     // Partition preallocated DSpark workspace (in floats):
     float* block_x     = ws;
-    float* normed      = block_x + MTP_BLOCK_SIZE * HIDDEN;
-    __half* normed_h   = reinterpret_cast<__half*>(normed + MTP_BLOCK_SIZE * HIDDEN);
-    float* qkv         = reinterpret_cast<float*>(normed_h + MTP_BLOCK_SIZE * HIDDEN);
-    float* attn_out    = qkv + MTP_BLOCK_SIZE * (Q_DIM + 2 * KV_DIM);
-    __half* attn_out_h = reinterpret_cast<__half*>(attn_out + MTP_BLOCK_SIZE * Q_DIM);
-    float* gu          = reinterpret_cast<float*>(attn_out_h + MTP_BLOCK_SIZE * Q_DIM);
-    float* swiglu      = gu + MTP_BLOCK_SIZE * (2 * MTP_INTERMEDIATE);
-    __half* swiglu_h   = reinterpret_cast<__half*>(swiglu + MTP_BLOCK_SIZE * MTP_INTERMEDIATE);
-    float* f_prev      = reinterpret_cast<float*>(swiglu_h + MTP_BLOCK_SIZE * MTP_INTERMEDIATE);
-    float* c_f         = f_prev + HIDDEN;
-    float* c_h         = c_f + 3 * MTP_MARKOV_RANK;
-    float* state       = c_h + MTP_MAX_DRAFTS * (3 * MTP_MARKOV_RANK);
-    float* raw_rnn     = state + MTP_MARKOV_RANK;
-    float* blk_val     = raw_rnn + 3 * MTP_MARKOV_RANK;
-    int32_t* blk_idx   = reinterpret_cast<int32_t*>(blk_val + MARKOV_BLOCKS);
-    float* blk_cm      = reinterpret_cast<float*>(blk_idx + MARKOV_BLOCKS);
-    float* blk_csum    = blk_cm + MARKOV_BLOCKS;
-    float* base_logits = blk_csum + MARKOV_BLOCKS;
+    float* normed      = block_x + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_HIDDEN;
+    __half* normed_h   = reinterpret_cast<__half*>(normed + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_HIDDEN);
+    float* qkv         = reinterpret_cast<float*>(normed_h + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_HIDDEN);
+    float* attn_out    = qkv + IFN_CUDA_MTP_BLOCK_SIZE * (IFN_CUDA_Q_DIM + 2 * IFN_CUDA_KV_DIM);
+    __half* attn_out_h = reinterpret_cast<__half*>(attn_out + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_Q_DIM);
+    float* gu          = reinterpret_cast<float*>(attn_out_h + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_Q_DIM);
+    float* swiglu      = gu + IFN_CUDA_MTP_BLOCK_SIZE * (2 * IFN_CUDA_MTP_INTERMEDIATE);
+    __half* swiglu_h   = reinterpret_cast<__half*>(swiglu + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_MTP_INTERMEDIATE);
+    float* f_prev      = reinterpret_cast<float*>(swiglu_h + IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_MTP_INTERMEDIATE);
+    float* c_f         = f_prev + IFN_CUDA_HIDDEN;
+    float* c_h         = c_f + 3 * IFN_CUDA_MTP_MARKOV_RANK;
+    float* state       = c_h + IFN_CUDA_MTP_MAX_DRAFTS * (3 * IFN_CUDA_MTP_MARKOV_RANK);
+    float* raw_rnn     = state + IFN_CUDA_MTP_MARKOV_RANK;
+    float* blk_val     = raw_rnn + 3 * IFN_CUDA_MTP_MARKOV_RANK;
+    int32_t* blk_idx   = reinterpret_cast<int32_t*>(blk_val + IFN_CUDA_MARKOV_BLOCKS);
+    float* blk_cm      = reinterpret_cast<float*>(blk_idx + IFN_CUDA_MARKOV_BLOCKS);
+    float* blk_csum    = blk_cm + IFN_CUDA_MARKOV_BLOCKS;
+    float* base_logits = blk_csum + IFN_CUDA_MARKOV_BLOCKS;
 
-    bool use_half = (dw.layers[0].w_qkv.kind != WeightKind::BF16);
+    bool use_half = (dw.layers[0].w_qkv.kind != ifn_cuda_weight_kind::IFN_CUDA_BF16);
 
     // 1. Build 8-row block [anchor, mask x7]
-    dspark_init_block_kernel<<<MTP_BLOCK_SIZE, 256, 0, stream>>>(
+    ifn_cuda_dspark_init_block_kernel<<<IFN_CUDA_MTP_BLOCK_SIZE, 256, 0, stream>>>(
         mw.embed, mw.embed_norm, dw.mask_embed, d_anchor_token, block_x);
 
     // 2. Run 3 dense DSpark layers over all 8 rows (ZERO inner-loop F32->F16 conversions!)
-    for (int l = 0; l < MTP_LAYERS; ++l) {
-        const DsparkLayerWeights& dl = dw.layers[l];
+    for (int l = 0; l < IFN_CUDA_MTP_LAYERS; ++l) {
+        const ifn_cuda_dspark_layer_weights& dl = dw.layers[l];
         if (use_half) {
-            dspark_rmsnorm_h_kernel<<<MTP_BLOCK_SIZE, 256, 0, stream>>>(block_x, dl.input_norm, nullptr, normed_h);
-            launch_linear_h(dl.w_qkv, normed_h, qkv, MTP_BLOCK_SIZE, false, stream);
+            ifn_cuda_dspark_rmsnorm_h_kernel<<<IFN_CUDA_MTP_BLOCK_SIZE, 256, 0, stream>>>(block_x, dl.input_norm, nullptr, normed_h);
+            ifn_cuda_launch_linear_h(dl.w_qkv, normed_h, qkv, IFN_CUDA_MTP_BLOCK_SIZE, false, stream);
         } else {
-            launch_rmsnorm(block_x, dl.input_norm, normed, MTP_BLOCK_SIZE, HIDDEN, HIDDEN, RMS_EPS, stream);
-            launch_linear(dl.w_qkv, normed, qkv, MTP_BLOCK_SIZE, false, stream);
+            ifn_cuda_launch_rmsnorm(block_x, dl.input_norm, normed, IFN_CUDA_MTP_BLOCK_SIZE, IFN_CUDA_HIDDEN, IFN_CUDA_HIDDEN, IFN_CUDA_RMS_EPS, stream);
+            ifn_cuda_launch_linear(dl.w_qkv, normed, qkv, IFN_CUDA_MTP_BLOCK_SIZE, false, stream);
         }
-        dspark_block_qk_rope_kernel<<<dim3(MTP_BLOCK_SIZE, NUM_HEADS + NUM_KV_HEADS), HEAD_DIM, 0, stream>>>(
+        ifn_cuda_dspark_block_qk_rope_kernel<<<dim3(IFN_CUDA_MTP_BLOCK_SIZE, IFN_CUDA_NUM_HEADS + IFN_CUDA_NUM_KV_HEADS), IFN_CUDA_HEAD_DIM, 0, stream>>>(
             qkv, dl.q_norm, dl.k_norm, d_pos);
         if (!dl.is_local) {
-            dim3 sgrid(NUM_KV_HEADS, KV_SPLIT_K);
-            if (global_kv_fmt == KVFormat::FP8) {
-                dspark_global_attn_bulk_splitk_kernel<1><<<sgrid, 128, 0, stream>>>(
+            dim3 sgrid(IFN_CUDA_NUM_KV_HEADS, IFN_CUDA_KV_SPLIT_K);
+            if (global_kv_fmt == ifn_cuda_kv_format::IFN_CUDA_FP8) {
+                ifn_cuda_dspark_global_attn_bulk_splitk_kernel<1><<<sgrid, 128, 0, stream>>>(
                     qkv, ctx_k[l], ctx_v[l], ctx_ks[l], ctx_vs[l], ctx_cap[l], d_pos, split_buf);
-            } else if (global_kv_fmt == KVFormat::Q4) {
-                dspark_global_attn_bulk_splitk_kernel<2><<<sgrid, 128, 0, stream>>>(
+            } else if (global_kv_fmt == ifn_cuda_kv_format::IFN_CUDA_Q4) {
+                ifn_cuda_dspark_global_attn_bulk_splitk_kernel<2><<<sgrid, 128, 0, stream>>>(
                     qkv, ctx_k[l], ctx_v[l], ctx_ks[l], ctx_vs[l], ctx_cap[l], d_pos, split_buf);
             } else {
-                dspark_global_attn_bulk_splitk_kernel<0><<<sgrid, 128, 0, stream>>>(
+                ifn_cuda_dspark_global_attn_bulk_splitk_kernel<0><<<sgrid, 128, 0, stream>>>(
                     qkv, ctx_k[l], ctx_v[l], ctx_ks[l], ctx_vs[l], ctx_cap[l], d_pos, split_buf);
             }
         }
-        dspark_block_attn_kernel<<<dim3(NUM_HEADS, MTP_BLOCK_SIZE), 256, 0, stream>>>(
+        ifn_cuda_dspark_block_attn_kernel<<<dim3(IFN_CUDA_NUM_HEADS, IFN_CUDA_MTP_BLOCK_SIZE), 256, 0, stream>>>(
             qkv, static_cast<const __nv_bfloat16*>(ctx_k[l]), static_cast<const __nv_bfloat16*>(ctx_v[l]),
-            dl.is_local ? nullptr : split_buf, ctx_cap[l], dl.is_local ? SWA_WINDOW : 0, d_pos,
+            dl.is_local ? nullptr : split_buf, ctx_cap[l], dl.is_local ? IFN_CUDA_SWA_WINDOW : 0, d_pos,
             use_half ? nullptr : attn_out, use_half ? attn_out_h : nullptr);
-        if (use_half) launch_linear_h(dl.w_o, attn_out_h, block_x, MTP_BLOCK_SIZE, true, stream);
-        else          launch_linear(dl.w_o, attn_out, block_x, MTP_BLOCK_SIZE, true, stream);
+        if (use_half) ifn_cuda_launch_linear_h(dl.w_o, attn_out_h, block_x, IFN_CUDA_MTP_BLOCK_SIZE, true, stream);
+        else          ifn_cuda_launch_linear(dl.w_o, attn_out, block_x, IFN_CUDA_MTP_BLOCK_SIZE, true, stream);
 
         if (use_half) {
-            dspark_rmsnorm_h_kernel<<<MTP_BLOCK_SIZE, 256, 0, stream>>>(block_x, dl.post_norm, nullptr, normed_h);
-            launch_linear_h(dl.w_gu, normed_h, gu, MTP_BLOCK_SIZE, false, stream);
-            dspark_swiglu_kernel<<<(MTP_BLOCK_SIZE * MTP_INTERMEDIATE + 255) / 256, 256, 0, stream>>>(
-                gu, nullptr, swiglu_h, MTP_BLOCK_SIZE);
-            launch_linear_h(dl.w_down, swiglu_h, block_x, MTP_BLOCK_SIZE, true, stream);
+            ifn_cuda_dspark_rmsnorm_h_kernel<<<IFN_CUDA_MTP_BLOCK_SIZE, 256, 0, stream>>>(block_x, dl.post_norm, nullptr, normed_h);
+            ifn_cuda_launch_linear_h(dl.w_gu, normed_h, gu, IFN_CUDA_MTP_BLOCK_SIZE, false, stream);
+            ifn_cuda_dspark_swiglu_kernel<<<(IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_MTP_INTERMEDIATE + 255) / 256, 256, 0, stream>>>(
+                gu, nullptr, swiglu_h, IFN_CUDA_MTP_BLOCK_SIZE);
+            ifn_cuda_launch_linear_h(dl.w_down, swiglu_h, block_x, IFN_CUDA_MTP_BLOCK_SIZE, true, stream);
         } else {
-            launch_rmsnorm(block_x, dl.post_norm, normed, MTP_BLOCK_SIZE, HIDDEN, HIDDEN, RMS_EPS, stream);
-            launch_linear(dl.w_gu, normed, gu, MTP_BLOCK_SIZE, false, stream);
-            dspark_swiglu_kernel<<<(MTP_BLOCK_SIZE * MTP_INTERMEDIATE + 255) / 256, 256, 0, stream>>>(
-                gu, swiglu, nullptr, MTP_BLOCK_SIZE);
-            launch_linear(dl.w_down, swiglu, block_x, MTP_BLOCK_SIZE, true, stream);
+            ifn_cuda_launch_rmsnorm(block_x, dl.post_norm, normed, IFN_CUDA_MTP_BLOCK_SIZE, IFN_CUDA_HIDDEN, IFN_CUDA_HIDDEN, IFN_CUDA_RMS_EPS, stream);
+            ifn_cuda_launch_linear(dl.w_gu, normed, gu, IFN_CUDA_MTP_BLOCK_SIZE, false, stream);
+            ifn_cuda_dspark_swiglu_kernel<<<(IFN_CUDA_MTP_BLOCK_SIZE * IFN_CUDA_MTP_INTERMEDIATE + 255) / 256, 256, 0, stream>>>(
+                gu, swiglu, nullptr, IFN_CUDA_MTP_BLOCK_SIZE);
+            ifn_cuda_launch_linear(dl.w_down, swiglu, block_x, IFN_CUDA_MTP_BLOCK_SIZE, true, stream);
         }
     }
 
     // 3. Final norm on rows 1..num_drafts -> normed (F32 for rnn_w_h) + normed_h (F16 for unembed_draft!)
-    dspark_rmsnorm_h_kernel<<<num_drafts, 256, 0, stream>>>(block_x + HIDDEN, dw.norm_w, normed, normed_h);
+    ifn_cuda_dspark_rmsnorm_h_kernel<<<num_drafts, 256, 0, stream>>>(block_x + IFN_CUDA_HIDDEN, dw.norm_w, normed, normed_h);
 
     // 4. Precompute Markov inputs + zero RNN state in ONE kernel (no cudaMemsetAsync!)
-    copy_f_prev_zero_state_kernel<<<(HIDDEN + 255) / 256, 256, 0, stream>>>(f_ring, d_pos, f_prev, state);
-    launch_bf16_linear(dw.rnn_w_f, f_prev, c_f, 1, 3 * MTP_MARKOV_RANK, HIDDEN, stream);
-    launch_bf16_linear(dw.rnn_w_h, normed, c_h, num_drafts, 3 * MTP_MARKOV_RANK, HIDDEN, stream);
+    ifn_cuda_copy_f_prev_zero_state_kernel<<<(IFN_CUDA_HIDDEN + 255) / 256, 256, 0, stream>>>(f_ring, d_pos, f_prev, state);
+    ifn_cuda_launch_bf16_linear(dw.rnn_w_f, f_prev, c_f, 1, 3 * IFN_CUDA_MTP_MARKOV_RANK, IFN_CUDA_HIDDEN, stream);
+    ifn_cuda_launch_bf16_linear(dw.rnn_w_h, normed, c_h, num_drafts, 3 * IFN_CUDA_MTP_MARKOV_RANK, IFN_CUDA_HIDDEN, stream);
 
     // 5. Precompute base_logits[0..num_drafts-1, 0..Vd-1] (+ fold_b inline for NVFP4!)
     int Vd = dw.draft_vocab_size;
     bool fold_b_in_base = false;
-    if (dw.unembed_draft.kind == WeightKind::NVFP4) {
+    if (dw.unembed_draft.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) {
         fold_b_in_base = true;
         const auto* wd = static_cast<const uint8_t*>(dw.unembed_draft.data);
         const auto* ws_sc = dw.unembed_draft.scales;
         float gs = dw.unembed_draft.global_scale;
         switch (num_drafts) {
-            case 1: dspark_base_logits_nvfp4_kernel<1><<<DSPARK_UNEMBED_BLOCKS, 256, 0, stream>>>(wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd); break;
-            case 2: launch_pdl(dspark_base_logits_nvfp4_mma_kernel<2>, dim3(DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
-            case 3: launch_pdl(dspark_base_logits_nvfp4_mma_kernel<3>, dim3(DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
-            case 4: launch_pdl(dspark_base_logits_nvfp4_mma_kernel<4>, dim3(DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
-            case 5: launch_pdl(dspark_base_logits_nvfp4_mma_kernel<5>, dim3(DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
-            case 6: launch_pdl(dspark_base_logits_nvfp4_mma_kernel<6>, dim3(DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
-            case 7: launch_pdl(dspark_base_logits_nvfp4_mma_kernel<7>, dim3(DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
+            case 1: ifn_cuda_dspark_base_logits_nvfp4_kernel<1><<<IFN_CUDA_DSPARK_UNEMBED_BLOCKS, 256, 0, stream>>>(wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd); break;
+            case 2: ifn_cuda_launch_pdl(ifn_cuda_dspark_base_logits_nvfp4_mma_kernel<2>, dim3(IFN_CUDA_DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
+            case 3: ifn_cuda_launch_pdl(ifn_cuda_dspark_base_logits_nvfp4_mma_kernel<3>, dim3(IFN_CUDA_DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
+            case 4: ifn_cuda_launch_pdl(ifn_cuda_dspark_base_logits_nvfp4_mma_kernel<4>, dim3(IFN_CUDA_DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
+            case 5: ifn_cuda_launch_pdl(ifn_cuda_dspark_base_logits_nvfp4_mma_kernel<5>, dim3(IFN_CUDA_DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
+            case 6: ifn_cuda_launch_pdl(ifn_cuda_dspark_base_logits_nvfp4_mma_kernel<6>, dim3(IFN_CUDA_DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
+            case 7: ifn_cuda_launch_pdl(ifn_cuda_dspark_base_logits_nvfp4_mma_kernel<7>, dim3(IFN_CUDA_DSPARK_UNEMBED_BLOCKS), 192, stream, wd, ws_sc, gs, normed_h, dw.fold_b, base_logits, Vd, 0u); break;
         }
-    } else if (dw.unembed_draft.kind != WeightKind::BF16) {
-        launch_linear_h(dw.unembed_draft, normed_h, base_logits, num_drafts, false, stream);
+    } else if (dw.unembed_draft.kind != ifn_cuda_weight_kind::IFN_CUDA_BF16) {
+        ifn_cuda_launch_linear_h(dw.unembed_draft, normed_h, base_logits, num_drafts, false, stream);
     } else {
-        launch_linear(dw.unembed_draft, normed, base_logits, num_drafts, false, stream);
+        ifn_cuda_launch_linear(dw.unembed_draft, normed, base_logits, num_drafts, false, stream);
     }
 
     // 6. Run num_drafts sequential Markov steps (24-block coalesced RNN + half-warp fused argmax + exact confidence!)
     const float* fb_arg = fold_b_in_base ? nullptr : dw.fold_b;
     for (int i = 0; i < num_drafts; ++i) {
         const int32_t* prev_ptr = (i == 0) ? d_anchor_token : (out_draft_tokens + i - 1);
-        markov_rnn_proj_kernel<<<24, 128, 0, stream>>>(
+        ifn_cuda_markov_rnn_proj_kernel<<<24, 128, 0, stream>>>(
             dw.rnn_w_sp, dw.rnn_bias, dw.markov_w1,
-            c_h + i * (3 * MTP_MARKOV_RANK), c_f, prev_ptr, state, raw_rnn);
+            c_h + i * (3 * IFN_CUDA_MTP_MARKOV_RANK), c_f, prev_ptr, state, raw_rnn);
 
         const float* bl_i = base_logits + (size_t)i * Vd;
         float* dp_i = out_draft_probs ? (out_draft_probs + (size_t)i * Vd) : nullptr;
-        if (dw.fold_w.kind == WeightKind::NVFP4) {
-            markov_fold_argmax_stage1_kernel<2><<<MARKOV_BLOCKS, 256, 0, stream>>>(
+        if (dw.fold_w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) {
+            ifn_cuda_markov_fold_argmax_stage1_kernel<2><<<IFN_CUDA_MARKOV_BLOCKS, 256, 0, stream>>>(
                 dw.fold_w.data, dw.fold_w.scales, dw.fold_w.global_scale,
                 bl_i, fb_arg, raw_rnn, state, blk_val, blk_idx, blk_cm, blk_csum,
                 dp_i, sample_cfg, Vd);
         } else {
-            markov_fold_argmax_stage1_kernel<0><<<MARKOV_BLOCKS, 256, 0, stream>>>(
+            ifn_cuda_markov_fold_argmax_stage1_kernel<0><<<IFN_CUDA_MARKOV_BLOCKS, 256, 0, stream>>>(
                 dw.fold_w.data, nullptr, 1.0f,
                 bl_i, fb_arg, raw_rnn, state, blk_val, blk_idx, blk_cm, blk_csum,
                 dp_i, sample_cfg, Vd);
         }
-        markov_fold_argmax_stage2_kernel<<<1, 256, 0, stream>>>(
+        ifn_cuda_markov_fold_argmax_stage2_kernel<<<1, 256, 0, stream>>>(
             blk_val, blk_idx, blk_cm, blk_csum, dw.draft_vocab_ids,
             out_draft_tokens + i, out_draft_conf ? (out_draft_conf + i) : nullptr,
             dp_i, out_draft_q_sel ? (out_draft_q_sel + i) : nullptr, out_draft_is_delta,
@@ -1165,12 +1166,12 @@ void launch_dspark_draft(
     }
 }
 
-void launch_spec_verify(
+void ifn_cuda_launch_spec_verify(
     const int32_t* target_preds, const int32_t* draft_tokens, int B,
     int32_t* out_accepted_tokens, int32_t* out_num_accepted,
     int32_t* d_pos, int32_t* d_next_anchor, cudaStream_t stream) {
-    spec_verify_kernel<<<1, 1, 0, stream>>>(
+    ifn_cuda_spec_verify_kernel<<<1, 1, 0, stream>>>(
         target_preds, draft_tokens, B, out_accepted_tokens, out_num_accepted, d_pos, d_next_anchor);
 }
 
-} // namespace squid
+} // namespace ifn_cuda

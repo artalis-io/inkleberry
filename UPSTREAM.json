@@ -24,7 +24,7 @@
     "src/vram_arena.zig": "75112e04283e347ab5a2d4e7ff873c33d92b9a08f47e6daa33c8c146b8986b91",
     "src/weights.zig": "96a379d4210bf32e57bcac58242b7c976c0ca3ca049a9a26ecb1f6bfb88d0f14"
   },
-  "policy": "CUDA mathematics and pinned Zig reference bytes remain unchanged. Relocations preserve original upstream paths and hashes; C is the production host.",
+  "policy": "CUDA mathematics and pinned Zig reference bytes remain unchanged. Production CUDA identifiers use the reversible config/native-namespace.json map; inverse mapping must reproduce the original hashes. C is the production host.",
   "relocated_files": {
     "build.zig": "reference/upstream/build.zig",
     "src/constants.zig": "reference/upstream/src/constants.zig",

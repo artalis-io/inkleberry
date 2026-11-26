@@ -2,7 +2,7 @@
  * Supported public Inkling ByteLevel profile; model/tokenizer data stay external. */
 #ifndef IFN_TOKENIZER_PROFILE_H
 #define IFN_TOKENIZER_PROFILE_H
-#define PRETOKENIZER_PROFILE                                                                       \
+#define IFN_TOKENIZER_PROFILE_LOCAL_PRETOKENIZER_PROFILE                                           \
     "{\"type\":\"Sequence\",\"pretokenizers\":[{\"type\":\"Split\",\"pattern\":{\"Regex\":\"[^"    \
     "\\\\r\\\\n\\\\p{L}\\\\p{N}]?[\\\\p{Lu}\\\\p{Lt}\\\\p{Lm}\\\\p{Lo}\\\\p{M}]*[\\\\p{Ll}\\\\p{"  \
     "Lm}\\\\p{Lo}\\\\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|[^\\\\r\\\\n\\\\p{L}\\\\p{N}]?[\\\\p{Lu}" \

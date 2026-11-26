@@ -20,23 +20,23 @@ void ifn_weight_backend_check(ifn_gpu_weights *w, int error, const char *operati
     (void)snprintf(w->failure, sizeof w->failure, "%s: CUDA status %d", operation, error);
 }
 
-static ifn_status result(ifn_gpu_weights *w) {
+static ifn_status ifn_weights_runtime_local_result(ifn_gpu_weights *w) {
     return ifn_error(w->status, w->status == IFN_OK ? "" : w->failure);
 }
 
-static bool acquire(ifn_gpu_weights *w) {
+static bool ifn_weights_runtime_local_acquire(ifn_gpu_weights *w) {
     return w && !atomic_flag_test_and_set_explicit(&w->busy, memory_order_acquire);
 }
 
-static void unlock(ifn_gpu_weights *w) {
+static void ifn_weights_runtime_local_unlock(ifn_gpu_weights *w) {
     atomic_flag_clear_explicit(&w->busy, memory_order_release);
 }
 
-static bool resources(const ifn_gpu_weights *w) {
+static bool ifn_weights_runtime_local_resources(const ifn_gpu_weights *w) {
     return w->arena || w->stage || w->amax || w->fold_temp || w->stream;
 }
 
-static void release_ptr(ifn_gpu_weights *w, void **p) {
+static void ifn_weights_runtime_local_release_ptr(ifn_gpu_weights *w, void **p) {
     if (!*p)
         return;
     int rc = w->backend.release(w->backend.context, *p);
@@ -45,18 +45,18 @@ static void release_ptr(ifn_gpu_weights *w, void **p) {
     ifn_weight_backend_check(w, rc, "free owned GPU allocation");
 }
 
-static void temporary_cleanup(ifn_gpu_weights *w) {
-    release_ptr(w, &w->fold_temp);
-    release_ptr(w, &w->amax);
-    release_ptr(w, &w->stage);
+static void ifn_weights_runtime_local_temporary_cleanup(ifn_gpu_weights *w) {
+    ifn_weights_runtime_local_release_ptr(w, &w->fold_temp);
+    ifn_weights_runtime_local_release_ptr(w, &w->amax);
+    ifn_weights_runtime_local_release_ptr(w, &w->stage);
 }
 
-static void cleanup(ifn_gpu_weights *w) {
+static void ifn_weights_runtime_local_cleanup(ifn_gpu_weights *w) {
     if (w->stream)
         ifn_weight_backend_check(w, w->backend.sync(w->backend.context, w->stream),
                                  "synchronize owned stream");
-    temporary_cleanup(w);
-    release_ptr(w, &w->arena);
+    ifn_weights_runtime_local_temporary_cleanup(w);
+    ifn_weights_runtime_local_release_ptr(w, &w->arena);
     if (w->stream && !w->arena && !w->stage && !w->amax && !w->fold_temp) {
         int rc = w->backend.stream_destroy(w->backend.context, w->stream);
         if (!rc)
@@ -96,7 +96,7 @@ ifn_status ifn_weights_create(const ifn_weight_config *input, const ifn_options 
     atomic_flag_clear(&w->busy);
     ifn_weights_recipe(w);
     if (w->status != IFN_OK) {
-        status = result(w);
+        status = ifn_weights_runtime_local_result(w);
         a.release(a.context, w);
         return status;
     }
@@ -138,14 +138,14 @@ ifn_status ifn_weights_plan(const ifn_weight_config *config, const ifn_options *
 ifn_status ifn_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *checkpoint) {
     if (!w || !checkpoint)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing GPU weights/checkpoint");
-    if (!acquire(w))
+    if (!ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
-    if (resources(w) || w->ready) {
-        unlock(w);
+    if (ifn_weights_runtime_local_resources(w) || w->ready) {
+        ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_BUSY, "destroy existing or failed GPU image before reload");
     }
     if (w->config.with_mtp && ifn_inkling_checkpoint_count(checkpoint) != 876) {
-        unlock(w);
+        ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_FORMAT, "MTP requested but not admitted");
     }
     w->status = IFN_OK;
@@ -164,18 +164,18 @@ ifn_status ifn_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *ch
         if (w->status == IFN_OK)
             ifn_weight_backend_check(w, w->backend.stream_create(w->backend.context, &w->stream),
                                      "create weight stream");
-#define ALLOC(p, n)                                                                                \
+#define IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(p, n)                                                      \
     do {                                                                                           \
         if (w->status == IFN_OK)                                                                   \
             ifn_weight_backend_check(                                                              \
                 w, w->backend.allocate(w->backend.context, &w->p, (size_t)(n)), "allocate " #p);   \
     } while (0)
-        ALLOC(arena, w->plan.arena_bytes);
-        ALLOC(stage, w->plan.staging_bytes);
-        ALLOC(amax, 4);
+        IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(arena, w->plan.arena_bytes);
+        IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(stage, w->plan.staging_bytes);
+        IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(amax, 4);
         if (w->plan.fold_temporary_bytes)
-            ALLOC(fold_temp, w->plan.fold_temporary_bytes);
-#undef ALLOC
+            IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC(fold_temp, w->plan.fold_temporary_bytes);
+#undef IFN_WEIGHTS_RUNTIME_LOCAL_ALLOC
         if (w->status == IFN_OK) {
             w->execute = true;
             w->checkpoint = checkpoint;
@@ -189,17 +189,17 @@ ifn_status ifn_weights_load(ifn_gpu_weights *w, const ifn_inkling_checkpoint *ch
             if (w->status == IFN_OK)
                 ifn_weight_backend_check(w, w->backend.sync(w->backend.context, w->stream),
                                          "finish GPU weight upload");
-            temporary_cleanup(w);
+            ifn_weights_runtime_local_temporary_cleanup(w);
         }
         if (w->status != IFN_OK)
-            cleanup(w);
+            ifn_weights_runtime_local_cleanup(w);
     }
     if (previous.device >= 0)
         ifn_weight_backend_check(w, w->backend.leave(w->backend.context, &previous),
                                  "restore caller device");
     w->ready = w->status == IFN_OK;
-    ifn_status status = result(w);
-    unlock(w);
+    ifn_status status = ifn_weights_runtime_local_result(w);
+    ifn_weights_runtime_local_unlock(w);
     return status;
 }
 
@@ -209,30 +209,30 @@ ifn_status ifn_weights_destroy(ifn_gpu_weights **handle) {
     ifn_gpu_weights *w = *handle;
     if (!w)
         return ifn_error(IFN_OK, "");
-    if (!acquire(w))
+    if (!ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     if (w->session_users) {
-        unlock(w);
+        ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_BUSY, "GPU image is retained by a session");
     }
     w->status = IFN_OK;
     w->failure[0] = 0;
     w->backend_error = 0;
     w->ready = false;
-    if (resources(w)) {
+    if (ifn_weights_runtime_local_resources(w)) {
         ifn_device_scope previous = {-1, NULL};
         ifn_weight_backend_check(w,
                                  w->backend.enter(w->backend.context, w->config.device, &previous),
                                  "select GPU for cleanup");
         if (w->status == IFN_OK)
-            cleanup(w);
+            ifn_weights_runtime_local_cleanup(w);
         if (previous.device >= 0)
             ifn_weight_backend_check(w, w->backend.leave(w->backend.context, &previous),
                                      "restore caller device");
     }
-    ifn_status status = result(w);
-    if (resources(w)) {
-        unlock(w);
+    ifn_status status = ifn_weights_runtime_local_result(w);
+    if (ifn_weights_runtime_local_resources(w)) {
+        ifn_weights_runtime_local_unlock(w);
         return status;
     }
     ifn_options a = w->allocator;
@@ -246,10 +246,10 @@ ifn_status ifn_weights_get_plan(ifn_gpu_weights *w, ifn_weight_plan *out) {
         memset(out, 0, sizeof *out);
     if (!w || !out)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing plan arguments");
-    if (!acquire(w))
+    if (!ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     *out = w->plan;
-    unlock(w);
+    ifn_weights_runtime_local_unlock(w);
     return ifn_error(IFN_OK, "");
 }
 
@@ -258,12 +258,12 @@ ifn_status ifn_weights_get_span(ifn_gpu_weights *w, size_t index, ifn_weight_spa
         memset(out, 0, sizeof *out);
     if (!w || !out)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing span arguments");
-    if (!acquire(w))
+    if (!ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     ifn_status status = !w->ready ? IFN_BUSY : index >= w->span_count ? IFN_NOT_FOUND : IFN_OK;
     if (status == IFN_OK)
         *out = w->spans[index];
-    unlock(w);
+    ifn_weights_runtime_local_unlock(w);
     return ifn_error(status, status == IFN_OK ? "" : "weight span unavailable");
 }
 
@@ -272,12 +272,12 @@ ifn_status ifn_weights_get_view(ifn_gpu_weights *w, size_t index, ifn_weight_vie
         memset(out, 0, sizeof *out);
     if (!w || !out)
         return ifn_error(IFN_INVALID_ARGUMENT, "missing view arguments");
-    if (!acquire(w))
+    if (!ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     ifn_status status = !w->ready ? IFN_BUSY : index >= w->view_count ? IFN_NOT_FOUND : IFN_OK;
     if (status == IFN_OK)
         *out = w->views[index];
-    unlock(w);
+    ifn_weights_runtime_local_unlock(w);
     return ifn_error(status, status == IFN_OK ? "" : "weight view unavailable");
 }
 
@@ -285,15 +285,15 @@ ifn_status ifn_weights_read(ifn_gpu_weights *w, size_t index, uint64_t offset, v
                             size_t bytes) {
     if (!w || (!out && bytes))
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid readback arguments");
-    if (!acquire(w))
+    if (!ifn_weights_runtime_local_acquire(w))
         return ifn_error(IFN_BUSY, "weight operation already active");
     if (!w->ready) {
-        unlock(w);
+        ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_BUSY, "weights not ready");
     }
     if (index >= w->span_count || offset > w->spans[index].bytes ||
         bytes > w->spans[index].bytes - offset) {
-        unlock(w);
+        ifn_weights_runtime_local_unlock(w);
         return ifn_error(IFN_INVALID_ARGUMENT, "weight readback outside span");
     }
     w->status = IFN_OK;
@@ -318,7 +318,7 @@ ifn_status ifn_weights_read(ifn_gpu_weights *w, size_t index, uint64_t offset, v
                                  "restore caller device");
     if (w->status != IFN_OK)
         w->ready = false;
-    ifn_status status = result(w);
-    unlock(w);
+    ifn_status status = ifn_weights_runtime_local_result(w);
+    ifn_weights_runtime_local_unlock(w);
     return status;
 }

@@ -11,9 +11,9 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
     IFN_INFER_INIT(mc);
     IFN_INFER_INIT(sc);
     IFN_INFER_INIT(rc);
-    (void)si_defaults(IFN_DEFAULT_MODEL, &mc, NULL);
-    (void)si_defaults(IFN_DEFAULT_SESSION, &sc, NULL);
-    (void)si_defaults(IFN_DEFAULT_REQUEST, &rc, NULL);
+    (void)ifn_infer_defaults(IFN_DEFAULT_MODEL, &mc, NULL);
+    (void)ifn_infer_defaults(IFN_DEFAULT_SESSION, &sc, NULL);
+    (void)ifn_infer_defaults(IFN_DEFAULT_REQUEST, &rc, NULL);
     sc.context_tokens = 512;
     rc.output_kind = IFN_OUTPUT_RAW_TOKENS;
     rc.max_output_tokens = data[0];
@@ -27,12 +27,12 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
     ifn_infer_model *m = NULL;
     ifn_infer_session *s = NULL;
     ifn_infer_request *r = NULL;
-    if (si_model_create(&mc, &m, NULL))
+    if (ifn_infer_model_create(&mc, &m, NULL))
         return 0;
     if (ifn_gpu_weights_create(&m->weights_config, &m->allocator, &m->weights))
         goto done;
     m->state = IFN_HANDLE_READY;
-    if (si_session_create(m, &sc, &s, NULL) || si_session_prepare(s, NULL))
+    if (ifn_infer_session_create(m, &sc, &s, NULL) || ifn_infer_session_prepare(s, NULL))
         goto done;
     int32_t tokens[32];
     size_t count = size - 8 > 32 ? 32 : size - 8;
@@ -43,10 +43,10 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
     input.kind = IFN_INPUT_TOKENS;
     input.tokens = tokens;
     input.token_count = count;
-    (void)si_request_create(s, &input, &rc, &r, NULL);
-    (void)si_request_close(&r, NULL);
+    (void)ifn_infer_request_create(s, &input, &rc, &r, NULL);
+    (void)ifn_infer_request_close(&r, NULL);
 done:
-    (void)si_session_close(&s, NULL);
-    (void)si_model_close(&m, NULL);
+    (void)ifn_infer_session_close(&s, NULL);
+    (void)ifn_infer_model_close(&m, NULL);
     return 0;
 }

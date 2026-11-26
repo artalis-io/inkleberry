@@ -23,7 +23,7 @@ oracle. The generator does not read that manifest or the reference tree.
 - A record field's optional integer `count` specifies a fixed array, such as
   the three DSpark layers. Arrays in function parameters are not implicit pointers.
 - A record's optional `cpp_type` names its actual CUDA C++ type, for example
-  `squid::SampleConfig`. Otherwise the bridge uses the record's existing name.
+  `ifn_cuda::ifn_cuda_sample_config`. Otherwise the bridge uses the record's existing name.
 
 Schema version 1 rejects unknown keys, duplicate symbols/fields/parameters, C/C++
 keywords or invalid identifiers, unknown types, invalid array counts, excessive
@@ -77,3 +77,8 @@ also verifies every pinned Zig file before compiling the optional comparisons.
 The original reference remains available; it no longer defines the C build's ABI.
 
 Executed validation: [schema/ABI qualification](../reference/reports/cuda-abi-schema-validation.md).
+
+The bridge, records and CUDA namespace use the project prefix throughout.
+`config/native-namespace.json` records the reversible identifier-only adaptation.
+Production provenance checks reconstruct the original CUDA bytes and verify the
+unchanged upstream hashes; numeric expressions and layouts are not normalized away.

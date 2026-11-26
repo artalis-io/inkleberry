@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#define REQUIRE(x)                                                                                 \
+#define IFN_INFER_NATIVE_LOCAL_REQUIRE(x)                                                          \
     do {                                                                                           \
         if (!(x)) {                                                                                \
             fprintf(stderr, "infer-native:%d: %s\n", __LINE__, #x);                                \
@@ -22,10 +22,10 @@ typedef struct {
     size_t bytes, events;
     atomic_bool arrived, resume;
     int block;
-} output;
+} ifn_infer_native_local_output;
 
-static uint32_t collect(void *ctx, const ifn_infer_event_v1 *event) {
-    output *o = ctx;
+static uint32_t ifn_infer_native_local_collect(void *ctx, const ifn_infer_event_v1 *event) {
+    ifn_infer_native_local_output *o = ctx;
     if (event->kind == IFN_EVENT_CONTENT) {
         if (event->text.bytes > sizeof o->text - 1 - o->bytes)
             return IFN_CALLBACK_CANCEL;
@@ -45,17 +45,17 @@ static uint32_t collect(void *ctx, const ifn_infer_event_v1 *event) {
 typedef struct {
     const ifn_infer_api_v1 *api;
     ifn_infer_request *request;
-    output *out;
+    ifn_infer_native_local_output *out;
     ifn_status status;
-} task;
+} ifn_infer_native_local_task;
 
-static void *run(void *ctx) {
-    task *t = ctx;
-    t->status = t->api->request_run(t->request, collect, t->out, NULL);
+static void *ifn_infer_native_local_run(void *ctx) {
+    ifn_infer_native_local_task *t = ctx;
+    t->status = t->api->request_run(t->request, ifn_infer_native_local_collect, t->out, NULL);
     return NULL;
 }
 
-static void output_init(output *o) {
+static void ifn_infer_native_local_output_init(ifn_infer_native_local_output *o) {
     memset(o, 0, sizeof *o);
     atomic_init(&o->arrived, false);
     atomic_init(&o->resume, false);
@@ -72,9 +72,9 @@ int main(int argc, char **argv) {
     ifn_infer_request *requests[6] = {0};
     pthread_t thread;
     int thread_live = 0;
-    output outputs[6];
+    ifn_infer_native_local_output outputs[6];
     for (size_t i = 0; i < 6; i++)
-        output_init(&outputs[i]);
+        ifn_infer_native_local_output_init(&outputs[i]);
     ifn_infer_model_config_v1 mc;
     ifn_infer_session_config_v1 sc;
     ifn_infer_request_config_v1 rc;
@@ -89,23 +89,24 @@ int main(int argc, char **argv) {
     IFN_INFER_INIT(input);
     IFN_INFER_INIT(result);
     IFN_INFER_INIT(plan);
-    REQUIRE(ifn_infer_get_api(1, 0, &table) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(ifn_infer_get_api(1, 0, &table) == IFN_OK);
     api = table;
-    REQUIRE(api->defaults(IFN_DEFAULT_MODEL, &mc, NULL) == IFN_OK);
-    REQUIRE(api->defaults(IFN_DEFAULT_SESSION, &sc, NULL) == IFN_OK);
-    REQUIRE(api->defaults(IFN_DEFAULT_REQUEST, &rc, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->defaults(IFN_DEFAULT_MODEL, &mc, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->defaults(IFN_DEFAULT_SESSION, &sc, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->defaults(IFN_DEFAULT_REQUEST, &rc, NULL) == IFN_OK);
     mc.weight_profile = (ifn_infer_bytes){"nvfp4-mtp", 9};
     source.directory = (ifn_infer_bytes){argv[1], strlen(argv[1])};
     source.format_id = (ifn_infer_bytes){"inkling-safetensors", sizeof("inkling-safetensors") - 1};
-    REQUIRE(api->model_create(&mc, &model, NULL) == IFN_OK);
-    REQUIRE(api->model_plan(model, &source, &plan, NULL) == IFN_OK &&
-            plan.peak_owned_device_bytes > 0);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->model_create(&mc, &model, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->model_plan(model, &source, &plan, NULL) == IFN_OK &&
+                                   plan.peak_owned_device_bytes > 0);
     printf("weight_peak_bytes=%llu\n", (unsigned long long)plan.peak_owned_device_bytes);
-    REQUIRE(api->model_load(model, &source, NULL) == IFN_OK);
-    REQUIRE(api->session_create(model, &sc, &session, NULL) == IFN_OK);
-    REQUIRE(api->session_plan(session, &plan, NULL) == IFN_OK && plan.owned_device_bytes > 0);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->model_load(model, &source, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->session_create(model, &sc, &session, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->session_plan(session, &plan, NULL) == IFN_OK &&
+                                   plan.owned_device_bytes > 0);
     printf("session_arena_bytes=%llu\n", (unsigned long long)plan.owned_device_bytes);
-    REQUIRE(api->session_prepare(session, NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->session_prepare(session, NULL) == IFN_OK);
     char system[8192] = "";
     for (unsigned i = 0; i < 64; i++)
         strcat(system, "You are a concise mathematical assistant. Return the numeric answer. ");
@@ -138,55 +139,67 @@ int main(int argc, char **argv) {
     rc.max_event_bytes = 4;
     rc.cache_scope = (ifn_infer_bytes){"native-a", 8};
     for (size_t i = 0; i < 4; i++)
-        REQUIRE(api->request_create(session, &input, &rc, &requests[i], NULL) == IFN_OK);
+        IFN_INFER_NATIVE_LOCAL_REQUIRE(
+            api->request_create(session, &input, &rc, &requests[i], NULL) == IFN_OK);
     rc.cache_scope = (ifn_infer_bytes){"native-b", 8};
-    REQUIRE(api->request_create(session, &input, &rc, &requests[4], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_create(session, &input, &rc, &requests[4], NULL) ==
+                                   IFN_OK);
     ifn_infer_bytes stop = {"7", 1};
     rc.stops = (ifn_infer_array){&stop, 1, sizeof stop, 0};
-    REQUIRE(api->request_create(session, &input, &rc, &requests[5], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_create(session, &input, &rc, &requests[5], NULL) ==
+                                   IFN_OK);
     /* All request-owned inputs are prepared; overwrite the borrowed text/options. */
     memset(system, 0, sizeof system);
     tuning.draft_tokens = 99;
-    REQUIRE(api->request_run(requests[0], collect, &outputs[0], NULL) == IFN_OK);
-    REQUIRE(strstr(outputs[0].text, "7") != NULL);
-    REQUIRE(api->request_result(requests[0], &result, NULL) == IFN_OK && result.input_tokens > 128);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(
+        api->request_run(requests[0], ifn_infer_native_local_collect, &outputs[0], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(strstr(outputs[0].text, "7") != NULL);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[0], &result, NULL) == IFN_OK &&
+                                   result.input_tokens > 128);
     printf("answer=%s prompt=%llu output=%llu run_ns=%llu\n", outputs[0].text,
            (unsigned long long)result.input_tokens, (unsigned long long)result.generated_tokens,
            (unsigned long long)result.run_ns);
-    REQUIRE(api->request_run(requests[1], collect, &outputs[1], NULL) == IFN_OK);
-    REQUIRE(!strcmp(outputs[0].text, outputs[1].text));
-    REQUIRE(api->request_result(requests[1], &result, NULL) == IFN_OK &&
-            result.prefix_reused_tokens > 0);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(
+        api->request_run(requests[1], ifn_infer_native_local_collect, &outputs[1], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(!strcmp(outputs[0].text, outputs[1].text));
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[1], &result, NULL) == IFN_OK &&
+                                   result.prefix_reused_tokens > 0);
     printf("prefix_reused=%llu\n", (unsigned long long)result.prefix_reused_tokens);
     outputs[2].block = 1;
-    task work = {api, requests[2], &outputs[2], 999};
-    REQUIRE(!pthread_create(&thread, NULL, run, &work));
+    ifn_infer_native_local_task work = {api, requests[2], &outputs[2], 999};
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(
+        !pthread_create(&thread, NULL, ifn_infer_native_local_run, &work));
     thread_live = 1;
     while (!atomic_load(&outputs[2].arrived))
         sched_yield();
     uint32_t disposition;
-    REQUIRE(api->request_cancel(requests[0], &disposition, NULL) == IFN_OK &&
-            disposition == IFN_CANCEL_TOO_LATE);
-    REQUIRE(api->request_run(requests[3], collect, &outputs[3], NULL) == IFN_BUSY);
-    REQUIRE(api->request_cancel(requests[2], &disposition, NULL) == IFN_OK &&
-            disposition == IFN_CANCEL_ACCEPTED);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_cancel(requests[0], &disposition, NULL) == IFN_OK &&
+                                   disposition == IFN_CANCEL_TOO_LATE);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_run(requests[3], ifn_infer_native_local_collect,
+                                                    &outputs[3], NULL) == IFN_BUSY);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_cancel(requests[2], &disposition, NULL) == IFN_OK &&
+                                   disposition == IFN_CANCEL_ACCEPTED);
     atomic_store(&outputs[2].resume, true);
-    REQUIRE(!pthread_join(thread, NULL));
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(!pthread_join(thread, NULL));
     thread_live = 0;
-    REQUIRE(work.status == IFN_CANCELLED);
-    REQUIRE(api->request_result(requests[2], &result, NULL) == IFN_OK &&
-            result.finish_reason == IFN_FINISH_CANCELLED_V1);
-    REQUIRE(api->request_run(requests[3], collect, &outputs[3], NULL) == IFN_OK);
-    REQUIRE(!strcmp(outputs[0].text, outputs[3].text));
-    REQUIRE(api->request_result(requests[3], &result, NULL) == IFN_OK &&
-            result.prefix_reused_tokens == 0);
-    REQUIRE(api->request_run(requests[4], collect, &outputs[4], NULL) == IFN_OK);
-    REQUIRE(!strcmp(outputs[0].text, outputs[4].text));
-    REQUIRE(api->request_result(requests[4], &result, NULL) == IFN_OK &&
-            result.prefix_reused_tokens == 0);
-    REQUIRE(api->request_run(requests[5], collect, &outputs[5], NULL) == IFN_OK);
-    REQUIRE(api->request_result(requests[5], &result, NULL) == IFN_OK &&
-            result.finish_reason == IFN_FINISH_STOP_STRING_V1 && !outputs[5].bytes);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(work.status == IFN_CANCELLED);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[2], &result, NULL) == IFN_OK &&
+                                   result.finish_reason == IFN_FINISH_CANCELLED_V1);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(
+        api->request_run(requests[3], ifn_infer_native_local_collect, &outputs[3], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(!strcmp(outputs[0].text, outputs[3].text));
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[3], &result, NULL) == IFN_OK &&
+                                   result.prefix_reused_tokens == 0);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(
+        api->request_run(requests[4], ifn_infer_native_local_collect, &outputs[4], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(!strcmp(outputs[0].text, outputs[4].text));
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[4], &result, NULL) == IFN_OK &&
+                                   result.prefix_reused_tokens == 0);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(
+        api->request_run(requests[5], ifn_infer_native_local_collect, &outputs[5], NULL) == IFN_OK);
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[5], &result, NULL) == IFN_OK &&
+                                   result.finish_reason == IFN_FINISH_STOP_STRING_V1 &&
+                                   !outputs[5].bytes);
     puts("native ABI: copied chat, adaptive/lookup, answer parity, cache reuse, independent "
          "streams, BUSY, stale cancel, active cancel, cache invalidation, scope isolation, stop "
          "filtering and replay passed");

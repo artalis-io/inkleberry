@@ -1,3 +1,4 @@
+// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
 // Fast Batched Prefill Kernels (B <= 256):
 // 1. Coalesced NVFP4/FP8/BF16 -> FP16 dequant + cuBLAS FP16 Tensor Core GEMM for dense, router & controllers.
 // 2. Blackwell mma.sync.aligned.m16n8k16 FP16 Tensor Core Multi-Token MoE (w13 softcapped SwiGLU + w2 zero-atomic).
@@ -15,31 +16,31 @@
 #include <cstdint>
 #include <cstdio>
 
-namespace squid {
+namespace ifn_cuda {
 
 namespace {
 
-static cublasHandle_t g_cublas = nullptr;
+static cublasHandle_t ifn_cuda_cublas_handle = nullptr;
 
-static cublasHandle_t get_cublas(cudaStream_t stream) {
-    if (!g_cublas) {
-        cublasStatus_t st = cublasCreate(&g_cublas);
+static cublasHandle_t ifn_cuda_get_cublas(cudaStream_t stream) {
+    if (!ifn_cuda_cublas_handle) {
+        cublasStatus_t st = cublasCreate(&ifn_cuda_cublas_handle);
         if (st != CUBLAS_STATUS_SUCCESS) {
             fprintf(stderr, "cublasCreate failed: %d\n", (int)st);
             std::exit(1);
         }
-        cublasSetMathMode(g_cublas, CUBLAS_DEFAULT_MATH);
+        cublasSetMathMode(ifn_cuda_cublas_handle, CUBLAS_DEFAULT_MATH);
     }
-    cublasSetStream(g_cublas, stream);
-    return g_cublas;
+    cublasSetStream(ifn_cuda_cublas_handle, stream);
+    return ifn_cuda_cublas_handle;
 }
 
-__global__ void p_f32_to_f16_kernel(const float* __restrict__ src, __half* __restrict__ dst, size_t n) {
+__global__ void ifn_cuda_p_f32_to_f16_kernel(const float* __restrict__ src, __half* __restrict__ dst, size_t n) {
     size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) dst[i] = __float2half(src[i]);
 }
 
-__global__ void p_dequant_nvfp4_to_f16_kernel(
+__global__ void ifn_cuda_p_dequant_nvfp4_to_f16_kernel(
     const uint8_t* __restrict__ w_data,
     const uint8_t* __restrict__ w_scales,
     __half* __restrict__ out_f16,
@@ -48,10 +49,10 @@ __global__ void p_dequant_nvfp4_to_f16_kernel(
     if (bidx >= total_blocks) return;
     uint2 w8 = __ldg(reinterpret_cast<const uint2*>(w_data) + bidx);
     // Keep e2m1 * e4m3 exact in FP16 and apply global_scale via cuBLAS alpha in FP32!
-    __half2 hsc = __float2half2_rn(cvt_e4m3_to_float(__ldg(w_scales + bidx)));
+    __half2 hsc = __float2half2_rn(ifn_cuda_cvt_e4m3_to_float(__ldg(w_scales + bidx)));
     __half2 h[8];
-    cvt_e2m1x8_to_half2x4(w8.x, h[0], h[1], h[2], h[3]);
-    cvt_e2m1x8_to_half2x4(w8.y, h[4], h[5], h[6], h[7]);
+    ifn_cuda_cvt_e2m1x8_to_half2x4(w8.x, h[0], h[1], h[2], h[3]);
+    ifn_cuda_cvt_e2m1x8_to_half2x4(w8.y, h[4], h[5], h[6], h[7]);
     #pragma unroll
     for (int i = 0; i < 8; ++i) h[i] = __hmul2(h[i], hsc);
     uint4* dst4 = reinterpret_cast<uint4*>(out_f16 + bidx * 16);
@@ -59,7 +60,7 @@ __global__ void p_dequant_nvfp4_to_f16_kernel(
     dst4[1] = *reinterpret_cast<const uint4*>(&h[4]);
 }
 
-__global__ void p_dequant_fp8_to_f16_kernel(
+__global__ void ifn_cuda_p_dequant_fp8_to_f16_kernel(
     const uint8_t* __restrict__ w_data,
     const float* __restrict__ row_scales,
     __half* __restrict__ out_f16,
@@ -70,11 +71,11 @@ __global__ void p_dequant_fp8_to_f16_kernel(
     int row = (int)(idx / (K >> 1));
     float sc = __ldg(row_scales + row);
     uint16_t raw2 = __ldg(reinterpret_cast<const uint16_t*>(w_data) + idx);
-    float2 f = __half22float2(cvt_e4m3x2_to_half2(raw2));
+    float2 f = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(raw2));
     reinterpret_cast<__half2*>(out_f16)[idx] = __floats2half2_rn(f.x * sc, f.y * sc);
 }
 
-__global__ void p_dequant_bf16_to_f16_kernel(
+__global__ void ifn_cuda_p_dequant_bf16_to_f16_kernel(
     const __nv_bfloat16* __restrict__ w_data,
     __half* __restrict__ out_f16,
     size_t n) {
@@ -82,25 +83,25 @@ __global__ void p_dequant_bf16_to_f16_kernel(
     if (i < n) out_f16[i] = __float2half(__bfloat162float(w_data[i]));
 }
 
-__device__ __forceinline__ float load_sconv_src(
+__device__ __forceinline__ float ifn_cuda_load_sconv_src(
     const float* __restrict__ src_or_slots,
     int is_slotted,
     int b,
     int c) {
     if (is_slotted) {
-        const float* sb = src_or_slots + (size_t)b * TOP_K * HIDDEN + c;
-        return sb[0 * HIDDEN] + sb[1 * HIDDEN] + sb[2 * HIDDEN] + sb[3 * HIDDEN]
-             + sb[4 * HIDDEN] + sb[5 * HIDDEN] + sb[6 * HIDDEN] + sb[7 * HIDDEN];
+        const float* sb = src_or_slots + (size_t)b * IFN_CUDA_TOP_K * IFN_CUDA_HIDDEN + c;
+        return sb[0 * IFN_CUDA_HIDDEN] + sb[1 * IFN_CUDA_HIDDEN] + sb[2 * IFN_CUDA_HIDDEN] + sb[3 * IFN_CUDA_HIDDEN]
+             + sb[4 * IFN_CUDA_HIDDEN] + sb[5 * IFN_CUDA_HIDDEN] + sb[6 * IFN_CUDA_HIDDEN] + sb[7 * IFN_CUDA_HIDDEN];
     }
-    return src_or_slots[(size_t)b * HIDDEN + c];
+    return src_or_slots[(size_t)b * IFN_CUDA_HIDDEN + c];
 }
 
 // 2D-parallel batched causal hidden-dim 4-tap FIR sconv + optional 8-slot MoE reduction + residual add + block/tap commit!
 // Grid: dim3((HIDDEN+255)/256, (B+T_BLK-1)/T_BLK). When update_ring == 0 (multi-CTA over B),
 // ring is read-only here and p_sconv_ring_commit_kernel commits the final 16 tokens afterwards (100% race-free!).
-constexpr int SCONV_T_BLK = 32;
+constexpr int IFN_CUDA_SCONV_T_BLK = 32;
 
-__global__ void p_sconv_post_res_kernel(
+__global__ void ifn_cuda_p_sconv_post_res_kernel(
     const float* __restrict__ src_or_slots,
     int is_slotted,
     const __nv_bfloat16* __restrict__ sconv_w,
@@ -117,10 +118,10 @@ __global__ void p_sconv_post_res_kernel(
     int B,
     const int32_t* __restrict__ d_pos) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
-    if (c >= HIDDEN) return;
+    if (c >= IFN_CUDA_HIDDEN) return;
 
-    int b0 = blockIdx.y * SCONV_T_BLK;
-    int b1 = min(b0 + SCONV_T_BLK, B);
+    int b0 = blockIdx.y * IFN_CUDA_SCONV_T_BLK;
+    int b1 = min(b0 + IFN_CUDA_SCONV_T_BLK, B);
     if (b0 >= B) return;
 
     int pos0 = *d_pos;
@@ -130,58 +131,58 @@ __global__ void p_sconv_post_res_kernel(
     float wc3 = __bfloat162float(sconv_w[c * 4 + 3]);
 
     auto get_hist = [&](int b_idx) -> float {
-        if (b_idx >= 0) return load_sconv_src(src_or_slots, is_slotted, b_idx, c);
+        if (b_idx >= 0) return ifn_cuda_load_sconv_src(src_or_slots, is_slotted, b_idx, c);
         int p_hist = pos0 + b_idx;
-        return (p_hist >= 0) ? ring[(p_hist & 15) * HIDDEN + c] : 0.0f;
+        return (p_hist >= 0) ? ring[(p_hist & 15) * IFN_CUDA_HIDDEN + c] : 0.0f;
     };
     float h0 = get_hist(b0 - 3);
     float h1 = get_hist(b0 - 2);
     float h2 = get_hist(b0 - 1);
 
     for (int b = b0; b < b1; ++b) {
-        float cur = load_sconv_src(src_or_slots, is_slotted, b, c);
+        float cur = ifn_cuda_load_sconv_src(src_or_slots, is_slotted, b, c);
         if (update_ring && b >= B - 16) {
-            ring[((pos0 + b) & 15) * HIDDEN + c] = cur;
+            ring[((pos0 + b) & 15) * IFN_CUDA_HIDDEN + c] = cur;
         }
-        float conv = (wc0 * h0 + wc1 * h1 + wc2 * h2 + wc3 * cur + cur) * INV_SQRT_5;
+        float conv = (wc0 * h0 + wc1 * h1 + wc2 * h2 + wc3 * cur + cur) * IFN_CUDA_INV_SQRT_5;
         h0 = h1; h1 = h2; h2 = cur;
 
         if (write_conv_only) {
-            out_res[(size_t)b * HIDDEN + c] = conv;
+            out_res[(size_t)b * IFN_CUDA_HIDDEN + c] = conv;
         } else {
             float res_v;
             if (is_boundary) {
                 if (blocks && partial) {
-                    blocks[((size_t)b * 4 + block_idx) * HIDDEN + c] = partial[(size_t)b * HIDDEN + c];
+                    blocks[((size_t)b * 4 + block_idx) * IFN_CUDA_HIDDEN + c] = partial[(size_t)b * IFN_CUDA_HIDDEN + c];
                 }
                 res_v = conv;
             } else {
-                res_v = residual[(size_t)b * HIDDEN + c] + conv;
+                res_v = residual[(size_t)b * IFN_CUDA_HIDDEN + c] + conv;
             }
-            out_res[(size_t)b * HIDDEN + c] = res_v;
-            if (pre_tap_out) pre_tap_out[(size_t)b * HIDDEN + c] = res_v;
+            out_res[(size_t)b * IFN_CUDA_HIDDEN + c] = res_v;
+            if (pre_tap_out) pre_tap_out[(size_t)b * IFN_CUDA_HIDDEN + c] = res_v;
         }
     }
 }
 
-__global__ void p_sconv_ring_commit_kernel(
+__global__ void ifn_cuda_p_sconv_ring_commit_kernel(
     const float* __restrict__ src_or_slots,
     int is_slotted,
     float* __restrict__ ring,
     int B,
     const int32_t* __restrict__ d_pos) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
-    if (c >= HIDDEN) return;
+    if (c >= IFN_CUDA_HIDDEN) return;
     int pos0 = *d_pos;
     int b0 = max(0, B - 16);
     for (int b = b0; b < B; ++b) {
-        ring[((pos0 + b) & 15) * HIDDEN + c] = load_sconv_src(src_or_slots, is_slotted, b, c);
+        ring[((pos0 + b) & 15) * IFN_CUDA_HIDDEN + c] = ifn_cuda_load_sconv_src(src_or_slots, is_slotted, b, c);
     }
 }
 
 // 1-CTA-per-token (576 threads) runtime-gated directional ablation + residual/boundary commit for prefill.
 __global__ void __launch_bounds__(576)
-p_ablate_post_res_kernel(
+ifn_cuda_p_ablate_post_res_kernel(
     float* __restrict__ out_res,         // in: raw post-sconv y; out: ablated residual
     const float* __restrict__ residual,
     float* __restrict__ pre_tap_out,
@@ -202,19 +203,19 @@ p_ablate_post_res_kernel(
     __shared__ float sm_d[18];
     __shared__ float s_coeff;
 
-    float4 y = *reinterpret_cast<const float4*>(out_res + (size_t)b * HIDDEN + c4);
+    float4 y = *reinterpret_cast<const float4*>(out_res + (size_t)b * IFN_CUDA_HIDDEN + c4);
     float4 rv = *reinterpret_cast<const float4*>(abl_r + c4);
-    float dr = warp_sum(y.x * rv.x + y.y * rv.y + y.z * rv.z + y.w * rv.w);
+    float dr = ifn_cuda_warp_sum(y.x * rv.x + y.y * rv.y + y.z * rv.z + y.w * rv.w);
     if (lane == 0) sm_r[warp] = dr;
     if (abl_d) {
         float4 dv = *reinterpret_cast<const float4*>(abl_d + c4);
-        float dd = warp_sum(y.x * dv.x + y.y * dv.y + y.z * dv.z + y.w * dv.w);
+        float dd = ifn_cuda_warp_sum(y.x * dv.x + y.y * dv.y + y.z * dv.z + y.w * dv.w);
         if (lane == 0) sm_d[warp] = dd;
     }
     __syncthreads();
     if (warp == 0) {
-        float tot_r = warp_sum((lane < 18) ? sm_r[lane] : 0.0f);
-        float tot_d = abl_d ? warp_sum((lane < 18) ? sm_d[lane] : 0.0f) : 0.0f;
+        float tot_r = ifn_cuda_warp_sum((lane < 18) ? sm_r[lane] : 0.0f);
+        float tot_d = abl_d ? ifn_cuda_warp_sum((lane < 18) ? sm_d[lane] : 0.0f) : 0.0f;
         if (lane == 0) {
             float4 ap = __ldg(reinterpret_cast<const float4*>(abl_p));
             s_coeff = (!abl_d || tot_d > ap.w) ? (ap.x * fmaxf(tot_r - ap.y, ap.z)) : 0.0f;
@@ -227,38 +228,38 @@ p_ablate_post_res_kernel(
     float4 res_v;
     if (is_boundary) {
         if (blocks && partial) {
-            *reinterpret_cast<float4*>(blocks + ((size_t)b * 4 + block_idx) * HIDDEN + c4) =
-                *reinterpret_cast<const float4*>(partial + (size_t)b * HIDDEN + c4);
+            *reinterpret_cast<float4*>(blocks + ((size_t)b * 4 + block_idx) * IFN_CUDA_HIDDEN + c4) =
+                *reinterpret_cast<const float4*>(partial + (size_t)b * IFN_CUDA_HIDDEN + c4);
         }
         res_v = y;
     } else {
-        float4 base = *reinterpret_cast<const float4*>(residual + (size_t)b * HIDDEN + c4);
+        float4 base = *reinterpret_cast<const float4*>(residual + (size_t)b * IFN_CUDA_HIDDEN + c4);
         res_v = make_float4(base.x + y.x, base.y + y.y, base.z + y.z, base.w + y.w);
     }
-    *reinterpret_cast<float4*>(out_res + (size_t)b * HIDDEN + c4) = res_v;
-    if (pre_tap_out) *reinterpret_cast<float4*>(pre_tap_out + (size_t)b * HIDDEN + c4) = res_v;
+    *reinterpret_cast<float4*>(out_res + (size_t)b * IFN_CUDA_HIDDEN + c4) = res_v;
+    if (pre_tap_out) *reinterpret_cast<float4*>(pre_tap_out + (size_t)b * IFN_CUDA_HIDDEN + c4) = res_v;
 }
 
 // Scatter 8-token tap slots [s*4 + tap_slot, 8, HIDDEN] from contiguous [B, HIDDEN] in 1 launch!
-__global__ void p_copy_taps_chunked_kernel(
+__global__ void ifn_cuda_p_copy_taps_chunked_kernel(
     const float* __restrict__ src, // [B, HIDDEN]
     float* __restrict__ dst_taps,  // [n_sub, 4, 8, HIDDEN]
     int tap_slot,
     int B) {
     size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-    size_t total = (size_t)B * HIDDEN;
+    size_t total = (size_t)B * IFN_CUDA_HIDDEN;
     if (idx >= total) return;
-    int b = (int)(idx / HIDDEN);
-    int c = (int)(idx % HIDDEN);
+    int b = (int)(idx / IFN_CUDA_HIDDEN);
+    int c = (int)(idx % IFN_CUDA_HIDDEN);
     int s = b >> 3;
     int sb = b & 7;
-    dst_taps[((size_t)(s * 4 + tap_slot) * 8 + sb) * HIDDEN + c] = src[idx];
+    dst_taps[((size_t)(s * 4 + tap_slot) * 8 + sb) * IFN_CUDA_HIDDEN + c] = src[idx];
 }
 
 // Batched B<=256 Controller Prep (1 stream, grid = B, block = 256):
 // Computes msg = depth_attn(saved, prior_last, cp_q), cat_h = [rmsnorm(x), rmsnorm(msg)] in FP16!
 __global__ void __launch_bounds__(256)
-p_ctrl_prep_h_kernel(
+ifn_cuda_p_ctrl_prep_h_kernel(
     const float* __restrict__ x,
     const float* __restrict__ saved,
     const float* __restrict__ prior_last,
@@ -271,19 +272,19 @@ p_ctrl_prep_h_kernel(
     int lane = tid & 31;
     int warp = tid >> 5;
 
-    const float* sv = saved + (size_t)b * HIDDEN;
-    const float* pl = prior_last + (size_t)b * HIDDEN;
-    const float* xb = x + (size_t)b * HIDDEN;
+    const float* sv = saved + (size_t)b * IFN_CUDA_HIDDEN;
+    const float* pl = prior_last + (size_t)b * IFN_CUDA_HIDDEN;
+    const float* xb = x + (size_t)b * IFN_CUDA_HIDDEN;
 
     float d0 = 0.0f, d1 = 0.0f, xsq = 0.0f;
-    for (int d = tid; d < HIDDEN; d += 256) {
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
         float qv = cp_q[d];
         d0 = fmaf(qv, sv[d], d0);
         d1 = fmaf(qv, pl[d], d1);
         float xv = xb[d];
         xsq = fmaf(xv, xv, xsq);
     }
-    d0 = warp_sum(d0); d1 = warp_sum(d1); xsq = warp_sum(xsq);
+    d0 = ifn_cuda_warp_sum(d0); d1 = ifn_cuda_warp_sum(d1); xsq = ifn_cuda_warp_sum(xsq);
     __shared__ float sm0[8], sm1[8], smx[8];
     if (lane == 0) { sm0[warp] = d0; sm1[warp] = d1; smx[warp] = xsq; }
     __syncthreads();
@@ -292,48 +293,48 @@ p_ctrl_prep_h_kernel(
     if (tid == 0) {
         float t0 = 0.0f, t1 = 0.0f, tx = 0.0f;
         for (int i = 0; i < 8; ++i) { t0 += sm0[i]; t1 += sm1[i]; tx += smx[i]; }
-        float l0 = t0 * INV_SQRT_HIDDEN;
-        float l1 = t1 * INV_SQRT_HIDDEN;
+        float l0 = t0 * IFN_CUDA_INV_SQRT_HIDDEN;
+        float l1 = t1 * IFN_CUDA_INV_SQRT_HIDDEN;
         float mx = fmaxf(l0, l1);
         float e0 = expf(l0 - mx), e1 = expf(l1 - mx);
         float inv = 1.0f / (e0 + e1);
         w0 = e0 * inv;
         w1 = e1 * inv;
-        inv_x = rsqrtf(tx / float(HIDDEN) + RMS_EPS);
+        inv_x = rsqrtf(tx / float(IFN_CUDA_HIDDEN) + IFN_CUDA_RMS_EPS);
     }
     __syncthreads();
 
     float ww0 = w0, ww1 = w1, ix = inv_x;
-    float* msg_b = out_msg + (size_t)b * HIDDEN;
-    __half* cat_b = out_cat_h + (size_t)b * (2 * HIDDEN);
+    float* msg_b = out_msg + (size_t)b * IFN_CUDA_HIDDEN;
+    __half* cat_b = out_cat_h + (size_t)b * (2 * IFN_CUDA_HIDDEN);
 
     float msq = 0.0f;
-    for (int d = tid; d < HIDDEN; d += 256) {
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
         float mv = ww0 * sv[d] + ww1 * pl[d];
         msg_b[d] = mv;
         cat_b[d] = __float2half(xb[d] * ix);
         msq = fmaf(mv, mv, msq);
     }
-    msq = warp_sum(msq);
+    msq = ifn_cuda_warp_sum(msq);
     if (lane == 0) sm0[warp] = msq;
     __syncthreads();
     __shared__ float inv_m;
     if (tid == 0) {
         float tm = 0.0f;
         for (int i = 0; i < 8; ++i) tm += sm0[i];
-        inv_m = rsqrtf(tm / float(HIDDEN) + RMS_EPS);
+        inv_m = rsqrtf(tm / float(IFN_CUDA_HIDDEN) + IFN_CUDA_RMS_EPS);
     }
     __syncthreads();
     float im = inv_m;
-    for (int d = tid; d < HIDDEN; d += 256) {
-        cat_b[HIDDEN + d] = __float2half(msg_b[d] * im);
+    for (int d = tid; d < IFN_CUDA_HIDDEN; d += 256) {
+        cat_b[IFN_CUDA_HIDDEN + d] = __float2half(msg_b[d] * im);
     }
 }
 
 // Batched B<=256 Controller Finish (grid = B, block = 256):
 // merged = (1 - tanh(forget)) * x + tanh(gain) * msg -> RMSNorm * post_norm -> out (f32) & out_h (f16)
 __global__ void __launch_bounds__(256)
-p_ctrl_finish_kernel(
+ifn_cuda_p_ctrl_finish_kernel(
     const float* __restrict__ x,
     const float* __restrict__ msg,
     const float* __restrict__ forget,
@@ -343,23 +344,23 @@ p_ctrl_finish_kernel(
     __half* __restrict__ out_h) {
     int b = blockIdx.x;
     int tid = threadIdx.x;
-    const float* xb = x + (size_t)b * HIDDEN;
-    const float* mb = msg + (size_t)b * HIDDEN;
-    const float* fb = forget + (size_t)b * HIDDEN;
-    const float* gb = gain + (size_t)b * HIDDEN;
-    float* ob = out + (size_t)b * HIDDEN;
-    __half* ohb = out_h ? (out_h + (size_t)b * HIDDEN) : nullptr;
+    const float* xb = x + (size_t)b * IFN_CUDA_HIDDEN;
+    const float* mb = msg + (size_t)b * IFN_CUDA_HIDDEN;
+    const float* fb = forget + (size_t)b * IFN_CUDA_HIDDEN;
+    const float* gb = gain + (size_t)b * IFN_CUDA_HIDDEN;
+    float* ob = out + (size_t)b * IFN_CUDA_HIDDEN;
+    __half* ohb = out_h ? (out_h + (size_t)b * IFN_CUDA_HIDDEN) : nullptr;
 
     float vals[9]; // 2304 / 256 = 9 exact!
     float sq = 0.0f;
     #pragma unroll
     for (int i = 0; i < 9; ++i) {
         int d = tid + i * 256;
-        float v = (1.0f - fast_tanh(fb[d])) * xb[d] + fast_tanh(gb[d]) * mb[d];
+        float v = (1.0f - ifn_cuda_fast_tanh(fb[d])) * xb[d] + ifn_cuda_fast_tanh(gb[d]) * mb[d];
         vals[i] = v;
         sq = fmaf(v, v, sq);
     }
-    sq = warp_sum(sq);
+    sq = ifn_cuda_warp_sum(sq);
     __shared__ float sm[8];
     if ((tid & 31) == 0) sm[tid >> 5] = sq;
     __syncthreads();
@@ -367,7 +368,7 @@ p_ctrl_finish_kernel(
     if (tid == 0) {
         float tot = 0.0f;
         for (int i = 0; i < 8; ++i) tot += sm[i];
-        inv_rms = rsqrtf(tot / float(HIDDEN) + RMS_EPS);
+        inv_rms = rsqrtf(tot / float(IFN_CUDA_HIDDEN) + IFN_CUDA_RMS_EPS);
     }
     __syncthreads();
     float ir = inv_rms;
@@ -381,7 +382,7 @@ p_ctrl_finish_kernel(
 }
 
 // Per-token top-8 selection (1 warp per token, grid = B) — identical tie-breaking to kernels_inkling.cu!
-__global__ void p_route_topk_only_kernel(
+__global__ void ifn_cuda_p_route_topk_only_kernel(
     const float* __restrict__ logits,
     const float* __restrict__ router_bias,
     int32_t* __restrict__ out_ids,
@@ -393,16 +394,16 @@ __global__ void p_route_topk_only_kernel(
     #pragma unroll
     for (int i = 0; i < 4; ++i) {
         int e = lane + 32 * i;
-        float raw = fast_sigmoid(logits[(size_t)b * NUM_EXPERTS + e]);
+        float raw = ifn_cuda_fast_sigmoid(logits[(size_t)b * IFN_CUDA_NUM_EXPERTS + e]);
         sc[i] = raw;
         bi[i] = raw + router_bias[e];
     }
 
-    int winners[TOP_K];
-    float chosen[TOP_K];
-    for (int k = 0; k < TOP_K; ++k) {
+    int winners[IFN_CUDA_TOP_K];
+    float chosen[IFN_CUDA_TOP_K];
+    for (int k = 0; k < IFN_CUDA_TOP_K; ++k) {
         float best = -1e30f;
-        int best_e = NUM_EXPERTS;
+        int best_e = IFN_CUDA_NUM_EXPERTS;
         #pragma unroll
         for (int i = 0; i < 4; ++i) {
             int e = lane + 32 * i;
@@ -411,13 +412,13 @@ __global__ void p_route_topk_only_kernel(
                 best_e = e;
             }
         }
-        float top = warp_max(best);
-        int cand = (best == top) ? best_e : NUM_EXPERTS;
+        float top = ifn_cuda_warp_max(best);
+        int cand = (best == top) ? best_e : IFN_CUDA_NUM_EXPERTS;
         #pragma unroll
         for (int off = 16; off > 0; off >>= 1) {
             cand = min(cand, __shfl_xor_sync(0xffffffffu, cand, off));
         }
-        cand = min(cand, NUM_EXPERTS - 1);
+        cand = min(cand, IFN_CUDA_NUM_EXPERTS - 1);
         float sel = 0.0f;
         #pragma unroll
         for (int i = 0; i < 4; ++i) {
@@ -426,24 +427,24 @@ __global__ void p_route_topk_only_kernel(
                 bi[i] = -1e30f;
             }
         }
-        chosen[k] = warp_sum(sel);
+        chosen[k] = ifn_cuda_warp_sum(sel);
         winners[k] = cand;
     }
 
     if (lane == 0) {
         float total = 0.0f;
         #pragma unroll
-        for (int k = 0; k < TOP_K; ++k) total += chosen[k];
-        float inv = ROUTE_SCALE / (total + 1e-20f);
+        for (int k = 0; k < IFN_CUDA_TOP_K; ++k) total += chosen[k];
+        float inv = IFN_CUDA_ROUTE_SCALE / (total + 1e-20f);
         #pragma unroll
-        for (int k = 0; k < TOP_K; ++k) {
-            out_ids[b * TOP_K + k] = winners[k];
-            out_weights[b * TOP_K + k] = chosen[k] * inv;
+        for (int k = 0; k < IFN_CUDA_TOP_K; ++k) {
+            out_ids[b * IFN_CUDA_TOP_K + k] = winners[k];
+            out_weights[b * IFN_CUDA_TOP_K + k] = chosen[k] * inv;
         }
     }
 }
 
-__global__ void p_sort_experts_kernel(
+__global__ void ifn_cuda_p_sort_experts_kernel(
     const int32_t* __restrict__ route_ids,
     const float* __restrict__ route_w,
     int B,
@@ -452,14 +453,14 @@ __global__ void p_sort_experts_kernel(
     int32_t* __restrict__ sorted_tok,
     int32_t* __restrict__ sorted_slot,
     float* __restrict__ sorted_w) {
-    __shared__ int32_t counts[NUM_EXPERTS];
-    __shared__ int32_t cursors[NUM_EXPERTS];
+    __shared__ int32_t counts[IFN_CUDA_NUM_EXPERTS];
+    __shared__ int32_t cursors[IFN_CUDA_NUM_EXPERTS];
     int tid = threadIdx.x;
     counts[tid] = 0;
     __syncthreads();
 
-    int total = B * TOP_K;
-    for (int idx = tid; idx < total; idx += NUM_EXPERTS) {
+    int total = B * IFN_CUDA_TOP_K;
+    for (int idx = tid; idx < total; idx += IFN_CUDA_NUM_EXPERTS) {
         atomicAdd(&counts[route_ids[idx]], 1);
     }
     __syncthreads();
@@ -470,7 +471,7 @@ __global__ void p_sort_experts_kernel(
         int32_t* tile_exp = expert_offsets + 130;
         int32_t* tile_st  = expert_offsets + 386;
         int32_t* tile_en  = expert_offsets + 642;
-        for (int e = 0; e < NUM_EXPERTS; ++e) {
+        for (int e = 0; e < IFN_CUDA_NUM_EXPERTS; ++e) {
             expert_offsets[e] = sum;
             cursors[e] = sum;
             int cnt = counts[e];
@@ -482,12 +483,12 @@ __global__ void p_sort_experts_kernel(
             }
             sum += cnt;
         }
-        expert_offsets[NUM_EXPERTS] = sum;
+        expert_offsets[IFN_CUDA_NUM_EXPERTS] = sum;
         expert_offsets[129] = nt;
     }
     __syncthreads();
 
-    for (int idx = tid; idx < total; idx += NUM_EXPERTS) {
+    for (int idx = tid; idx < total; idx += IFN_CUDA_NUM_EXPERTS) {
         int e = route_ids[idx];
         int dst = atomicAdd(&cursors[e], 1);
         sorted_tok[dst] = idx >> 3;
@@ -502,40 +503,40 @@ __global__ void p_sort_experts_kernel(
 // and specialized for Blackwell sm_120a hardware cvt.rn.f16x2.e2m1x2 + FP16 MMA!
 // ============================================================================
 
-enum class WgemmMode { Up, Down };
-constexpr int WG_TN = 128;
-constexpr int WG_BK = 64;
-constexpr int WG_AS = 3;
-constexpr int WG_NT = 256;
-constexpr int WG_KCH = WG_BK / 8; // 8 16-byte chunks per activation row
+enum class ifn_cuda_wgemm_mode { IFN_CUDA_UP, IFN_CUDA_DOWN };
+constexpr int IFN_CUDA_WG_TN = 128;
+constexpr int IFN_CUDA_WG_BK = 64;
+constexpr int IFN_CUDA_WG_AS = 3;
+constexpr int IFN_CUDA_WG_NT = 256;
+constexpr int IFN_CUDA_WG_KCH = IFN_CUDA_WG_BK / 8; // 8 16-byte chunks per activation row
 
-__device__ __forceinline__ uint32_t wg_smem_addr(const void* ptr) {
+__device__ __forceinline__ uint32_t ifn_cuda_wg_smem_addr(const void* ptr) {
     return static_cast<uint32_t>(__cvta_generic_to_shared(ptr));
 }
 
-__device__ __forceinline__ void wg_cp_async16(void* smem_dst, const void* gmem_src, int src_bytes = 16) {
+__device__ __forceinline__ void ifn_cuda_wg_cp_async16(void* smem_dst, const void* gmem_src, int src_bytes = 16) {
     asm volatile("cp.async.cg.shared.global [%0], [%1], 16, %2;\n"
-                 :: "r"(wg_smem_addr(smem_dst)), "l"(gmem_src), "r"(src_bytes));
+                 :: "r"(ifn_cuda_wg_smem_addr(smem_dst)), "l"(gmem_src), "r"(src_bytes));
 }
 
-__device__ __forceinline__ void wg_cp_async4(void* smem_dst, const void* gmem_src) {
+__device__ __forceinline__ void ifn_cuda_wg_cp_async4(void* smem_dst, const void* gmem_src) {
     asm volatile("cp.async.ca.shared.global [%0], [%1], 4;\n"
-                 :: "r"(wg_smem_addr(smem_dst)), "l"(gmem_src));
+                 :: "r"(ifn_cuda_wg_smem_addr(smem_dst)), "l"(gmem_src));
 }
 
-__device__ __forceinline__ void wg_cp_commit() { asm volatile("cp.async.commit_group;\n"); }
+__device__ __forceinline__ void ifn_cuda_wg_cp_commit() { asm volatile("cp.async.commit_group;\n"); }
 
 template <int Groups>
-__device__ __forceinline__ void wg_cp_wait() {
+__device__ __forceinline__ void ifn_cuda_wg_cp_wait() {
     asm volatile("cp.async.wait_group %0;\n" :: "n"(Groups));
 }
 
-__device__ __forceinline__ void wg_ldmatrix_x4(uint32_t& r0, uint32_t& r1, uint32_t& r2, uint32_t& r3, uint32_t addr) {
+__device__ __forceinline__ void ifn_cuda_wg_ldmatrix_x4(uint32_t& r0, uint32_t& r1, uint32_t& r2, uint32_t& r3, uint32_t addr) {
     asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];\n"
                  : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(addr));
 }
 
-__device__ __forceinline__ void wg_mma_f16(float (&c)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
+__device__ __forceinline__ void ifn_cuda_wg_mma_f16(float (&c)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
     asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
                  "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
                  : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3])
@@ -543,54 +544,54 @@ __device__ __forceinline__ void wg_mma_f16(float (&c)[4], const uint32_t (&a)[4]
 }
 
 template <int Chunks>
-__device__ __forceinline__ int wg_swz(int row, int chunk) {
+__device__ __forceinline__ int ifn_cuda_wg_swz(int row, int chunk) {
     return row * (Chunks * 8) + ((chunk ^ (row & 7)) << 3);
 }
 
 template <int FMT, int K, int TM>
-struct WgCfg {
+struct ifn_cuda_wg_cfg {
     static constexpr int CODE_ROW  = (FMT == 0) ? (K / 2) : K;
     static constexpr int SCALE_ROW = (FMT == 0) ? (K / 16) : (K / 32);
     static constexpr int WK        = (FMT == 0) ? 128 : 64;
-    static constexpr int R         = WK / WG_BK;
+    static constexpr int R         = WK / IFN_CUDA_WG_BK;
     static constexpr int KC        = K / WK;
     static constexpr int WS        = (TM <= 32) ? ((FMT == 0) ? 6 : 7) : ((FMT == 0) ? 3 : 4);
-    static_assert(R * (WS - 1) >= WG_AS);
+    static_assert(R * (WS - 1) >= IFN_CUDA_WG_AS);
     static constexpr int WCODE     = (FMT == 0) ? (WK / 2) : WK;
     static constexpr int WSTRIDE   = WCODE + 16;
-    static constexpr int W_BYTES   = WG_TN * WSTRIDE;
-    static constexpr int A_BYTES   = TM * WG_BK * 2;
-    static constexpr int SC_BYTES  = WG_TN * SCALE_ROW;
-    static constexpr int OFF_W     = WG_AS * A_BYTES;
+    static constexpr int W_BYTES   = IFN_CUDA_WG_TN * WSTRIDE;
+    static constexpr int A_BYTES   = TM * IFN_CUDA_WG_BK * 2;
+    static constexpr int SC_BYTES  = IFN_CUDA_WG_TN * SCALE_ROW;
+    static constexpr int OFF_W     = IFN_CUDA_WG_AS * A_BYTES;
     static constexpr int OFF_SC    = OFF_W + WS * W_BYTES;
     static constexpr int SMEM      = (OFF_SC + SC_BYTES + 15) / 16 * 16;
     static_assert(K % WK == 0 && SMEM <= 101376);
 };
 
 template <int MT, int TM, class After>
-__device__ __forceinline__ void wg_mma_step(
+__device__ __forceinline__ void ifn_cuda_wg_mma_step(
     float (&acc)[TM / 16][2][4], const uint16_t* A,
-    const uint32_t (&b)[WG_BK / 16][2][2], int lane, After&& after) {
+    const uint32_t (&b)[IFN_CUDA_WG_BK / 16][2][2], int lane, After&& after) {
     #pragma unroll
-    for (int kk = 0; kk < WG_BK / 16; ++kk) {
+    for (int kk = 0; kk < IFN_CUDA_WG_BK / 16; ++kk) {
         uint32_t a[MT][4];
         #pragma unroll
         for (int mt = 0; mt < MT; ++mt) {
-            wg_ldmatrix_x4(a[mt][0], a[mt][1], a[mt][2], a[mt][3],
-                           wg_smem_addr(A + wg_swz<WG_KCH>(mt * 16 + (lane & 15), kk * 2 + (lane >> 4))));
+            ifn_cuda_wg_ldmatrix_x4(a[mt][0], a[mt][1], a[mt][2], a[mt][3],
+                           ifn_cuda_wg_smem_addr(A + ifn_cuda_wg_swz<IFN_CUDA_WG_KCH>(mt * 16 + (lane & 15), kk * 2 + (lane >> 4))));
         }
         #pragma unroll
         for (int mt = 0; mt < MT; ++mt) {
-            wg_mma_f16(acc[mt][0], a[mt], b[kk][0][0], b[kk][0][1]);
-            wg_mma_f16(acc[mt][1], a[mt], b[kk][1][0], b[kk][1][1]);
+            ifn_cuda_wg_mma_f16(acc[mt][0], a[mt], b[kk][0][0], b[kk][0][1]);
+            ifn_cuda_wg_mma_f16(acc[mt][1], a[mt], b[kk][1][0], b[kk][1][1]);
         }
         after(kk);
     }
 }
 
-template <int FMT, WgemmMode MODE, int K, int TM>
-__global__ void __launch_bounds__(WG_NT, 1)
-p_wgemm_kernel(
+template <int FMT, ifn_cuda_wgemm_mode MODE, int K, int TM>
+__global__ void __launch_bounds__(IFN_CUDA_WG_NT, 1)
+ifn_cuda_p_wgemm_kernel(
     const uint8_t* __restrict__ w_codes,
     const uint8_t* __restrict__ w_scales,
     const float* __restrict__ w_factors,
@@ -601,10 +602,10 @@ p_wgemm_kernel(
     const float* __restrict__ sorted_w,
     __half* __restrict__ out_act_h,
     float* __restrict__ out_slots) {
-    constexpr int KS = K / WG_BK;
-    constexpr int NE = (MODE == WgemmMode::Up) ? (2 * INTERMEDIATE) : HIDDEN;
-    constexpr int NTILES_N = NE / WG_TN;
-    using C = WgCfg<FMT, K, TM>;
+    constexpr int KS = K / IFN_CUDA_WG_BK;
+    constexpr int NE = (MODE == ifn_cuda_wgemm_mode::IFN_CUDA_UP) ? (2 * IFN_CUDA_INTERMEDIATE) : IFN_CUDA_HIDDEN;
+    constexpr int NTILES_N = NE / IFN_CUDA_WG_TN;
+    using C = ifn_cuda_wg_cfg<FMT, K, TM>;
 
     extern __shared__ __align__(128) unsigned char smem[];
     unsigned char* a_smem = smem;
@@ -621,7 +622,7 @@ p_wgemm_kernel(
     const int pb = expert_offsets[386 + tile_idx];
     const int en = expert_offsets[642 + tile_idx];
     const int n  = en - pb;
-    const int n0 = (blockIdx.x % NTILES_N) * WG_TN;
+    const int n0 = (blockIdx.x % NTILES_N) * IFN_CUDA_WG_TN;
 
     const uint8_t* code_tile  = w_codes  + ((size_t)e * NE + n0) * C::CODE_ROW;
     const uint8_t* scale_tile = w_scales + ((size_t)e * NE + n0) * C::SCALE_ROW;
@@ -632,7 +633,7 @@ p_wgemm_kernel(
     for (int i = 0; i < TM / 32; ++i) {
         const int r = (tid >> 3) + 32 * i;
         const int rr = (r < n) ? r : 0;
-        if constexpr (MODE == WgemmMode::Up) {
+        if constexpr (MODE == ifn_cuda_wgemm_mode::IFN_CUDA_UP) {
             arow[i] = a_base + (size_t)sorted_tok[pb + rr] * K;
         } else {
             arow[i] = a_base + (size_t)(pb + rr) * K;
@@ -640,41 +641,41 @@ p_wgemm_kernel(
     }
 
     auto load_a = [&](int ks) {
-        uint16_t* A = reinterpret_cast<uint16_t*>(a_smem + (ks % WG_AS) * C::A_BYTES);
+        uint16_t* A = reinterpret_cast<uint16_t*>(a_smem + (ks % IFN_CUDA_WG_AS) * C::A_BYTES);
         #pragma unroll
         for (int i = 0; i < TM / 32; ++i) {
             const int r = (tid >> 3) + 32 * i;
             const int c = tid & 7;
-            wg_cp_async16(A + wg_swz<WG_KCH>(r, c), arow[i] + ks * WG_BK + c * 8, (r < n) ? 16 : 0);
+            ifn_cuda_wg_cp_async16(A + ifn_cuda_wg_swz<IFN_CUDA_WG_KCH>(r, c), arow[i] + ks * IFN_CUDA_WG_BK + c * 8, (r < n) ? 16 : 0);
         }
     };
     auto load_w = [&](int chunk) {
         unsigned char* ws = w_smem + (chunk % C::WS) * C::W_BYTES;
         constexpr int CPR = C::WCODE / 16;
         #pragma unroll
-        for (int i = 0; i < WG_TN * CPR / WG_NT; ++i) {
-            const int id = tid + i * WG_NT;
+        for (int i = 0; i < IFN_CUDA_WG_TN * CPR / IFN_CUDA_WG_NT; ++i) {
+            const int id = tid + i * IFN_CUDA_WG_NT;
             const int row = id / CPR;
             const int ch = id % CPR;
-            wg_cp_async16(ws + row * C::WSTRIDE + ch * 16,
+            ifn_cuda_wg_cp_async16(ws + row * C::WSTRIDE + ch * 16,
                           code_tile + (size_t)row * C::CODE_ROW + chunk * C::WCODE + ch * 16);
         }
     };
     auto issue = [&](int j) {
         if (j < KS) load_a(j);
-        wg_cp_commit();
+        ifn_cuda_wg_cp_commit();
     };
 
-    for (int id = tid; id < C::SC_BYTES / 4; id += WG_NT) {
+    for (int id = tid; id < C::SC_BYTES / 4; id += IFN_CUDA_WG_NT) {
         int byte_off = id * 4;
-        wg_cp_async4(sc_smem + byte_off, scale_tile + (size_t)(byte_off / C::SCALE_ROW) * C::SCALE_ROW + (byte_off % C::SCALE_ROW));
+        ifn_cuda_wg_cp_async4(sc_smem + byte_off, scale_tile + (size_t)(byte_off / C::SCALE_ROW) * C::SCALE_ROW + (byte_off % C::SCALE_ROW));
     }
     #pragma unroll
     for (int j = 0; j < C::WS - 1; ++j) {
         if (j < C::KC) load_w(j);
     }
     #pragma unroll
-    for (int j = 0; j < WG_AS - 1; ++j) issue(j);
+    for (int j = 0; j < IFN_CUDA_WG_AS - 1; ++j) issue(j);
 
     const int c = lane & 3;
     const float factor = (FMT == 0) ? __ldg(w_factors + e) : 1.0f;
@@ -692,8 +693,8 @@ p_wgemm_kernel(
             const int row = warp * 16 + nt * 8 + (lane >> 2);
             if constexpr (FMT == 0) {
                 const uint32_t s4 = *reinterpret_cast<const uint32_t*>(sc_smem + row * C::SCALE_ROW + ks * 4);
-                const __half2 lo = cvt_e4m3x2_to_half2(static_cast<uint16_t>(s4 & 0xFFFFu));
-                const __half2 hi = cvt_e4m3x2_to_half2(static_cast<uint16_t>(s4 >> 16));
+                const __half2 lo = ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(s4 & 0xFFFFu));
+                const __half2 hi = ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(s4 >> 16));
                 sc[nt][0] = __low2half2(lo);
                 sc[nt][1] = __high2half2(lo);
                 sc[nt][2] = __low2half2(hi);
@@ -711,9 +712,9 @@ p_wgemm_kernel(
         }
     };
 
-    auto decode = [&](int ks, int kk, const __half2 (&sc)[2][4], uint32_t (&b)[WG_BK / 16][2][2]) {
+    auto decode = [&](int ks, int kk, const __half2 (&sc)[2][4], uint32_t (&b)[IFN_CUDA_WG_BK / 16][2][2]) {
         const unsigned char* ws = w_smem + ((ks / C::R) % C::WS) * C::W_BYTES;
-        const int kc = (ks % C::R) * WG_BK + kk * 16;
+        const int kc = (ks % C::R) * IFN_CUDA_WG_BK + kk * 16;
         #pragma unroll
         for (int nt = 0; nt < 2; ++nt) {
             const int row = warp * 16 + nt * 8 + (lane >> 2);
@@ -722,17 +723,17 @@ p_wgemm_kernel(
                 const uint2 wd = *reinterpret_cast<const uint2*>(ws + row * C::WSTRIDE + (kc >> 1));
                 const uint32_t b0 = (wd.x >> (8 * c)) & 0xFFu;
                 const uint32_t b1 = (wd.y >> (8 * c)) & 0xFFu;
-                __half2 h0 = __hmul2(cvt_e2m1x2_to_half2(b0), s);
-                __half2 h1 = __hmul2(cvt_e2m1x2_to_half2(b1), s);
+                __half2 h0 = __hmul2(ifn_cuda_cvt_e2m1x2_to_half2(b0), s);
+                __half2 h1 = __hmul2(ifn_cuda_cvt_e2m1x2_to_half2(b1), s);
                 b[kk][nt][0] = *reinterpret_cast<const uint32_t*>(&h0);
                 b[kk][nt][1] = *reinterpret_cast<const uint32_t*>(&h1);
             } else {
                 const uint4 q = *reinterpret_cast<const uint4*>(ws + row * C::WSTRIDE + kc);
                 const uint32_t w0 = (c >> 1) ? q.y : q.x;
                 const uint32_t w1 = (c >> 1) ? q.w : q.z;
-                const float sf = cvt_ue8m0_to_float(static_cast<uint8_t>(*reinterpret_cast<const uint32_t*>(&s)));
-                float2 f0 = __half22float2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(w0 >> (16 * (c & 1)))));
-                float2 f1 = __half22float2(cvt_e4m3x2_to_half2(static_cast<uint16_t>(w1 >> (16 * (c & 1)))));
+                const float sf = ifn_cuda_cvt_ue8m0_to_float(static_cast<uint8_t>(*reinterpret_cast<const uint32_t*>(&s)));
+                float2 f0 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(w0 >> (16 * (c & 1)))));
+                float2 f1 = __half22float2(ifn_cuda_cvt_e4m3x2_to_half2(static_cast<uint16_t>(w1 >> (16 * (c & 1)))));
                 __half2 h0 = __floats2half2_rn(f0.x * sf, f0.y * sf);
                 __half2 h1 = __floats2half2_rn(f1.x * sf, f1.y * sf);
                 b[kk][nt][0] = *reinterpret_cast<const uint32_t*>(&h0);
@@ -742,21 +743,21 @@ p_wgemm_kernel(
         }
     };
 
-    uint32_t bcur[WG_BK / 16][2][2], bnext[WG_BK / 16][2][2];
+    uint32_t bcur[IFN_CUDA_WG_BK / 16][2][2], bnext[IFN_CUDA_WG_BK / 16][2][2];
     #pragma unroll 1
     for (int ks = 0; ks < KS; ++ks) {
-        wg_cp_wait<WG_AS - 2>();
+        ifn_cuda_wg_cp_wait<IFN_CUDA_WG_AS - 2>();
         __syncthreads();
         const int chunk = ks / C::R;
         if (ks % C::R == 0 && chunk + C::WS - 1 < C::KC) load_w(chunk + C::WS - 1);
-        issue(ks + WG_AS - 1);
+        issue(ks + IFN_CUDA_WG_AS - 1);
         if (ks == 0) {
             __half2 sc0[2][4];
             scales_of(0, sc0);
             #pragma unroll
-            for (int kk = 0; kk < WG_BK / 16; ++kk) decode(0, kk, sc0, bcur);
+            for (int kk = 0; kk < IFN_CUDA_WG_BK / 16; ++kk) decode(0, kk, sc0, bcur);
         }
-        const uint16_t* A = reinterpret_cast<const uint16_t*>(a_smem + (ks % WG_AS) * C::A_BYTES);
+        const uint16_t* A = reinterpret_cast<const uint16_t*>(a_smem + (ks % IFN_CUDA_WG_AS) * C::A_BYTES);
         const bool more = (ks + 1 < KS);
         __half2 scn[2][4];
         if (more) scales_of(ks + 1, scn);
@@ -764,17 +765,17 @@ p_wgemm_kernel(
             if (more) decode(ks + 1, kk, scn, bnext);
         };
         switch (mact) {
-            case 1: if constexpr (1 <= TM / 16) wg_mma_step<1, TM>(acc, A, bcur, lane, after); break;
-            case 2: if constexpr (2 <= TM / 16) wg_mma_step<2, TM>(acc, A, bcur, lane, after); break;
-            case 3: if constexpr (3 <= TM / 16) wg_mma_step<3, TM>(acc, A, bcur, lane, after); break;
-            case 4: if constexpr (4 <= TM / 16) wg_mma_step<4, TM>(acc, A, bcur, lane, after); break;
-            case 5: if constexpr (5 <= TM / 16) wg_mma_step<5, TM>(acc, A, bcur, lane, after); break;
-            case 6: if constexpr (6 <= TM / 16) wg_mma_step<6, TM>(acc, A, bcur, lane, after); break;
-            case 7: if constexpr (7 <= TM / 16) wg_mma_step<7, TM>(acc, A, bcur, lane, after); break;
-            default: wg_mma_step<TM / 16, TM>(acc, A, bcur, lane, after); break;
+            case 1: if constexpr (1 <= TM / 16) ifn_cuda_wg_mma_step<1, TM>(acc, A, bcur, lane, after); break;
+            case 2: if constexpr (2 <= TM / 16) ifn_cuda_wg_mma_step<2, TM>(acc, A, bcur, lane, after); break;
+            case 3: if constexpr (3 <= TM / 16) ifn_cuda_wg_mma_step<3, TM>(acc, A, bcur, lane, after); break;
+            case 4: if constexpr (4 <= TM / 16) ifn_cuda_wg_mma_step<4, TM>(acc, A, bcur, lane, after); break;
+            case 5: if constexpr (5 <= TM / 16) ifn_cuda_wg_mma_step<5, TM>(acc, A, bcur, lane, after); break;
+            case 6: if constexpr (6 <= TM / 16) ifn_cuda_wg_mma_step<6, TM>(acc, A, bcur, lane, after); break;
+            case 7: if constexpr (7 <= TM / 16) ifn_cuda_wg_mma_step<7, TM>(acc, A, bcur, lane, after); break;
+            default: ifn_cuda_wg_mma_step<TM / 16, TM>(acc, A, bcur, lane, after); break;
         }
         #pragma unroll
-        for (int kk = 0; kk < WG_BK / 16; ++kk) {
+        for (int kk = 0; kk < IFN_CUDA_WG_BK / 16; ++kk) {
             #pragma unroll
             for (int nt = 0; nt < 2; ++nt) {
                 bcur[kk][nt][0] = bnext[kk][nt][0];
@@ -782,7 +783,7 @@ p_wgemm_kernel(
             }
         }
     }
-    wg_cp_wait<0>();
+    ifn_cuda_wg_cp_wait<0>();
 
     #pragma unroll
     for (int mt = 0; mt < TM / 16; ++mt) {
@@ -796,42 +797,42 @@ p_wgemm_kernel(
                 const int cl = warp * 16 + nt * 8 + c * 2;
                 const float c0 = acc[mt][nt][2 * half] * factor;
                 const float c1 = acc[mt][nt][2 * half + 1] * factor;
-                if constexpr (MODE == WgemmMode::Up) {
-                    const float g_cap = fast_tanh(c0 * (1.0f / GATE_SOFTCAP)) * GATE_SOFTCAP;
-                    const float u_cap = fast_tanh(c1 * (1.0f / UP_SOFTCAP)) * UP_SOFTCAP;
-                    out_act_h[(size_t)(pb + row) * INTERMEDIATE + (n0 + cl) / 2] =
-                        __float2half((g_cap * fast_sigmoid(c0)) * u_cap);
+                if constexpr (MODE == ifn_cuda_wgemm_mode::IFN_CUDA_UP) {
+                    const float g_cap = ifn_cuda_fast_tanh(c0 * (1.0f / IFN_CUDA_GATE_SOFTCAP)) * IFN_CUDA_GATE_SOFTCAP;
+                    const float u_cap = ifn_cuda_fast_tanh(c1 * (1.0f / IFN_CUDA_UP_SOFTCAP)) * IFN_CUDA_UP_SOFTCAP;
+                    out_act_h[(size_t)(pb + row) * IFN_CUDA_INTERMEDIATE + (n0 + cl) / 2] =
+                        __float2half((g_cap * ifn_cuda_fast_sigmoid(c0)) * u_cap);
                 } else {
-                    const int dst_slot = sorted_tok[pb + row] * TOP_K + sorted_slot[pb + row];
+                    const int dst_slot = sorted_tok[pb + row] * IFN_CUDA_TOP_K + sorted_slot[pb + row];
                     const float rw = sorted_w[pb + row];
-                    out_slots[(size_t)dst_slot * HIDDEN + n0 + cl + 0] = c0 * rw;
-                    out_slots[(size_t)dst_slot * HIDDEN + n0 + cl + 1] = c1 * rw;
+                    out_slots[(size_t)dst_slot * IFN_CUDA_HIDDEN + n0 + cl + 0] = c0 * rw;
+                    out_slots[(size_t)dst_slot * IFN_CUDA_HIDDEN + n0 + cl + 1] = c1 * rw;
                 }
             }
         }
     }
 }
 
-template <int FMT, WgemmMode MODE, int K, int TM>
-static void dispatch_wgemm_tm(
-    const ExpertBank& eb, const __half* x_h,
+template <int FMT, ifn_cuda_wgemm_mode MODE, int K, int TM>
+static void ifn_cuda_dispatch_wgemm_tm(
+    const ifn_cuda_expert_bank& eb, const __half* x_h,
     const int32_t* expert_offsets, const int32_t* sorted_tok, const int32_t* sorted_slot, const float* sorted_w,
     __half* out_act_h, float* out_slots, cudaStream_t stream) {
-    constexpr int NE = (MODE == WgemmMode::Up) ? (2 * INTERMEDIATE) : HIDDEN;
-    constexpr int NTILES_N = NE / WG_TN;
-    constexpr int SMEM = WgCfg<FMT, K, TM>::SMEM;
+    constexpr int NE = (MODE == ifn_cuda_wgemm_mode::IFN_CUDA_UP) ? (2 * IFN_CUDA_INTERMEDIATE) : IFN_CUDA_HIDDEN;
+    constexpr int NTILES_N = NE / IFN_CUDA_WG_TN;
+    constexpr int SMEM = ifn_cuda_wg_cfg<FMT, K, TM>::SMEM;
     static const cudaError_t attr = cudaFuncSetAttribute(
-        p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);
+        ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);
     (void)attr;
     // Max 256 active tiles by pigeonhole bound (B<=512 w/ TR=32 or B<=2048 w/ TR=128)
     int grid = 256 * NTILES_N;
-    p_wgemm_kernel<FMT, MODE, K, TM><<<grid, WG_NT, SMEM, stream>>>(
+    ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM><<<grid, IFN_CUDA_WG_NT, SMEM, stream>>>(
         eb.data, eb.scales, (FMT == 0) ? eb.expert_scale : nullptr,
         x_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, out_act_h, out_slots);
 }
 
 // 1-launch batched B<=2048 global dynamic short conv for BOTH K (blockIdx.y=0) and V (blockIdx.y=1) in-place!
-__global__ void p_dynamic_sconv_kv_inplace_kernel(
+__global__ void ifn_cuda_p_dynamic_sconv_kv_inplace_kernel(
     float* __restrict__ k_proj,
     float* __restrict__ v_proj,
     const __nv_bfloat16* __restrict__ k_sw,
@@ -843,36 +844,36 @@ __global__ void p_dynamic_sconv_kv_inplace_kernel(
     int B,
     const int32_t* __restrict__ d_pos) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
-    if (c >= KV_DIM) return;
+    if (c >= IFN_CUDA_KV_DIM) return;
     int is_v = blockIdx.y;
     float* x = is_v ? v_proj : k_proj;
     const __nv_bfloat16* sw = is_v ? v_sw : k_sw;
     const float* taps = is_v ? v_taps : k_taps;
     float* ring = is_v ? v_ring : k_ring;
 
-    int head = c / HEAD_DIM;
+    int head = c / IFN_CUDA_HEAD_DIM;
     int pos0 = *d_pos;
-    float sw0 = __bfloat162float(sw[0 * KV_DIM + c]);
-    float sw1 = __bfloat162float(sw[1 * KV_DIM + c]);
-    float sw2 = __bfloat162float(sw[2 * KV_DIM + c]);
-    float sw3 = __bfloat162float(sw[3 * KV_DIM + c]);
+    float sw0 = __bfloat162float(sw[0 * IFN_CUDA_KV_DIM + c]);
+    float sw1 = __bfloat162float(sw[1 * IFN_CUDA_KV_DIM + c]);
+    float sw2 = __bfloat162float(sw[2 * IFN_CUDA_KV_DIM + c]);
+    float sw3 = __bfloat162float(sw[3 * IFN_CUDA_KV_DIM + c]);
 
-    float h1 = (pos0 >= 1) ? ring[((pos0 - 1) & 15) * KV_DIM + c] : 0.0f;
-    float h2 = (pos0 >= 2) ? ring[((pos0 - 2) & 15) * KV_DIM + c] : 0.0f;
-    float h3 = (pos0 >= 3) ? ring[((pos0 - 3) & 15) * KV_DIM + c] : 0.0f;
+    float h1 = (pos0 >= 1) ? ring[((pos0 - 1) & 15) * IFN_CUDA_KV_DIM + c] : 0.0f;
+    float h2 = (pos0 >= 2) ? ring[((pos0 - 2) & 15) * IFN_CUDA_KV_DIM + c] : 0.0f;
+    float h3 = (pos0 >= 3) ? ring[((pos0 - 3) & 15) * IFN_CUDA_KV_DIM + c] : 0.0f;
 
     for (int b = 0; b < B; ++b) {
-        float cur = x[(size_t)b * KV_DIM + c];
+        float cur = x[(size_t)b * IFN_CUDA_KV_DIM + c];
         int p = pos0 + b;
         if (b >= B - 16) {
-            ring[(p & 15) * KV_DIM + c] = cur;
+            ring[(p & 15) * IFN_CUDA_KV_DIM + c] = cur;
         }
         const float* dt = taps + (size_t)b * 32 + head * 4;
         float acc = cur * (sw0 + dt[0])
                   + h1  * (sw1 + dt[1])
                   + h2  * (sw2 + dt[2])
                   + h3  * (sw3 + dt[3]);
-        x[(size_t)b * KV_DIM + c] = (acc + cur) * INV_SQRT_9;
+        x[(size_t)b * IFN_CUDA_KV_DIM + c] = (acc + cur) * IFN_CUDA_INV_SQRT_9;
         h3 = h2; h2 = h1; h1 = cur;
     }
 }
@@ -881,7 +882,7 @@ __global__ void p_dynamic_sconv_kv_inplace_kernel(
 // Grid = dim3(64, B), Block = 128
 template <int KV_FMT>
 __global__ void __launch_bounds__(128)
-p_global_attn_prep_store_kernel(
+ifn_cuda_p_global_attn_prep_store_kernel(
     float* __restrict__ qrgs,
     const float* __restrict__ ck,
     const float* __restrict__ cv,
@@ -899,51 +900,51 @@ p_global_attn_prep_store_kernel(
     int warp = tid >> 5;
     int lane = tid & 31;
     int p = (*d_pos) + b;
-    float ratio = fmaxf(float(p + 1) / float(LOG_SCALE_FLOOR), 1.0f);
-    float tau = 1.0f + LOG_SCALE_ALPHA * logf(ratio);
-    constexpr int QRGS_STRIDE = Q_DIM + R_DIM + Q_DIM + NUM_HEADS;
+    float ratio = fmaxf(float(p + 1) / float(IFN_CUDA_LOG_SCALE_FLOOR), 1.0f);
+    float tau = 1.0f + IFN_CUDA_LOG_SCALE_ALPHA * logf(ratio);
+    constexpr int QRGS_STRIDE = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS;
     __shared__ float sm[4];
     __shared__ float factor;
 
     if (kind_id < 24) {
         int h = kind_id;
-        float* qp = qrgs + (size_t)b * QRGS_STRIDE + h * HEAD_DIM;
-        float val = qp[tid] * __bfloat162float(q_clip_scale[h * HEAD_DIM + tid]);
-        float sq = warp_sum(val * val);
+        float* qp = qrgs + (size_t)b * QRGS_STRIDE + h * IFN_CUDA_HEAD_DIM;
+        float val = qp[tid] * __bfloat162float(q_clip_scale[h * IFN_CUDA_HEAD_DIM + tid]);
+        float sq = ifn_cuda_warp_sum(val * val);
         if (lane == 0) sm[warp] = sq;
         __syncthreads();
-        if (tid == 0) factor = fminf(QK_CLIP / (sqrtf(sm[0] + sm[1] + sm[2] + sm[3]) + 1e-6f), 1.0f) * tau;
+        if (tid == 0) factor = fminf(IFN_CUDA_QK_CLIP / (sqrtf(sm[0] + sm[1] + sm[2] + sm[3]) + 1e-6f), 1.0f) * tau;
         __syncthreads();
         qp[tid] = val * factor;
     } else if (kind_id < 48) {
-        if (tid >= D_REL) return;
+        if (tid >= IFN_CUDA_D_REL) return;
         int h = kind_id - 24;
-        float* rp = qrgs + (size_t)b * QRGS_STRIDE + Q_DIM + h * D_REL;
-        float val = rp[tid] * __bfloat162float(rel_clip_scale[h * D_REL + tid]);
+        float* rp = qrgs + (size_t)b * QRGS_STRIDE + IFN_CUDA_Q_DIM + h * IFN_CUDA_D_REL;
+        float val = rp[tid] * __bfloat162float(rel_clip_scale[h * IFN_CUDA_D_REL + tid]);
         float sq = val * val;
         #pragma unroll
         for (int off = 8; off > 0; off >>= 1) sq += __shfl_xor_sync(0xFFFFu, sq, off);
-        rp[tid] = val * fminf(REL_CLIP / (sqrtf(sq) + 1e-6f), 1.0f) * tau;
+        rp[tid] = val * fminf(IFN_CUDA_REL_CLIP / (sqrtf(sq) + 1e-6f), 1.0f) * tau;
     } else if (kind_id < 56) {
         int h = kind_id - 48;
-        int c = h * HEAD_DIM + tid;
-        float val = ck[(size_t)b * KV_DIM + c];
-        float sq = warp_sum(val * val);
+        int c = h * IFN_CUDA_HEAD_DIM + tid;
+        float val = ck[(size_t)b * IFN_CUDA_KV_DIM + c];
+        float sq = ifn_cuda_warp_sum(val * val);
         if (lane == 0) sm[warp] = sq;
         __syncthreads();
-        if (tid == 0) factor = fminf(QK_CLIP / (sqrtf(sm[0] + sm[1] + sm[2] + sm[3]) + 1e-6f), 1.0f);
+        if (tid == 0) factor = fminf(IFN_CUDA_QK_CLIP / (sqrtf(sm[0] + sm[1] + sm[2] + sm[3]) + 1e-6f), 1.0f);
         __syncthreads();
-        store_kv_head_128<KV_FMT>(val * factor, p % kv_cap, h, tid, k_cache, k_scale, sm);
+        ifn_cuda_store_kv_head_128<KV_FMT>(val * factor, p % kv_cap, h, tid, k_cache, k_scale, sm);
     } else {
         int h = kind_id - 56;
-        int c = h * HEAD_DIM + tid;
-        float val = cv[(size_t)b * KV_DIM + c];
-        float sq = warp_sum(val * val);
+        int c = h * IFN_CUDA_HEAD_DIM + tid;
+        float val = cv[(size_t)b * IFN_CUDA_KV_DIM + c];
+        float sq = ifn_cuda_warp_sum(val * val);
         if (lane == 0) sm[warp] = sq;
         __syncthreads();
-        if (tid == 0) factor = rsqrtf((sm[0] + sm[1] + sm[2] + sm[3]) / float(HEAD_DIM) + RMS_EPS);
+        if (tid == 0) factor = rsqrtf((sm[0] + sm[1] + sm[2] + sm[3]) / float(IFN_CUDA_HEAD_DIM) + IFN_CUDA_RMS_EPS);
         __syncthreads();
-        store_kv_head_128<KV_FMT>(val * factor, p % kv_cap, h, tid, v_cache, v_scale, sm);
+        ifn_cuda_store_kv_head_128<KV_FMT>(val * factor, p % kv_cap, h, tid, v_cache, v_scale, sm);
     }
 }
 
@@ -953,8 +954,8 @@ p_global_attn_prep_store_kernel(
 // Bulk global tiles (dist >= 1024) skip rel-bias + causal masking completely (pure TC FlashAttention!).
 // Zero SMEM output reduction: each warp owns 16 queries end-to-end and writes directly to out_gated_h!
 template <int KV_FMT, int Q_TOK>
-__global__ void __launch_bounds__((Q_TOK * GQA_RATIO / 16) * 32)
-p_flash_attn_prefill_tc_kernel(
+__global__ void __launch_bounds__((Q_TOK * IFN_CUDA_GQA_RATIO / 16) * 32)
+ifn_cuda_p_flash_attn_prefill_tc_kernel(
     const float* __restrict__ qrgs,
     const __nv_bfloat16* __restrict__ rel_proj,
     const void* __restrict__ k_cache,
@@ -966,16 +967,16 @@ p_flash_attn_prefill_tc_kernel(
     int window,
     int B,
     const int32_t* __restrict__ d_pos) {
-    constexpr int Q_MAX = Q_TOK * GQA_RATIO;     // 96 (global) or 48 (local)
+    constexpr int Q_MAX = Q_TOK * IFN_CUDA_GQA_RATIO;     // 96 (global) or 48 (local)
     constexpr int NUM_WARPS = Q_MAX / 16;        // 6 or 3
     constexpr int THREADS = NUM_WARPS * 32;      // 192 or 96
-    constexpr int QRGS_STRIDE = Q_DIM + R_DIM + Q_DIM + NUM_HEADS;
+    constexpr int QRGS_STRIDE = IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + IFN_CUDA_NUM_HEADS;
 
     int kvh = blockIdx.x;
     int b_start = blockIdx.y * Q_TOK;
     int q_tok_cnt = min(Q_TOK, B - b_start);
     if (q_tok_cnt <= 0) return;
-    int q_cnt = q_tok_cnt * GQA_RATIO;
+    int q_cnt = q_tok_cnt * IFN_CUDA_GQA_RATIO;
 
     int tid = threadIdx.x;
     int warp = tid >> 5;
@@ -988,18 +989,18 @@ p_flash_attn_prefill_tc_kernel(
     int q_pos_max = q_pos_min + q_tok_cnt - 1;
 
     // 22.0 KB SMEM (Q_TOK=32) / 20.5 KB SMEM (Q_TOK=16) -> 4 blocks/SM on RTX 5090!
-    __shared__ __half s_k[32][HEAD_DIM + 8]; // 8,704 B
-    __shared__ __half s_v[32][HEAD_DIM + 8]; // 8,704 B
-    __shared__ __half s_r[Q_MAX][D_REL];     // 3,072 B (Q_TOK=32) / 1,536 B (Q_TOK=16)
-    __shared__ __half s_rp[64][D_REL];       // 2,048 B
+    __shared__ __half s_k[32][IFN_CUDA_HEAD_DIM + 8]; // 8,704 B
+    __shared__ __half s_v[32][IFN_CUDA_HEAD_DIM + 8]; // 8,704 B
+    __shared__ __half s_r[Q_MAX][IFN_CUDA_D_REL];     // 3,072 B (Q_TOK=32) / 1,536 B (Q_TOK=16)
+    __shared__ __half s_rp[64][IFN_CUDA_D_REL];       // 2,048 B
 
     // 1. Load R[0..q_cnt-1][0..15] into SMEM once for all KV tiles
-    for (int i = tid; i < q_cnt * D_REL; i += THREADS) {
+    for (int i = tid; i < q_cnt * IFN_CUDA_D_REL; i += THREADS) {
         int qi = i >> 4;
         int k = i & 15;
-        int h = kvh * GQA_RATIO + (qi % GQA_RATIO);
-        int b = b_start + (qi / GQA_RATIO);
-        s_r[qi][k] = __float2half(qrgs[(size_t)b * QRGS_STRIDE + Q_DIM + h * D_REL + k]);
+        int h = kvh * IFN_CUDA_GQA_RATIO + (qi % IFN_CUDA_GQA_RATIO);
+        int b = b_start + (qi / IFN_CUDA_GQA_RATIO);
+        s_r[qi][k] = __float2half(qrgs[(size_t)b * QRGS_STRIDE + IFN_CUDA_Q_DIM + h * IFN_CUDA_D_REL + k]);
     }
 
     // 2. Load this warp's 16 queries (q0, q1) into registers + initialize softmax with attention sink!
@@ -1015,22 +1016,22 @@ p_flash_attn_prefill_tc_kernel(
     float d0 = 1.0f, d1 = 1.0f;
 
     if (q0 < q_cnt) {
-        h0 = kvh * GQA_RATIO + (q0 % GQA_RATIO);
-        b0 = b_start + (q0 / GQA_RATIO);
+        h0 = kvh * IFN_CUDA_GQA_RATIO + (q0 % IFN_CUDA_GQA_RATIO);
+        b0 = b_start + (q0 / IFN_CUDA_GQA_RATIO);
         pos_q0 = pos0 + b0;
         const float* base0 = qrgs + (size_t)b0 * QRGS_STRIDE;
-        qp0 = base0 + h0 * HEAD_DIM;
-        gp0 = base0 + Q_DIM + R_DIM + h0 * HEAD_DIM;
-        m0 = base0[Q_DIM + R_DIM + Q_DIM + h0];
+        qp0 = base0 + h0 * IFN_CUDA_HEAD_DIM;
+        gp0 = base0 + IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + h0 * IFN_CUDA_HEAD_DIM;
+        m0 = base0[IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + h0];
     }
     if (q1 < q_cnt) {
-        h1 = kvh * GQA_RATIO + (q1 % GQA_RATIO);
-        b1 = b_start + (q1 / GQA_RATIO);
+        h1 = kvh * IFN_CUDA_GQA_RATIO + (q1 % IFN_CUDA_GQA_RATIO);
+        b1 = b_start + (q1 / IFN_CUDA_GQA_RATIO);
         pos_q1 = pos0 + b1;
         const float* base1 = qrgs + (size_t)b1 * QRGS_STRIDE;
-        qp1 = base1 + h1 * HEAD_DIM;
-        gp1 = base1 + Q_DIM + R_DIM + h1 * HEAD_DIM;
-        m1 = base1[Q_DIM + R_DIM + Q_DIM + h1];
+        qp1 = base1 + h1 * IFN_CUDA_HEAD_DIM;
+        gp1 = base1 + IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + h1 * IFN_CUDA_HEAD_DIM;
+        m1 = base1[IFN_CUDA_Q_DIM + IFN_CUDA_R_DIM + IFN_CUDA_Q_DIM + h1];
     }
 
     uint32_t q_reg[8][4];
@@ -1038,10 +1039,10 @@ p_flash_attn_prefill_tc_kernel(
     for (int kt = 0; kt < 8; ++kt) {
         int k_off = kt * 16;
         if (qp0) {
-            __half2 h_a = __floats2half2_rn(qp0[k_off + tid4 * 2] * INV_SQRT_HEAD_DIM,
-                                            qp0[k_off + tid4 * 2 + 1] * INV_SQRT_HEAD_DIM);
-            __half2 h_c = __floats2half2_rn(qp0[k_off + tid4 * 2 + 8] * INV_SQRT_HEAD_DIM,
-                                            qp0[k_off + tid4 * 2 + 9] * INV_SQRT_HEAD_DIM);
+            __half2 h_a = __floats2half2_rn(qp0[k_off + tid4 * 2] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                            qp0[k_off + tid4 * 2 + 1] * IFN_CUDA_INV_SQRT_HEAD_DIM);
+            __half2 h_c = __floats2half2_rn(qp0[k_off + tid4 * 2 + 8] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                            qp0[k_off + tid4 * 2 + 9] * IFN_CUDA_INV_SQRT_HEAD_DIM);
             q_reg[kt][0] = *reinterpret_cast<const uint32_t*>(&h_a);
             q_reg[kt][2] = *reinterpret_cast<const uint32_t*>(&h_c);
         } else {
@@ -1049,10 +1050,10 @@ p_flash_attn_prefill_tc_kernel(
             q_reg[kt][2] = 0u;
         }
         if (qp1) {
-            __half2 h_b = __floats2half2_rn(qp1[k_off + tid4 * 2] * INV_SQRT_HEAD_DIM,
-                                            qp1[k_off + tid4 * 2 + 1] * INV_SQRT_HEAD_DIM);
-            __half2 h_d = __floats2half2_rn(qp1[k_off + tid4 * 2 + 8] * INV_SQRT_HEAD_DIM,
-                                            qp1[k_off + tid4 * 2 + 9] * INV_SQRT_HEAD_DIM);
+            __half2 h_b = __floats2half2_rn(qp1[k_off + tid4 * 2] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                            qp1[k_off + tid4 * 2 + 1] * IFN_CUDA_INV_SQRT_HEAD_DIM);
+            __half2 h_d = __floats2half2_rn(qp1[k_off + tid4 * 2 + 8] * IFN_CUDA_INV_SQRT_HEAD_DIM,
+                                            qp1[k_off + tid4 * 2 + 9] * IFN_CUDA_INV_SQRT_HEAD_DIM);
             q_reg[kt][1] = *reinterpret_cast<const uint32_t*>(&h_b);
             q_reg[kt][3] = *reinterpret_cast<const uint32_t*>(&h_d);
         } else {
@@ -1078,7 +1079,7 @@ p_flash_attn_prefill_tc_kernel(
 
     for (int t0 = t_start; t0 < t_end; t0 += 32) {
         int tile_len = min(32, t_end - t0);
-        bool is_bulk = (window == 0) && (tile_len == 32) && (t0 + 31 <= q_pos_min - REL_EXTENT);
+        bool is_bulk = (window == 0) && (tile_len == 32) && (t0 + 31 <= q_pos_min - IFN_CUDA_REL_EXTENT);
 
         // Cooperatively load K[32, 128] and V[32, 128] into SMEM ONCE for all 48/96 queries!
         #pragma unroll
@@ -1088,9 +1089,9 @@ p_flash_attn_prefill_tc_kernel(
             if (t_loc < tile_len) {
                 int slot = (t0 + t_loc) % kv_cap;
                 *reinterpret_cast<uint4*>(&s_k[t_loc][sub * 8]) =
-                    load_kv_8elems_h2x4<KV_FMT>(k_cache, k_scale, slot, kvh, sub);
+                    ifn_cuda_load_kv_8elems_h2x4<KV_FMT>(k_cache, k_scale, slot, kvh, sub);
                 *reinterpret_cast<uint4*>(&s_v[t_loc][sub * 8]) =
-                    load_kv_8elems_h2x4<KV_FMT>(v_cache, v_scale, slot, kvh, sub);
+                    ifn_cuda_load_kv_8elems_h2x4<KV_FMT>(v_cache, v_scale, slot, kvh, sub);
             } else {
                 *reinterpret_cast<uint4*>(&s_k[t_loc][sub * 8]) = make_uint4(0, 0, 0, 0);
                 *reinterpret_cast<uint4*>(&s_v[t_loc][sub * 8]) = make_uint4(0, 0, 0, 0);
@@ -1100,13 +1101,13 @@ p_flash_attn_prefill_tc_kernel(
         int d_min = 0;
         if (!is_bulk) {
             d_min = max(0, q_pos_min - (t0 + tile_len - 1));
-            int d_max = min(REL_EXTENT - 1, q_pos_max - t0);
+            int d_max = min(IFN_CUDA_REL_EXTENT - 1, q_pos_max - t0);
             int d_span = (d_max >= d_min) ? (d_max - d_min + 1) : 0;
-            for (int i = tid; i < d_span * D_REL; i += THREADS) {
+            for (int i = tid; i < d_span * IFN_CUDA_D_REL; i += THREADS) {
                 int di = i >> 4;
                 int k = i & 15;
                 int dist = d_min + di;
-                s_rp[di][k] = __float2half(__bfloat162float(__ldg(&rel_proj[k * REL_EXTENT + dist])));
+                s_rp[di][k] = __float2half(__bfloat162float(__ldg(&rel_proj[k * IFN_CUDA_REL_EXTENT + dist])));
             }
         }
         __syncthreads();
@@ -1126,11 +1127,11 @@ p_flash_attn_prefill_tc_kernel(
             #pragma unroll
             for (int kt = 0; kt < 8; ++kt) {
                 uint32_t kb0, kb1, kb2, kb3;
-                ldmatrix_x4(kb0, kb1, kb2, kb3, &s_k[k_ld_row][kt * 16 + k_ld_col]);
-                mma_m16n8k16_f32_f16(s0, s1, s2, s3,
+                ifn_cuda_ldmatrix_x4(kb0, kb1, kb2, kb3, &s_k[k_ld_row][kt * 16 + k_ld_col]);
+                ifn_cuda_mma_m16n8k16_f32_f16(s0, s1, s2, s3,
                                      q_reg[kt][0], q_reg[kt][1], q_reg[kt][2], q_reg[kt][3],
                                      kb0, kb1, s0, s1, s2, s3);
-                mma_m16n8k16_f32_f16(s4, s5, s6, s7,
+                ifn_cuda_mma_m16n8k16_f32_f16(s4, s5, s6, s7,
                                      q_reg[kt][0], q_reg[kt][1], q_reg[kt][2], q_reg[kt][3],
                                      kb2, kb3, s4, s5, s6, s7);
             }
@@ -1141,7 +1142,7 @@ p_flash_attn_prefill_tc_kernel(
                     int t = t0 + t_base + col;
                     if (t > pos_q || (window > 0 && t < pos_q + 1 - window)) { s = -1e30f; return; }
                     int dist = pos_q - t;
-                    if (dist < REL_EXTENT) {
+                    if (dist < IFN_CUDA_REL_EXTENT) {
                         const __half2* rh = reinterpret_cast<const __half2*>(&s_r[qi][0]);
                         const __half2* ph = reinterpret_cast<const __half2*>(&s_rp[dist - d_min][0]);
                         __half2 a0 = __hmul2(rh[0], ph[0]), a1 = __hmul2(rh[1], ph[1]);
@@ -1212,8 +1213,8 @@ p_flash_attn_prefill_tc_kernel(
             #pragma unroll
             for (int nt = 0; nt < 16; ++nt) {
                 uint32_t vb0, vb1;
-                ldmatrix_x2_trans(vb0, vb1, &s_v[v_ld_row][nt * 8]);
-                mma_m16n8k16_f32_f16(o[nt][0], o[nt][1], o[nt][2], o[nt][3],
+                ifn_cuda_ldmatrix_x2_trans(vb0, vb1, &s_v[v_ld_row][nt * 8]);
+                ifn_cuda_mma_m16n8k16_f32_f16(o[nt][0], o[nt][1], o[nt][2], o[nt][3],
                                      pa0, pa1, pa2, pa3,
                                      vb0, vb1,
                                      o[nt][0], o[nt][1], o[nt][2], o[nt][3]);
@@ -1225,32 +1226,32 @@ p_flash_attn_prefill_tc_kernel(
     // 3. Direct gated FP16 writeback (zero SMEM reduction!)
     if (q0 < q_cnt) {
         float inv_d0 = 1.0f / d0;
-        __half* dst0 = out_gated_h + (size_t)b0 * Q_DIM + h0 * HEAD_DIM;
+        __half* dst0 = out_gated_h + (size_t)b0 * IFN_CUDA_Q_DIM + h0 * IFN_CUDA_HEAD_DIM;
         #pragma unroll
         for (int nt = 0; nt < 16; ++nt) {
             int col0 = nt * 8 + c0;
             int col1 = nt * 8 + c1;
-            dst0[col0] = __float2half((o[nt][0] * inv_d0) * fast_sigmoid(gp0[col0]));
-            dst0[col1] = __float2half((o[nt][1] * inv_d0) * fast_sigmoid(gp0[col1]));
+            dst0[col0] = __float2half((o[nt][0] * inv_d0) * ifn_cuda_fast_sigmoid(gp0[col0]));
+            dst0[col1] = __float2half((o[nt][1] * inv_d0) * ifn_cuda_fast_sigmoid(gp0[col1]));
         }
     }
     if (q1 < q_cnt) {
         float inv_d1 = 1.0f / d1;
-        __half* dst1 = out_gated_h + (size_t)b1 * Q_DIM + h1 * HEAD_DIM;
+        __half* dst1 = out_gated_h + (size_t)b1 * IFN_CUDA_Q_DIM + h1 * IFN_CUDA_HEAD_DIM;
         #pragma unroll
         for (int nt = 0; nt < 16; ++nt) {
             int col0 = nt * 8 + c0;
             int col1 = nt * 8 + c1;
-            dst1[col0] = __float2half((o[nt][2] * inv_d1) * fast_sigmoid(gp1[col0]));
-            dst1[col1] = __float2half((o[nt][3] * inv_d1) * fast_sigmoid(gp1[col1]));
+            dst1[col0] = __float2half((o[nt][2] * inv_d1) * ifn_cuda_fast_sigmoid(gp1[col0]));
+            dst1[col1] = __float2half((o[nt][3] * inv_d1) * ifn_cuda_fast_sigmoid(gp1[col1]));
         }
     }
 }
 
 } // namespace
 
-void launch_prefill_warmup_cublas(cudaStream_t stream) {
-    cublasHandle_t h = get_cublas(stream);
+void ifn_cuda_launch_prefill_warmup_cublas(cudaStream_t stream) {
+    cublasHandle_t h = ifn_cuda_get_cublas(stream);
     void* d_tmp = nullptr;
     if (cudaMalloc(&d_tmp, 2048) == cudaSuccess && d_tmp) {
         cudaMemsetAsync(d_tmp, 0, 2048, stream);
@@ -1272,33 +1273,33 @@ void launch_prefill_warmup_cublas(cudaStream_t stream) {
     }
 }
 
-void launch_prefill_f32_to_f16(const float* src, __half* dst, int count, cudaStream_t stream) {
-    p_f32_to_f16_kernel<<<(count + 255) / 256, 256, 0, stream>>>(src, dst, (size_t)count);
+void ifn_cuda_launch_prefill_f32_to_f16(const float* src, __half* dst, int count, cudaStream_t stream) {
+    ifn_cuda_p_f32_to_f16_kernel<<<(count + 255) / 256, 256, 0, stream>>>(src, dst, (size_t)count);
 }
 
-void launch_prefill_gemm_h(
-    const LinearWeight& w,
+void ifn_cuda_launch_prefill_gemm_h(
+    const ifn_cuda_linear_weight& w,
     const __half* x_h,
     float* y,
     __half* w_f16_scratch,
     int B,
     cudaStream_t stream) {
-    if (w.kind == WeightKind::NVFP4) {
+    if (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) {
         size_t total_blocks = (size_t)w.rows * (w.cols >> 4);
-        p_dequant_nvfp4_to_f16_kernel<<<(int)((total_blocks + 255) / 256), 256, 0, stream>>>(
+        ifn_cuda_p_dequant_nvfp4_to_f16_kernel<<<(int)((total_blocks + 255) / 256), 256, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.scales, w_f16_scratch, total_blocks);
-    } else if (w.kind == WeightKind::FP8) {
+    } else if (w.kind == ifn_cuda_weight_kind::IFN_CUDA_FP8) {
         size_t total_pairs = (size_t)w.rows * (w.cols >> 1);
-        p_dequant_fp8_to_f16_kernel<<<(int)((total_pairs + 255) / 256), 256, 0, stream>>>(
+        ifn_cuda_p_dequant_fp8_to_f16_kernel<<<(int)((total_pairs + 255) / 256), 256, 0, stream>>>(
             static_cast<const uint8_t*>(w.data), w.row_scales, w_f16_scratch, w.rows, w.cols);
     } else {
         size_t n = (size_t)w.rows * w.cols;
-        p_dequant_bf16_to_f16_kernel<<<(int)((n + 255) / 256), 256, 0, stream>>>(
+        ifn_cuda_p_dequant_bf16_to_f16_kernel<<<(int)((n + 255) / 256), 256, 0, stream>>>(
             static_cast<const __nv_bfloat16*>(w.data), w_f16_scratch, n);
     }
 
-    float alpha = (w.kind == WeightKind::NVFP4) ? w.global_scale : 1.0f, beta = 0.0f;
-    cublasHandle_t h = get_cublas(stream);
+    float alpha = (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) ? w.global_scale : 1.0f, beta = 0.0f;
+    cublasHandle_t h = ifn_cuda_get_cublas(stream);
     cublasStatus_t st = cublasGemmEx(
         h, CUBLAS_OP_T, CUBLAS_OP_N,
         w.rows, B, w.cols,
@@ -1314,49 +1315,49 @@ void launch_prefill_gemm_h(
     }
 }
 
-void launch_prefill_sconv_post_res(
+void ifn_cuda_launch_prefill_sconv_post_res(
     const float* src_or_slots, int is_slotted, const __nv_bfloat16* sconv_w, float* ring,
     const float* residual, float* out_res, float* pre_tap_out,
     float* blocks, const float* partial, int block_idx, int is_boundary,
     int B, const int32_t* d_pos,
     const float* abl_r, const float* abl_d, const float* abl_p, cudaStream_t stream) {
     int write_conv_only = (abl_r != nullptr) ? 1 : 0;
-    int ty = (B + SCONV_T_BLK - 1) / SCONV_T_BLK;
+    int ty = (B + IFN_CUDA_SCONV_T_BLK - 1) / IFN_CUDA_SCONV_T_BLK;
     int update_ring = (ty == 1) ? 1 : 0;
-    p_sconv_post_res_kernel<<<dim3((HIDDEN + 255) / 256, ty), 256, 0, stream>>>(
+    ifn_cuda_p_sconv_post_res_kernel<<<dim3((IFN_CUDA_HIDDEN + 255) / 256, ty), 256, 0, stream>>>(
         src_or_slots, is_slotted, sconv_w, ring, residual, out_res, pre_tap_out,
         blocks, partial, block_idx, is_boundary, write_conv_only, update_ring, B, d_pos);
     if (!update_ring) {
-        p_sconv_ring_commit_kernel<<<(HIDDEN + 255) / 256, 256, 0, stream>>>(
+        ifn_cuda_p_sconv_ring_commit_kernel<<<(IFN_CUDA_HIDDEN + 255) / 256, 256, 0, stream>>>(
             src_or_slots, is_slotted, ring, B, d_pos);
     }
     if (abl_r != nullptr) {
-        p_ablate_post_res_kernel<<<B, 576, 0, stream>>>(
+        ifn_cuda_p_ablate_post_res_kernel<<<B, 576, 0, stream>>>(
             out_res, residual, pre_tap_out, blocks, partial, block_idx, is_boundary,
             abl_r, abl_d, abl_p);
     }
 }
 
-void launch_prefill_copy_taps(const float* src, float* dst_taps, int tap_slot, int B, cudaStream_t stream) {
-    int total = B * HIDDEN;
-    p_copy_taps_chunked_kernel<<<(total + 255) / 256, 256, 0, stream>>>(src, dst_taps, tap_slot, B);
+void ifn_cuda_launch_prefill_copy_taps(const float* src, float* dst_taps, int tap_slot, int B, cudaStream_t stream) {
+    int total = B * IFN_CUDA_HIDDEN;
+    ifn_cuda_p_copy_taps_chunked_kernel<<<(total + 255) / 256, 256, 0, stream>>>(src, dst_taps, tap_slot, B);
 }
 
-void launch_prefill_local_sconv_prep_store(
+void ifn_cuda_launch_prefill_local_sconv_prep_store(
     float* qrgs, float* k_proj, float* v_proj,
     const __nv_bfloat16* k_sconv_w, const __nv_bfloat16* v_sconv_w,
     float* k_ring, float* v_ring,
     const __nv_bfloat16* q_clip_scale, const __nv_bfloat16* rel_clip_scale,
     __nv_bfloat16* k_cache, __nv_bfloat16* v_cache,
     int kv_cap, int B, const int32_t* d_pos, cudaStream_t stream) {
-    launch_static_sconv(k_proj, k_sconv_w, k_ring, k_proj, B, KV_DIM, d_pos, stream);
-    launch_static_sconv(v_proj, v_sconv_w, v_ring, v_proj, B, KV_DIM, d_pos, stream);
-    launch_attn_prep_store(
+    ifn_cuda_launch_static_sconv(k_proj, k_sconv_w, k_ring, k_proj, B, IFN_CUDA_KV_DIM, d_pos, stream);
+    ifn_cuda_launch_static_sconv(v_proj, v_sconv_w, v_ring, v_proj, B, IFN_CUDA_KV_DIM, d_pos, stream);
+    ifn_cuda_launch_attn_prep_store(
         qrgs, k_proj, v_proj, q_clip_scale, rel_clip_scale,
         k_cache, v_cache, kv_cap, false, B, d_pos, stream);
 }
 
-void launch_prefill_global_sconv_prep_store(
+void ifn_cuda_launch_prefill_global_sconv_prep_store(
     float* qrgs, float* k_proj, float* v_proj,
     const __half* in_k_h, const __half* in_v_h,
     const __nv_bfloat16* k_sconv_w, const __nv_bfloat16* v_sconv_w,
@@ -1364,123 +1365,123 @@ void launch_prefill_global_sconv_prep_store(
     float* k_ring, float* v_ring,
     const __nv_bfloat16* q_clip_scale, const __nv_bfloat16* rel_clip_scale,
     void* k_cache, void* v_cache, __half* k_scale, __half* v_scale,
-    KVFormat kv_fmt, int kv_cap,
+    ifn_cuda_kv_format kv_fmt, int kv_cap,
     float* scratch_taps, __half* w_f16_scratch,
     int B, const int32_t* d_pos, cudaStream_t stream) {
     // 1. Batched cuBLAS FP16 TC dynamic tap projections ([32, 2304] x [B, 2304])
     float* k_taps = scratch_taps;
     float* v_taps = scratch_taps + (size_t)B * 32;
-    LinearWeight kw = {WeightKind::BF16, 32, HIDDEN, const_cast<__nv_bfloat16*>(k_sconv_proj), nullptr, nullptr, 1.0f};
-    LinearWeight vw = {WeightKind::BF16, 32, HIDDEN, const_cast<__nv_bfloat16*>(v_sconv_proj), nullptr, nullptr, 1.0f};
-    launch_prefill_gemm_h(kw, in_k_h, k_taps, w_f16_scratch, B, stream);
-    launch_prefill_gemm_h(vw, in_v_h, v_taps, w_f16_scratch, B, stream);
+    ifn_cuda_linear_weight kw = {ifn_cuda_weight_kind::IFN_CUDA_BF16, 32, IFN_CUDA_HIDDEN, const_cast<__nv_bfloat16*>(k_sconv_proj), nullptr, nullptr, 1.0f};
+    ifn_cuda_linear_weight vw = {ifn_cuda_weight_kind::IFN_CUDA_BF16, 32, IFN_CUDA_HIDDEN, const_cast<__nv_bfloat16*>(v_sconv_proj), nullptr, nullptr, 1.0f};
+    ifn_cuda_launch_prefill_gemm_h(kw, in_k_h, k_taps, w_f16_scratch, B, stream);
+    ifn_cuda_launch_prefill_gemm_h(vw, in_v_h, v_taps, w_f16_scratch, B, stream);
 
     // 2. 1-launch causal dynamic sconv for K & V in-place
-    p_dynamic_sconv_kv_inplace_kernel<<<dim3(KV_DIM / 256, 2), 256, 0, stream>>>(
+    ifn_cuda_p_dynamic_sconv_kv_inplace_kernel<<<dim3(IFN_CUDA_KV_DIM / 256, 2), 256, 0, stream>>>(
         k_proj, v_proj, k_sconv_w, v_sconv_w, k_taps, v_taps, k_ring, v_ring, B, d_pos);
 
     // 3. 1-launch Q/R/K clip (with log-pos tau) + V RMSNorm + quantized KV store
     dim3 grid(64, B);
-    if (kv_fmt == KVFormat::FP8) {
-        p_global_attn_prep_store_kernel<1><<<grid, 128, 0, stream>>>(
+    if (kv_fmt == ifn_cuda_kv_format::IFN_CUDA_FP8) {
+        ifn_cuda_p_global_attn_prep_store_kernel<1><<<grid, 128, 0, stream>>>(
             qrgs, k_proj, v_proj, q_clip_scale, rel_clip_scale, k_cache, v_cache, k_scale, v_scale, kv_cap, d_pos);
-    } else if (kv_fmt == KVFormat::Q4) {
-        p_global_attn_prep_store_kernel<2><<<grid, 128, 0, stream>>>(
+    } else if (kv_fmt == ifn_cuda_kv_format::IFN_CUDA_Q4) {
+        ifn_cuda_p_global_attn_prep_store_kernel<2><<<grid, 128, 0, stream>>>(
             qrgs, k_proj, v_proj, q_clip_scale, rel_clip_scale, k_cache, v_cache, k_scale, v_scale, kv_cap, d_pos);
     } else {
-        p_global_attn_prep_store_kernel<0><<<grid, 128, 0, stream>>>(
+        ifn_cuda_p_global_attn_prep_store_kernel<0><<<grid, 128, 0, stream>>>(
             qrgs, k_proj, v_proj, q_clip_scale, rel_clip_scale, k_cache, v_cache, k_scale, v_scale, kv_cap, d_pos);
     }
 }
 
-void launch_prefill_flash_attn_tc(
+void ifn_cuda_launch_prefill_flash_attn_tc(
     const float* qrgs, const __nv_bfloat16* rel_proj,
     const void* k_cache, const void* v_cache,
     const __half* k_scale, const __half* v_scale,
-    KVFormat kv_fmt, __half* out_gated_h,
+    ifn_cuda_kv_format kv_fmt, __half* out_gated_h,
     int kv_cap, int window, int B, const int32_t* d_pos, cudaStream_t stream) {
     if (window > 0) {
         // Local SWA (BF16): Q_TOK=16 (48 queries/CTA, 3 warps=96 threads -> 128 CTAs for B=256 = 1 wave!)
-        dim3 grid(NUM_KV_HEADS, (B + 15) / 16);
-        p_flash_attn_prefill_tc_kernel<0, 16><<<grid, 96, 0, stream>>>(
+        dim3 grid(IFN_CUDA_NUM_KV_HEADS, (B + 15) / 16);
+        ifn_cuda_p_flash_attn_prefill_tc_kernel<0, 16><<<grid, 96, 0, stream>>>(
             qrgs, rel_proj, k_cache, v_cache, k_scale, v_scale, out_gated_h, kv_cap, window, B, d_pos);
     } else {
         // Global (BF16/FP8/Q4): Q_TOK=32 (96 queries/CTA, 6 warps=192 threads -> 128 CTAs for B=512 = 1 wave!)
-        dim3 grid(NUM_KV_HEADS, (B + 31) / 32);
-        if (kv_fmt == KVFormat::FP8) {
-            p_flash_attn_prefill_tc_kernel<1, 32><<<grid, 192, 0, stream>>>(
+        dim3 grid(IFN_CUDA_NUM_KV_HEADS, (B + 31) / 32);
+        if (kv_fmt == ifn_cuda_kv_format::IFN_CUDA_FP8) {
+            ifn_cuda_p_flash_attn_prefill_tc_kernel<1, 32><<<grid, 192, 0, stream>>>(
                 qrgs, rel_proj, k_cache, v_cache, k_scale, v_scale, out_gated_h, kv_cap, 0, B, d_pos);
-        } else if (kv_fmt == KVFormat::Q4) {
-            p_flash_attn_prefill_tc_kernel<2, 32><<<grid, 192, 0, stream>>>(
+        } else if (kv_fmt == ifn_cuda_kv_format::IFN_CUDA_Q4) {
+            ifn_cuda_p_flash_attn_prefill_tc_kernel<2, 32><<<grid, 192, 0, stream>>>(
                 qrgs, rel_proj, k_cache, v_cache, k_scale, v_scale, out_gated_h, kv_cap, 0, B, d_pos);
         } else {
-            p_flash_attn_prefill_tc_kernel<0, 32><<<grid, 192, 0, stream>>>(
+            ifn_cuda_p_flash_attn_prefill_tc_kernel<0, 32><<<grid, 192, 0, stream>>>(
                 qrgs, rel_proj, k_cache, v_cache, k_scale, v_scale, out_gated_h, kv_cap, 0, B, d_pos);
         }
     }
 }
 
-void launch_prefill_controller_one(
+void ifn_cuda_launch_prefill_controller_one(
     const float* x, const float* saved, const float* prior_last, const float* cp_q,
-    const ControllerWeights& cw, const __nv_bfloat16* post_norm,
+    const ifn_cuda_controller_weights& cw, const __nv_bfloat16* post_norm,
     float* out, __half* out_h,
     float* scratch_msg, __half* scratch_cat_h, float* scratch_d, __half* scratch_d_h,
     float* scratch_f, float* scratch_g, __half* w_f16_scratch,
     int B, cudaStream_t stream) {
-    p_ctrl_prep_h_kernel<<<B, 256, 0, stream>>>(x, saved, prior_last, cp_q, scratch_msg, scratch_cat_h);
+    ifn_cuda_p_ctrl_prep_h_kernel<<<B, 256, 0, stream>>>(x, saved, prior_last, cp_q, scratch_msg, scratch_cat_h);
 
-    LinearWeight down_w = cw.down_nvfp4;
-    LinearWeight forget_w = cw.forget_nvfp4;
-    LinearWeight gain_w = cw.gain_nvfp4;
+    ifn_cuda_linear_weight down_w = cw.down_nvfp4;
+    ifn_cuda_linear_weight forget_w = cw.forget_nvfp4;
+    ifn_cuda_linear_weight gain_w = cw.gain_nvfp4;
     if (down_w.data == nullptr) {
-        down_w = {WeightKind::BF16, GATE_RANK, 2 * HIDDEN, cw.down_w, nullptr, nullptr, 1.0f};
-        forget_w = {WeightKind::BF16, HIDDEN, GATE_RANK, cw.forget_w, nullptr, nullptr, 1.0f};
-        gain_w = {WeightKind::BF16, HIDDEN, GATE_RANK, cw.gain_w, nullptr, nullptr, 1.0f};
+        down_w = {ifn_cuda_weight_kind::IFN_CUDA_BF16, IFN_CUDA_GATE_RANK, 2 * IFN_CUDA_HIDDEN, cw.down_w, nullptr, nullptr, 1.0f};
+        forget_w = {ifn_cuda_weight_kind::IFN_CUDA_BF16, IFN_CUDA_HIDDEN, IFN_CUDA_GATE_RANK, cw.forget_w, nullptr, nullptr, 1.0f};
+        gain_w = {ifn_cuda_weight_kind::IFN_CUDA_BF16, IFN_CUDA_HIDDEN, IFN_CUDA_GATE_RANK, cw.gain_w, nullptr, nullptr, 1.0f};
     }
 
-    launch_prefill_gemm_h(down_w, scratch_cat_h, scratch_d, w_f16_scratch, B, stream);
-    launch_prefill_f32_to_f16(scratch_d, scratch_d_h, B * GATE_RANK, stream);
-    launch_prefill_gemm_h(forget_w, scratch_d_h, scratch_f, w_f16_scratch, B, stream);
-    launch_prefill_gemm_h(gain_w, scratch_d_h, scratch_g, w_f16_scratch, B, stream);
+    ifn_cuda_launch_prefill_gemm_h(down_w, scratch_cat_h, scratch_d, w_f16_scratch, B, stream);
+    ifn_cuda_launch_prefill_f32_to_f16(scratch_d, scratch_d_h, B * IFN_CUDA_GATE_RANK, stream);
+    ifn_cuda_launch_prefill_gemm_h(forget_w, scratch_d_h, scratch_f, w_f16_scratch, B, stream);
+    ifn_cuda_launch_prefill_gemm_h(gain_w, scratch_d_h, scratch_g, w_f16_scratch, B, stream);
 
-    p_ctrl_finish_kernel<<<B, 256, 0, stream>>>(x, scratch_msg, scratch_f, scratch_g, post_norm, out, out_h);
+    ifn_cuda_p_ctrl_finish_kernel<<<B, 256, 0, stream>>>(x, scratch_msg, scratch_f, scratch_g, post_norm, out, out_h);
 }
 
-void launch_prefill_route_and_sort(
+void ifn_cuda_launch_prefill_route_and_sort(
     const float* router_logits, const float* router_bias,
     int32_t* route_ids, float* route_w,
     int32_t* expert_offsets, int32_t* sorted_tok, int32_t* sorted_slot, float* sorted_w,
     int B, cudaStream_t stream) {
     int TR = (B <= 512) ? 32 : 128;
-    p_route_topk_only_kernel<<<B, 32, 0, stream>>>(router_logits, router_bias, route_ids, route_w);
-    p_sort_experts_kernel<<<1, NUM_EXPERTS, 0, stream>>>(
+    ifn_cuda_p_route_topk_only_kernel<<<B, 32, 0, stream>>>(router_logits, router_bias, route_ids, route_w);
+    ifn_cuda_p_sort_experts_kernel<<<1, IFN_CUDA_NUM_EXPERTS, 0, stream>>>(
         route_ids, route_w, B, TR, expert_offsets, sorted_tok, sorted_slot, sorted_w);
 }
 
-void launch_prefill_moe_gate_up_h(
-    const ExpertBank& w13, const __half* x_h,
+void ifn_cuda_launch_prefill_moe_gate_up_h(
+    const ifn_cuda_expert_bank& w13, const __half* x_h,
     const int32_t* expert_offsets, const int32_t* sorted_tok, const int32_t* sorted_slot,
     __half* out_act_h, int B, cudaStream_t stream) {
     if (w13.is_nvfp4) {
-        if (B <= 512) dispatch_wgemm_tm<0, WgemmMode::Up, HIDDEN, 32>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
-        else          dispatch_wgemm_tm<0, WgemmMode::Up, HIDDEN, 128>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
+        if (B <= 512) ifn_cuda_dispatch_wgemm_tm<0, ifn_cuda_wgemm_mode::IFN_CUDA_UP, IFN_CUDA_HIDDEN, 32>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
+        else          ifn_cuda_dispatch_wgemm_tm<0, ifn_cuda_wgemm_mode::IFN_CUDA_UP, IFN_CUDA_HIDDEN, 128>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
     } else {
-        if (B <= 512) dispatch_wgemm_tm<1, WgemmMode::Up, HIDDEN, 32>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
-        else          dispatch_wgemm_tm<1, WgemmMode::Up, HIDDEN, 128>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
+        if (B <= 512) ifn_cuda_dispatch_wgemm_tm<1, ifn_cuda_wgemm_mode::IFN_CUDA_UP, IFN_CUDA_HIDDEN, 32>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
+        else          ifn_cuda_dispatch_wgemm_tm<1, ifn_cuda_wgemm_mode::IFN_CUDA_UP, IFN_CUDA_HIDDEN, 128>(w13, x_h, expert_offsets, sorted_tok, sorted_slot, nullptr, out_act_h, nullptr, stream);
     }
 }
 
-void launch_prefill_moe_down_h(
-    const ExpertBank& w2, const __half* act_h,
+void ifn_cuda_launch_prefill_moe_down_h(
+    const ifn_cuda_expert_bank& w2, const __half* act_h,
     const int32_t* expert_offsets, const int32_t* sorted_tok, const int32_t* sorted_slot,
     const float* sorted_w, float* out_slots, int B, cudaStream_t stream) {
     if (w2.is_nvfp4) {
-        if (B <= 512) dispatch_wgemm_tm<0, WgemmMode::Down, INTERMEDIATE, 32>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
-        else          dispatch_wgemm_tm<0, WgemmMode::Down, INTERMEDIATE, 128>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
+        if (B <= 512) ifn_cuda_dispatch_wgemm_tm<0, ifn_cuda_wgemm_mode::IFN_CUDA_DOWN, IFN_CUDA_INTERMEDIATE, 32>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
+        else          ifn_cuda_dispatch_wgemm_tm<0, ifn_cuda_wgemm_mode::IFN_CUDA_DOWN, IFN_CUDA_INTERMEDIATE, 128>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
     } else {
-        if (B <= 512) dispatch_wgemm_tm<1, WgemmMode::Down, INTERMEDIATE, 32>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
-        else          dispatch_wgemm_tm<1, WgemmMode::Down, INTERMEDIATE, 128>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
+        if (B <= 512) ifn_cuda_dispatch_wgemm_tm<1, ifn_cuda_wgemm_mode::IFN_CUDA_DOWN, IFN_CUDA_INTERMEDIATE, 32>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
+        else          ifn_cuda_dispatch_wgemm_tm<1, ifn_cuda_wgemm_mode::IFN_CUDA_DOWN, IFN_CUDA_INTERMEDIATE, 128>(w2, act_h, expert_offsets, sorted_tok, sorted_slot, sorted_w, nullptr, out_slots, stream);
     }
 }
 
-} // namespace squid
+} // namespace ifn_cuda

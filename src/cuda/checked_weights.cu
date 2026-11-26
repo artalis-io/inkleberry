@@ -5,7 +5,7 @@
 #include "../../cuda/cuda_abi.cu"
 #include "../checked_cuda.h"
 #include <cuda.h>
-#define TRY(call)                                                                                  \
+#define IFN_CHECKED_WEIGHTS_LOCAL_TRY(call)                                                        \
     do {                                                                                           \
         cudaError_t e = (call);                                                                    \
         if (e != cudaSuccess)                                                                      \
@@ -18,11 +18,13 @@ extern "C" int ifn_cuda_enter(int device, ifn_device_scope *old) {
     if (before != CUDA_SUCCESS && before != CUDA_ERROR_NOT_INITIALIZED)
         return (int)before;
     old->context = context;
-    TRY(cudaGetDevice(&old->device));
-    TRY(cudaSetDevice(device));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGetDevice(&old->device));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaSetDevice(device));
     int major = 0, minor = 0;
-    TRY(cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device));
-    TRY(cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(
+        cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(
+        cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device));
     return major == 12 && minor == 0 ? 0 : (int)cudaErrorNotSupported;
 }
 
@@ -41,23 +43,24 @@ extern "C" int ifn_cuda_pack(const void *src, void *dst, void *scales, void *ama
                              int cols, int kind, float *scale, void *raw_stream) {
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     if (kind == 1) {
-        z_quant_bf16_to_fp8_kernel<<<rows, 256, 0, stream>>>(
+        ifn_cuda_z_quant_bf16_to_fp8_kernel<<<rows, 256, 0, stream>>>(
             static_cast<const __nv_bfloat16 *>(src), static_cast<uint8_t *>(dst),
             static_cast<float *>(scales), rows, cols);
         return (int)cudaGetLastError();
     }
-    TRY(cudaMemsetAsync(amax, 0, 4, stream));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaMemsetAsync(amax, 0, 4, stream));
     size_t n = (size_t)rows * cols;
     int grid = (int)std::min<size_t>((n + 255) / 256, 2048);
-    z_bf16_amax_kernel<<<grid, 256, 0, stream>>>(static_cast<const __nv_bfloat16 *>(src), n,
-                                                 static_cast<float *>(amax));
-    TRY(cudaGetLastError());
+    ifn_cuda_z_bf16_amax_kernel<<<grid, 256, 0, stream>>>(static_cast<const __nv_bfloat16 *>(src),
+                                                          n, static_cast<float *>(amax));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGetLastError());
     float h_amax = 0;
-    TRY(cudaMemcpyAsync(&h_amax, amax, 4, cudaMemcpyDeviceToHost, stream));
-    TRY(cudaStreamSynchronize(stream));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(
+        cudaMemcpyAsync(&h_amax, amax, 4, cudaMemcpyDeviceToHost, stream));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaStreamSynchronize(stream));
     *scale = std::max(h_amax / (448.0f * 6.0f), 1e-12f);
     size_t blocks = (size_t)rows * (cols / 16);
-    z_quant_bf16_to_nvfp4_kernel<<<(int)((blocks + 255) / 256), 256, 0, stream>>>(
+    ifn_cuda_z_quant_bf16_to_nvfp4_kernel<<<(int)((blocks + 255) / 256), 256, 0, stream>>>(
         static_cast<const __nv_bfloat16 *>(src), static_cast<uint8_t *>(dst),
         static_cast<uint8_t *>(scales), rows, cols, *scale);
     return (int)cudaGetLastError();
@@ -66,12 +69,12 @@ extern "C" int ifn_cuda_pack(const void *src, void *dst, void *scales, void *ama
 extern "C" int ifn_cuda_expert(const void *a, const void *b, void *out, void *scales, void *outer,
                                int e, int rows, int cols, void *raw_stream) {
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
-    z_mxfp8_expert_amax_kernel<<<e, 256, 0, stream>>>(static_cast<const uint8_t *>(a),
-                                                      static_cast<const uint8_t *>(b),
-                                                      static_cast<float *>(outer), rows, cols);
-    TRY(cudaGetLastError());
+    ifn_cuda_z_mxfp8_expert_amax_kernel<<<e, 256, 0, stream>>>(
+        static_cast<const uint8_t *>(a), static_cast<const uint8_t *>(b),
+        static_cast<float *>(outer), rows, cols);
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGetLastError());
     size_t blocks = (size_t)e * rows * (cols / 16);
-    z_mxfp8_to_nvfp4_expert_kernel<<<(int)((blocks + 255) / 256), 256, 0, stream>>>(
+    ifn_cuda_z_mxfp8_to_nvfp4_expert_kernel<<<(int)((blocks + 255) / 256), 256, 0, stream>>>(
         static_cast<const uint8_t *>(a), static_cast<const uint8_t *>(b),
         static_cast<float *>(outer), static_cast<uint8_t *>(out), static_cast<uint8_t *>(scales), e,
         rows, cols);
@@ -79,7 +82,7 @@ extern "C" int ifn_cuda_expert(const void *a, const void *b, void *out, void *sc
 }
 
 extern "C" int ifn_cuda_rnn(const void *src, void *a, void *b, void *c, void *raw_stream) {
-    z_split_dspark_rnn_kernel<<<768, 256, 0, static_cast<cudaStream_t>(raw_stream)>>>(
+    ifn_cuda_z_split_dspark_rnn_kernel<<<768, 256, 0, static_cast<cudaStream_t>(raw_stream)>>>(
         static_cast<const __nv_bfloat16 *>(src), static_cast<__nv_bfloat16 *>(a),
         static_cast<__nv_bfloat16 *>(b), static_cast<__nv_bfloat16 *>(c));
     return (int)cudaGetLastError();
@@ -91,11 +94,11 @@ extern "C" int ifn_cuda_fold(const void *u, const void *h, const void *b, void *
         return (int)cudaErrorInvalidValue;
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     dim3 block(32, 8);
-    z_compute_dspark_fold_bias_kernel<<<(vocab + 7) / 8, block, 0, stream>>>(
+    ifn_cuda_z_compute_dspark_fold_bias_kernel<<<(vocab + 7) / 8, block, 0, stream>>>(
         static_cast<const __nv_bfloat16 *>(u), static_cast<const __nv_bfloat16 *>(b),
         static_cast<float *>(fb), vocab, 2304);
-    TRY(cudaGetLastError());
-    z_compute_dspark_fold_w_kernel<<<vocab, 256, 0, stream>>>(
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGetLastError());
+    ifn_cuda_z_compute_dspark_fold_w_kernel<<<vocab, 256, 0, stream>>>(
         static_cast<const __nv_bfloat16 *>(u), static_cast<const __nv_bfloat16 *>(h),
         static_cast<__nv_bfloat16 *>(fw), vocab, 2304, 256);
     return (int)cudaGetLastError();
@@ -151,46 +154,47 @@ extern "C" int ifn_adaptive_prepare(void *state, const int32_t *anchor, const in
     if (a->root || a->exec || a->extra || a->capturing)
         return (int)cudaErrorInvalidResourceHandle;
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
-    TRY(cudaGraphCreate(&a->root, 0));
-    TRY(cudaGraphConditionalHandleCreate(&a->condition, a->root, 0, 0));
-    TRY(cudaStreamBeginCaptureToGraph(stream, a->root, nullptr, nullptr, 0,
-                                      cudaStreamCaptureModeThreadLocal));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGraphCreate(&a->root, 0));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGraphConditionalHandleCreate(&a->condition, a->root, 0, 0));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaStreamBeginCaptureToGraph(
+        stream, a->root, nullptr, nullptr, 0, cudaStreamCaptureModeThreadLocal));
     a->capturing = true;
     a->capture_stream = stream;
     a->active_graph = a->root;
-#define CAPTURE_TRY(call)                                                                          \
+#define IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(call)                                                \
     do {                                                                                           \
         cudaError_t e = (call);                                                                    \
         if (e != cudaSuccess)                                                                      \
             return ifn_end_adaptive_capture(a, (int)e);                                            \
     } while (0)
-    z_adaptive_select_width_kernel<<<1, 1, 0, stream>>>(anchor, drafts, confidence, threshold,
-                                                        tokens, width, a->condition);
-    CAPTURE_TRY(cudaGetLastError());
+    ifn_cuda_z_adaptive_select_width_kernel<<<1, 1, 0, stream>>>(
+        anchor, drafts, confidence, threshold, tokens, width, a->condition);
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(cudaGetLastError());
     cudaStreamCaptureStatus status;
     cudaGraph_t graph = nullptr;
     const cudaGraphNode_t *deps = nullptr;
     const cudaGraphEdgeData *edges = nullptr;
     size_t n = 0;
-    CAPTURE_TRY(cudaStreamGetCaptureInfo(stream, &status, nullptr, &graph, &deps, &edges, &n));
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(
+        cudaStreamGetCaptureInfo(stream, &status, nullptr, &graph, &deps, &edges, &n));
     cudaGraphNodeParams params{};
     params.type = cudaGraphNodeTypeConditional;
     params.conditional.handle = a->condition;
     params.conditional.type = cudaGraphCondTypeSwitch;
     params.conditional.size = 3;
     cudaGraphNode_t node = nullptr;
-    CAPTURE_TRY(cudaGraphAddNode(&node, graph, deps, edges, n, &params));
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(cudaGraphAddNode(&node, graph, deps, edges, n, &params));
     for (int i = 0; i < 3; i++)
         a->bodies[i] = params.conditional.phGraph_out[i];
-    CAPTURE_TRY(cudaStreamUpdateCaptureDependencies(stream, &node, nullptr, 1,
-                                                    cudaStreamSetCaptureDependencies));
-    CAPTURE_TRY(cudaMemcpyAsync(host_accepted, accepted, 8 * sizeof(int32_t),
-                                cudaMemcpyDeviceToHost, stream));
-    CAPTURE_TRY(
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(cudaStreamUpdateCaptureDependencies(
+        stream, &node, nullptr, 1, cudaStreamSetCaptureDependencies));
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(cudaMemcpyAsync(
+        host_accepted, accepted, 8 * sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(
         cudaMemcpyAsync(host_count, count, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
-    CAPTURE_TRY(
+    IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY(
         cudaMemcpyAsync(host_width, width, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
-#undef CAPTURE_TRY
+#undef IFN_CHECKED_WEIGHTS_LOCAL_CAPTURE_TRY
     return ifn_end_adaptive_capture(a, 0);
 }
 
@@ -200,8 +204,8 @@ extern "C" int ifn_adaptive_branch_begin(void *state, int branch, void *raw_stre
         return (int)cudaErrorInvalidValue;
     a->capture_stream = static_cast<cudaStream_t>(raw_stream);
     a->active_graph = a->bodies[branch];
-    TRY(cudaStreamBeginCaptureToGraph(a->capture_stream, a->active_graph, nullptr, nullptr, 0,
-                                      cudaStreamCaptureModeThreadLocal));
+    IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaStreamBeginCaptureToGraph(
+        a->capture_stream, a->active_graph, nullptr, nullptr, 0, cudaStreamCaptureModeThreadLocal));
     a->capturing = true;
     return 0;
 }
@@ -233,7 +237,7 @@ extern "C" int ifn_adaptive_cleanup(void *state) {
         if (a->capturing)
             return first ? first : (int)cudaErrorStreamCaptureInvalidated;
     }
-#define RELEASE_HANDLE(field, call)                                                                \
+#define IFN_CHECKED_WEIGHTS_LOCAL_RELEASE_HANDLE(field, call)                                      \
     do {                                                                                           \
         if (a->field) {                                                                            \
             cudaError_t e = (call);                                                                \
@@ -243,12 +247,12 @@ extern "C" int ifn_adaptive_cleanup(void *state) {
                 first = (int)e;                                                                    \
         }                                                                                          \
     } while (0)
-    RELEASE_HANDLE(exec, cudaGraphExecDestroy(a->exec));
+    IFN_CHECKED_WEIGHTS_LOCAL_RELEASE_HANDLE(exec, cudaGraphExecDestroy(a->exec));
     if (!a->exec) {
-        RELEASE_HANDLE(extra, cudaGraphDestroy(a->extra));
-        RELEASE_HANDLE(root, cudaGraphDestroy(a->root));
+        IFN_CHECKED_WEIGHTS_LOCAL_RELEASE_HANDLE(extra, cudaGraphDestroy(a->extra));
+        IFN_CHECKED_WEIGHTS_LOCAL_RELEASE_HANDLE(root, cudaGraphDestroy(a->root));
     }
-#undef RELEASE_HANDLE
+#undef IFN_CHECKED_WEIGHTS_LOCAL_RELEASE_HANDLE
     return first;
 }
 

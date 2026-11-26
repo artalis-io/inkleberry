@@ -48,3 +48,7 @@ historical JSON receipts as if they described a new build.
 The maintained product is now **Inkleberry Finn**, with the `ifn_` public API.
 Historical names below this directory remain archival; optional validation
 adapters and `oracles.mk` target the current build outputs.
+
+Native comparison targets prepare disposable Zig copies with adapted C link names.
+The original Zig sources and their hashes remain unchanged. Current C/CUDA
+sources, including kernels and bridge types, use the project namespace throughout.

@@ -5,7 +5,7 @@
 #include "lookup.h"
 #include <string.h>
 
-static uint64_t hash4(int32_t a, int32_t b, int32_t c, int32_t d) {
+static uint64_t ifn_lookup_local_hash4(int32_t a, int32_t b, int32_t c, int32_t d) {
     uint64_t h = (uint64_t)(int64_t)a * UINT64_C(0x9e3779b97f4a7c15);
     h = (h ^ (uint64_t)(int64_t)b) * UINT64_C(0xbf58476d1ce4e5b9);
     h = (h ^ (uint64_t)(int64_t)c) * UINT64_C(0x94d049bb133111eb);
@@ -13,13 +13,14 @@ static uint64_t hash4(int32_t a, int32_t b, int32_t c, int32_t d) {
     return h ^ (h >> 31);
 }
 
-static int32_t at(const ifn_lookup *s, uint32_t i) {
+static int32_t ifn_lookup_local_at(const ifn_lookup *s, uint32_t i) {
     return s->history[i & 8191];
 }
 
-static uint64_t suffix(const ifn_lookup *s) {
+static uint64_t ifn_lookup_local_suffix(const ifn_lookup *s) {
     uint32_t n = s->count;
-    return hash4(at(s, n - 4), at(s, n - 3), at(s, n - 2), at(s, n - 1));
+    return ifn_lookup_local_hash4(ifn_lookup_local_at(s, n - 4), ifn_lookup_local_at(s, n - 3),
+                                  ifn_lookup_local_at(s, n - 2), ifn_lookup_local_at(s, n - 1));
 }
 
 void ifn_lookup_reset(ifn_lookup *s) {
@@ -37,7 +38,7 @@ void ifn_lookup_push(ifn_lookup *s, int32_t token) {
     s->count = i + 1;
     if (s->count < 4)
         return;
-    uint64_t h = suffix(s);
+    uint64_t h = ifn_lookup_local_suffix(s);
     size_t slot = (size_t)(h & 16383);
     if (s->stamp[slot] == s->generation && s->hash[slot] == h) {
         s->older[slot] = s->newest[slot];
@@ -54,7 +55,7 @@ bool ifn_lookup_match(const ifn_lookup *s, int32_t out[7]) {
     uint32_t n = s->count;
     if (n < 24)
         return false;
-    uint64_t h = suffix(s);
+    uint64_t h = ifn_lookup_local_suffix(s);
     size_t slot = (size_t)(h & 16383);
     if (s->stamp[slot] != s->generation || s->hash[slot] != h)
         return false;
@@ -65,9 +66,9 @@ bool ifn_lookup_match(const ifn_lookup *s, int32_t out[7]) {
     if (candidate - 16 < low)
         return false;
     for (uint32_t k = 1; k <= 16; k++)
-        if (at(s, candidate - k) != at(s, n - k))
+        if (ifn_lookup_local_at(s, candidate - k) != ifn_lookup_local_at(s, n - k))
             return false;
     for (uint32_t j = 0; j < 7; j++)
-        out[j] = at(s, candidate + j);
+        out[j] = ifn_lookup_local_at(s, candidate + j);
     return true;
 }

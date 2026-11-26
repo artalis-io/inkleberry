@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static uint32_t output(void *context, const ifn_infer_event_v1 *event) {
+static uint32_t ifn_generate_local_output(void *context, const ifn_infer_event_v1 *event) {
     (void)context;
     if (event->kind == IFN_EVENT_CONTENT && event->text.bytes &&
         fwrite(event->text.data, 1, (size_t)event->text.bytes, stdout) != event->text.bytes)
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
     if (api->model_create(&mc, &model, NULL) || api->model_load(model, &source, NULL) ||
         api->session_create(model, &sc, &session, NULL) || api->session_prepare(session, NULL) ||
         api->request_create(session, &input, &rc, &request, NULL) ||
-        api->request_run(request, output, NULL, NULL))
+        api->request_run(request, ifn_generate_local_output, NULL, NULL))
         goto done;
     failed = 0;
 done:

@@ -55,6 +55,7 @@ generated-check:
 	python3 tools/verify_upstream.py --production-only
 	python3 tools/generate_cuda_abi.py --check
 	python3 test/cuda_abi_schema.py
+	python3 test/native_namespace.py
 .PHONY: reference-check
 reference-check: generated-check
 	python3 tools/verify_upstream.py
@@ -389,3 +390,7 @@ amalgamation-fuzz-smoke: | .build
 	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_tokenizer.c -o .build/fuzz-amalgam-tokenizer
 	.build/fuzz-amalgam-tokenizer -runs=3000 -max_len=32768 .build/tokenizer-corpus
+
+.PHONY: native-namespace-check
+native-namespace-check: libinkleberry-cuda.a libinkleberry_backend.so.1
+	python3 test/native_symbols.py libinkleberry-cuda.a libinkleberry_backend.so.1

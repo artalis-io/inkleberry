@@ -3,7 +3,7 @@
 Status: design rationale. The initial experimental facade is now implemented;
 see [the implemented contract](../../docs/inference-abi.md) and `include/sq_infer.h` for the
 actual surface and remaining limits. The original
-[reference header](abi/sq_infer_v1_draft.h) is retained as design history, not the SDK.
+[reference header](abi/ifn_infer_v1_draft.h) is retained as design history, not the SDK.
 Existing low-level public APIs and CUDA kernels remain unchanged.
 
 ## Purpose

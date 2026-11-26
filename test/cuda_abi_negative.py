@@ -31,12 +31,12 @@ def main():
         header.write_text(original)
         subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)
         # A signature disagreement with the real bridge must fail compilation.
-        old = 'int32_t squid_cuda_malloc('
+        old = 'int32_t ifn_cuda_malloc('
         assert original.count(old) == 1
-        header.write_text(original.replace(old, 'float squid_cuda_malloc(', 1))
+        header.write_text(original.replace(old, 'float ifn_cuda_malloc(', 1))
         failed = subprocess.run(command[:-1] + [str(folder / 'invalid-cpp.o')],
                                 cwd=ROOT, capture_output=True, text=True)
-        if failed.returncode == 0 or 'squid_cuda_malloc' not in failed.stderr:
+        if failed.returncode == 0 or 'ifn_cuda_malloc' not in failed.stderr:
             raise SystemExit('Compiler did not reject the intentional CUDA signature mismatch')
         # Change only C record layout. C++ expected offsets/sizes still come
         # from the actual bridge included by the separately compiled probe.
@@ -55,7 +55,7 @@ def main():
                        cwd=ROOT, check=True)
         env = dict(os.environ, LD_LIBRARY_PATH=cuda_lib)
         failed = subprocess.run([str(executable)], env=env, capture_output=True, text=True)
-        if failed.returncode != 1 or 'CSampleConfig.' not in failed.stderr:
+        if failed.returncode != 1 or 'ifn_cuda_c_sample_config.' not in failed.stderr:
             raise SystemExit('Independent C/C++ probe did not reject the intentional layout mismatch')
     print('Actual CUDA C++ bridge rejected signature and record-layout mismatches')
 

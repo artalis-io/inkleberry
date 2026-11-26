@@ -8,8 +8,8 @@
   },
   "records": [
     {
-      "name": "CSampleConfig",
-      "cpp_type": "squid::SampleConfig",
+      "name": "ifn_cuda_c_sample_config",
+      "cpp_type": "ifn_cuda::ifn_cuda_sample_config",
       "fields": [
         {"name": "inv_temp", "type": "float32"},
         {"name": "top_p", "type": "float32"},
@@ -19,15 +19,15 @@
       ]
     },
     {
-      "name": "CLoopCDConfig",
-      "cpp_type": "squid::LoopCDConfig",
+      "name": "ifn_cuda_c_loop_cd_config",
+      "cpp_type": "ifn_cuda::ifn_cuda_loop_cd_config",
       "fields": [
         {"name": "omega", "type": "float32"},
         {"name": "ref_pass", "type": "int32"}
       ]
     },
     {
-      "name": "CLinearWeight",
+      "name": "ifn_cuda_c_linear_weight",
       "fields": [
         {"name": "kind", "type": "uint8"},
         {"name": "rows", "type": "int32"},
@@ -39,7 +39,7 @@
       ]
     },
     {
-      "name": "CExpertBank",
+      "name": "ifn_cuda_c_expert_bank",
       "fields": [
         {"name": "is_nvfp4", "type": "uint8"},
         {"name": "n_experts", "type": "int32"},
@@ -51,18 +51,18 @@
       ]
     },
     {
-      "name": "CControllerWeights",
+      "name": "ifn_cuda_c_controller_weights",
       "fields": [
         {"name": "down_w", "type": "pointer<void>"},
         {"name": "forget_w", "type": "pointer<void>"},
         {"name": "gain_w", "type": "pointer<void>"},
-        {"name": "down_nvfp4", "type": "CLinearWeight"},
-        {"name": "forget_nvfp4", "type": "CLinearWeight"},
-        {"name": "gain_nvfp4", "type": "CLinearWeight"}
+        {"name": "down_nvfp4", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "forget_nvfp4", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "gain_nvfp4", "type": "ifn_cuda_c_linear_weight"}
       ]
     },
     {
-      "name": "CDsparkLayerWeights",
+      "name": "ifn_cuda_c_dspark_layer_weights",
       "fields": [
         {"name": "is_local", "type": "uint8"},
         {"name": "input_norm", "type": "pointer<void>"},
@@ -71,15 +71,15 @@
         {"name": "q_norm", "type": "pointer<void>"},
         {"name": "k_norm", "type": "pointer<void>"},
         {"name": "k_norm_ctx", "type": "pointer<void>"},
-        {"name": "w_qkv", "type": "CLinearWeight"},
-        {"name": "w_o", "type": "CLinearWeight"},
-        {"name": "w_gu", "type": "CLinearWeight"},
-        {"name": "w_down", "type": "CLinearWeight"},
-        {"name": "w_kv_ctx", "type": "CLinearWeight"}
+        {"name": "w_qkv", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "w_o", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "w_gu", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "w_down", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "w_kv_ctx", "type": "ifn_cuda_c_linear_weight"}
       ]
     },
     {
-      "name": "CDsparkWeights",
+      "name": "ifn_cuda_c_dspark_weights",
       "fields": [
         {"name": "loaded", "type": "uint8"},
         {"name": "fuse_alpha", "type": "pointer<float32>"},
@@ -96,16 +96,16 @@
         {"name": "draft_vocab_size", "type": "int32"},
         {"name": "draft_vocab_ids", "type": "pointer<int32>"},
         {"name": "inv_draft_vocab_ids", "type": "pointer<int32>"},
-        {"name": "unembed_draft", "type": "CLinearWeight"},
-        {"name": "fold_w", "type": "CLinearWeight"},
+        {"name": "unembed_draft", "type": "ifn_cuda_c_linear_weight"},
+        {"name": "fold_w", "type": "ifn_cuda_c_linear_weight"},
         {"name": "fold_b", "type": "pointer<float32>"},
-        {"name": "layers", "type": "CDsparkLayerWeights", "count": 3}
+        {"name": "layers", "type": "ifn_cuda_c_dspark_layer_weights", "count": 3}
       ]
     }
   ],
   "functions": [
     {
-      "name": "squid_cuda_malloc",
+      "name": "ifn_cuda_malloc",
       "returns": "int32",
       "parameters": [
         {"name": "ptr", "type": "pointer<pointer<void>>"},
@@ -113,14 +113,14 @@
       ]
     },
     {
-      "name": "squid_cuda_free",
+      "name": "ifn_cuda_free",
       "returns": "int32",
       "parameters": [
         {"name": "ptr", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_malloc_host_pinned",
+      "name": "ifn_cuda_malloc_host_pinned",
       "returns": "int32",
       "parameters": [
         {"name": "ptr", "type": "pointer<pointer<void>>"},
@@ -129,14 +129,14 @@
       ]
     },
     {
-      "name": "squid_cuda_free_host",
+      "name": "ifn_cuda_free_host",
       "returns": "int32",
       "parameters": [
         {"name": "ptr", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_host_get_device_pointer",
+      "name": "ifn_cuda_host_get_device_pointer",
       "returns": "int32",
       "parameters": [
         {"name": "dev_ptr", "type": "pointer<pointer<void>>"},
@@ -144,7 +144,7 @@
       ]
     },
     {
-      "name": "squid_cuda_memcpy_h2d",
+      "name": "ifn_cuda_memcpy_h2d",
       "returns": "int32",
       "parameters": [
         {"name": "dst", "type": "pointer<void>"},
@@ -153,7 +153,7 @@
       ]
     },
     {
-      "name": "squid_cuda_memcpy_d2h",
+      "name": "ifn_cuda_memcpy_d2h",
       "returns": "int32",
       "parameters": [
         {"name": "dst", "type": "pointer<void>"},
@@ -162,7 +162,7 @@
       ]
     },
     {
-      "name": "squid_cuda_memcpy_h2d_async",
+      "name": "ifn_cuda_memcpy_h2d_async",
       "returns": "int32",
       "parameters": [
         {"name": "dst", "type": "pointer<void>"},
@@ -172,7 +172,7 @@
       ]
     },
     {
-      "name": "squid_cuda_memcpy_d2h_async",
+      "name": "ifn_cuda_memcpy_d2h_async",
       "returns": "int32",
       "parameters": [
         {"name": "dst", "type": "pointer<void>"},
@@ -182,7 +182,7 @@
       ]
     },
     {
-      "name": "squid_cuda_memcpy_d2d_async",
+      "name": "ifn_cuda_memcpy_d2d_async",
       "returns": "int32",
       "parameters": [
         {"name": "dst", "type": "pointer<void>"},
@@ -192,7 +192,7 @@
       ]
     },
     {
-      "name": "squid_cuda_memset_async",
+      "name": "ifn_cuda_memset_async",
       "returns": "int32",
       "parameters": [
         {"name": "dst", "type": "pointer<void>"},
@@ -202,34 +202,34 @@
       ]
     },
     {
-      "name": "squid_cuda_device_sync",
+      "name": "ifn_cuda_device_sync",
       "returns": "int32",
       "parameters": [
       ]
     },
     {
-      "name": "squid_cuda_stream_create",
+      "name": "ifn_cuda_stream_create",
       "returns": "int32",
       "parameters": [
         {"name": "out_stream", "type": "pointer<pointer<void>>"}
       ]
     },
     {
-      "name": "squid_cuda_stream_destroy",
+      "name": "ifn_cuda_stream_destroy",
       "returns": "int32",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_stream_sync",
+      "name": "ifn_cuda_stream_sync",
       "returns": "int32",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_event_create",
+      "name": "ifn_cuda_event_create",
       "returns": "int32",
       "parameters": [
         {"name": "out_event", "type": "pointer<pointer<void>>"},
@@ -237,14 +237,14 @@
       ]
     },
     {
-      "name": "squid_cuda_event_destroy",
+      "name": "ifn_cuda_event_destroy",
       "returns": "int32",
       "parameters": [
         {"name": "ev", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_event_record",
+      "name": "ifn_cuda_event_record",
       "returns": "int32",
       "parameters": [
         {"name": "ev", "type": "pointer<void>"},
@@ -252,14 +252,14 @@
       ]
     },
     {
-      "name": "squid_cuda_event_sync",
+      "name": "ifn_cuda_event_sync",
       "returns": "int32",
       "parameters": [
         {"name": "ev", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_event_elapsed_ms",
+      "name": "ifn_cuda_event_elapsed_ms",
       "returns": "int32",
       "parameters": [
         {"name": "out_ms", "type": "pointer<float32>"},
@@ -268,7 +268,7 @@
       ]
     },
     {
-      "name": "squid_cuda_stream_wait_event",
+      "name": "ifn_cuda_stream_wait_event",
       "returns": "int32",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"},
@@ -276,14 +276,14 @@
       ]
     },
     {
-      "name": "squid_cuda_graph_begin",
+      "name": "ifn_cuda_graph_begin",
       "returns": "int32",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_cuda_graph_end_instantiate",
+      "name": "ifn_cuda_graph_end_instantiate",
       "returns": "int32",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"},
@@ -291,7 +291,7 @@
       ]
     },
     {
-      "name": "squid_cuda_graph_launch",
+      "name": "ifn_cuda_graph_launch",
       "returns": "int32",
       "parameters": [
         {"name": "exec", "type": "pointer<void>"},
@@ -299,14 +299,14 @@
       ]
     },
     {
-      "name": "squid_cuda_graph_destroy",
+      "name": "ifn_cuda_graph_destroy",
       "returns": "int32",
       "parameters": [
         {"name": "exec", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_pack_bf16_to_nvfp4",
+      "name": "ifn_pack_bf16_to_nvfp4",
       "returns": "float32",
       "parameters": [
         {"name": "src_bf16_dev", "type": "pointer<const,void>"},
@@ -318,7 +318,7 @@
       ]
     },
     {
-      "name": "squid_pack_bf16_to_fp8",
+      "name": "ifn_pack_bf16_to_fp8",
       "returns": "void",
       "parameters": [
         {"name": "src_bf16_dev", "type": "pointer<const,void>"},
@@ -329,7 +329,7 @@
       ]
     },
     {
-      "name": "squid_convert_mxfp8_to_nvfp4_experts",
+      "name": "ifn_convert_mxfp8_to_nvfp4_experts",
       "returns": "void",
       "parameters": [
         {"name": "src_w", "type": "pointer<const,uint8>"},
@@ -343,7 +343,7 @@
       ]
     },
     {
-      "name": "squid_split_dspark_rnn",
+      "name": "ifn_split_dspark_rnn",
       "returns": "void",
       "parameters": [
         {"name": "src_bf16", "type": "pointer<const,void>"},
@@ -353,7 +353,7 @@
       ]
     },
     {
-      "name": "squid_compute_dspark_fold",
+      "name": "ifn_compute_dspark_fold",
       "returns": "void",
       "parameters": [
         {"name": "unembed_bf16", "type": "pointer<const,void>"},
@@ -367,7 +367,7 @@
       ]
     },
     {
-      "name": "squid_launch_embed_norm",
+      "name": "ifn_launch_embed_norm",
       "returns": "void",
       "parameters": [
         {"name": "embed", "type": "pointer<const,void>"},
@@ -379,7 +379,7 @@
       ]
     },
     {
-      "name": "squid_launch_rmsnorm",
+      "name": "ifn_launch_rmsnorm",
       "returns": "void",
       "parameters": [
         {"name": "x", "type": "pointer<const,float32>"},
@@ -393,7 +393,7 @@
       ]
     },
     {
-      "name": "squid_launch_extract_block",
+      "name": "ifn_launch_extract_block",
       "returns": "void",
       "parameters": [
         {"name": "blocks", "type": "pointer<const,float32>"},
@@ -405,7 +405,7 @@
       ]
     },
     {
-      "name": "squid_launch_fused_depth_norm",
+      "name": "ifn_launch_fused_depth_norm",
       "returns": "void",
       "parameters": [
         {"name": "hidden", "type": "pointer<const,float32>"},
@@ -428,14 +428,14 @@
       ]
     },
     {
-      "name": "squid_launch_controller_mega_nvfp4",
+      "name": "ifn_launch_controller_mega_nvfp4",
       "returns": "void",
       "parameters": [
         {"name": "xs", "type": "pointer<const,pointer<float32>>"},
         {"name": "saved", "type": "pointer<const,float32>"},
         {"name": "prior_last", "type": "pointer<const,float32>"},
         {"name": "cp_queries", "type": "pointer<const,pointer<const,float32>>"},
-        {"name": "cws_in", "type": "pointer<const,pointer<const,CControllerWeights>>"},
+        {"name": "cws_in", "type": "pointer<const,pointer<const,ifn_cuda_c_controller_weights>>"},
         {"name": "post_norms", "type": "pointer<const,pointer<const,void>>"},
         {"name": "outs", "type": "pointer<const,pointer<float32>>"},
         {"name": "outs_h", "type": "pointer<const,pointer<void>>"},
@@ -445,14 +445,14 @@
       ]
     },
     {
-      "name": "squid_launch_controller_merge_batched",
+      "name": "ifn_launch_controller_merge_batched",
       "returns": "void",
       "parameters": [
         {"name": "xs", "type": "pointer<const,pointer<float32>>"},
         {"name": "saved", "type": "pointer<const,float32>"},
         {"name": "prior_last", "type": "pointer<const,float32>"},
         {"name": "cp_queries", "type": "pointer<const,pointer<const,float32>>"},
-        {"name": "cws_in", "type": "pointer<const,pointer<const,CControllerWeights>>"},
+        {"name": "cws_in", "type": "pointer<const,pointer<const,ifn_cuda_c_controller_weights>>"},
         {"name": "post_norms", "type": "pointer<const,pointer<const,void>>"},
         {"name": "outs", "type": "pointer<const,pointer<float32>>"},
         {"name": "outs_h", "type": "pointer<const,pointer<void>>"},
@@ -465,12 +465,12 @@
       ]
     },
     {
-      "name": "squid_launch_qkvrg_fused",
+      "name": "ifn_launch_qkvrg_fused",
       "returns": "void",
       "parameters": [
-        {"name": "w_qrgs", "type": "pointer<const,CLinearWeight>"},
-        {"name": "w_k", "type": "pointer<const,CLinearWeight>"},
-        {"name": "w_v", "type": "pointer<const,CLinearWeight>"},
+        {"name": "w_qrgs", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
+        {"name": "w_k", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
+        {"name": "w_v", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
         {"name": "in_qh", "type": "pointer<const,void>"},
         {"name": "in_kh", "type": "pointer<const,void>"},
         {"name": "in_vh", "type": "pointer<const,void>"},
@@ -482,10 +482,10 @@
       ]
     },
     {
-      "name": "squid_launch_linear",
+      "name": "ifn_launch_linear",
       "returns": "void",
       "parameters": [
-        {"name": "w", "type": "pointer<const,CLinearWeight>"},
+        {"name": "w", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
         {"name": "x", "type": "pointer<const,float32>"},
         {"name": "y", "type": "pointer<float32>"},
         {"name": "batch_size", "type": "int32"},
@@ -494,10 +494,10 @@
       ]
     },
     {
-      "name": "squid_launch_linear_h",
+      "name": "ifn_launch_linear_h",
       "returns": "void",
       "parameters": [
-        {"name": "w", "type": "pointer<const,CLinearWeight>"},
+        {"name": "w", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
         {"name": "x_h", "type": "pointer<const,void>"},
         {"name": "y", "type": "pointer<float32>"},
         {"name": "batch_size", "type": "int32"},
@@ -506,7 +506,7 @@
       ]
     },
     {
-      "name": "squid_launch_mega_global_sconv_prep_store",
+      "name": "ifn_launch_mega_global_sconv_prep_store",
       "returns": "void",
       "parameters": [
         {"name": "qrgs", "type": "pointer<float32>"},
@@ -534,7 +534,7 @@
       ]
     },
     {
-      "name": "squid_launch_mega_local_sconv_prep_store",
+      "name": "ifn_launch_mega_local_sconv_prep_store",
       "returns": "void",
       "parameters": [
         {"name": "qrgs", "type": "pointer<float32>"},
@@ -555,7 +555,7 @@
       ]
     },
     {
-      "name": "squid_launch_relative_attention_gated",
+      "name": "ifn_launch_relative_attention_gated",
       "returns": "void",
       "parameters": [
         {"name": "qrgs", "type": "pointer<const,float32>"},
@@ -576,7 +576,7 @@
       ]
     },
     {
-      "name": "squid_launch_mega_attn_post_mlp_in",
+      "name": "ifn_launch_mega_attn_post_mlp_in",
       "returns": "void",
       "parameters": [
         {"name": "o_proj", "type": "pointer<const,float32>"},
@@ -601,11 +601,11 @@
       ]
     },
     {
-      "name": "squid_launch_route_topk_nvfp4",
+      "name": "ifn_launch_route_topk_nvfp4",
       "returns": "void",
       "parameters": [
         {"name": "m_h", "type": "pointer<const,void>"},
-        {"name": "router_nvfp4", "type": "pointer<const,CLinearWeight>"},
+        {"name": "router_nvfp4", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
         {"name": "router_bias", "type": "pointer<const,float32>"},
         {"name": "scratch_logits", "type": "pointer<float32>"},
         {"name": "out_ids", "type": "pointer<int32>"},
@@ -616,7 +616,7 @@
       ]
     },
     {
-      "name": "squid_launch_route_topk",
+      "name": "ifn_launch_route_topk",
       "returns": "void",
       "parameters": [
         {"name": "m", "type": "pointer<const,float32>"},
@@ -631,10 +631,10 @@
       ]
     },
     {
-      "name": "squid_launch_moe_gate_up_h",
+      "name": "ifn_launch_moe_gate_up_h",
       "returns": "void",
       "parameters": [
-        {"name": "w13", "type": "pointer<const,CExpertBank>"},
+        {"name": "w13", "type": "pointer<const,ifn_cuda_c_expert_bank>"},
         {"name": "x_h", "type": "pointer<const,void>"},
         {"name": "route_ids", "type": "pointer<const,int32>"},
         {"name": "groups", "type": "pointer<const,void>"},
@@ -644,10 +644,10 @@
       ]
     },
     {
-      "name": "squid_launch_moe_down_h",
+      "name": "ifn_launch_moe_down_h",
       "returns": "void",
       "parameters": [
-        {"name": "w2", "type": "pointer<const,CExpertBank>"},
+        {"name": "w2", "type": "pointer<const,ifn_cuda_c_expert_bank>"},
         {"name": "act_h", "type": "pointer<const,void>"},
         {"name": "route_ids", "type": "pointer<const,int32>"},
         {"name": "route_w", "type": "pointer<const,float32>"},
@@ -658,7 +658,7 @@
       ]
     },
     {
-      "name": "squid_launch_mega_mlp_post_res",
+      "name": "ifn_launch_mega_mlp_post_res",
       "returns": "void",
       "parameters": [
         {"name": "moe_down_or_slots", "type": "pointer<const,float32>"},
@@ -677,7 +677,7 @@
       ]
     },
     {
-      "name": "squid_launch_loopcd_hidden_apply",
+      "name": "ifn_launch_loopcd_hidden_apply",
       "returns": "void",
       "parameters": [
         {"name": "hidden", "type": "pointer<float32>"},
@@ -688,7 +688,7 @@
       ]
     },
     {
-      "name": "squid_launch_mega_mlp_post_next_depth_norm",
+      "name": "ifn_launch_mega_mlp_post_next_depth_norm",
       "returns": "void",
       "parameters": [
         {"name": "moe_down_or_slots", "type": "pointer<const,float32>"},
@@ -720,21 +720,21 @@
         {"name": "abl_p", "type": "pointer<const,float32>"},
         {"name": "loopcd_h1", "type": "pointer<const,float32>"},
         {"name": "loopcd_h2", "type": "pointer<const,float32>"},
-        {"name": "loopcd_cfg", "type": "pointer<const,CLoopCDConfig>"},
+        {"name": "loopcd_cfg", "type": "pointer<const,ifn_cuda_c_loop_cd_config>"},
         {"name": "stream", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_launch_lm_head_argmax",
+      "name": "ifn_launch_lm_head_argmax",
       "returns": "void",
       "parameters": [
-        {"name": "unembed", "type": "pointer<const,CLinearWeight>"},
+        {"name": "unembed", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
         {"name": "x", "type": "pointer<const,float32>"},
         {"name": "out_tokens", "type": "pointer<int32>"},
         {"name": "out_logits", "type": "pointer<float32>"},
         {"name": "scratch_vals", "type": "pointer<float32>"},
         {"name": "scratch_idxs", "type": "pointer<int32>"},
-        {"name": "sample_cfg", "type": "pointer<const,CSampleConfig>"},
+        {"name": "sample_cfg", "type": "pointer<const,ifn_cuda_c_sample_config>"},
         {"name": "d_pos", "type": "pointer<const,int32>"},
         {"name": "d_draft_tokens", "type": "pointer<const,int32>"},
         {"name": "d_draft_probs", "type": "pointer<const,float32>"},
@@ -747,10 +747,10 @@
       ]
     },
     {
-      "name": "squid_launch_dspark_commit",
+      "name": "ifn_launch_dspark_commit",
       "returns": "void",
       "parameters": [
-        {"name": "dw_in", "type": "pointer<const,CDsparkWeights>"},
+        {"name": "dw_in", "type": "pointer<const,ifn_cuda_c_dspark_weights>"},
         {"name": "taps", "type": "pointer<const,float32>"},
         {"name": "ctx_k", "type": "pointer<const,pointer<void>>"},
         {"name": "ctx_v", "type": "pointer<const,pointer<void>>"},
@@ -767,12 +767,12 @@
       ]
     },
     {
-      "name": "squid_launch_dspark_draft",
+      "name": "ifn_launch_dspark_draft",
       "returns": "void",
       "parameters": [
         {"name": "embed", "type": "pointer<const,void>"},
         {"name": "embed_norm", "type": "pointer<const,void>"},
-        {"name": "dw_in", "type": "pointer<const,CDsparkWeights>"},
+        {"name": "dw_in", "type": "pointer<const,ifn_cuda_c_dspark_weights>"},
         {"name": "d_anchor_token", "type": "pointer<const,int32>"},
         {"name": "d_pos", "type": "pointer<const,int32>"},
         {"name": "num_drafts", "type": "int32"},
@@ -787,7 +787,7 @@
         {"name": "workspace", "type": "pointer<float32>"},
         {"name": "out_draft_tokens", "type": "pointer<int32>"},
         {"name": "out_draft_conf", "type": "pointer<float32>"},
-        {"name": "sample_cfg", "type": "pointer<const,CSampleConfig>"},
+        {"name": "sample_cfg", "type": "pointer<const,ifn_cuda_c_sample_config>"},
         {"name": "out_draft_probs", "type": "pointer<float32>"},
         {"name": "out_draft_q_sel", "type": "pointer<float32>"},
         {"name": "out_draft_is_delta", "type": "pointer<int32>"},
@@ -795,7 +795,7 @@
       ]
     },
     {
-      "name": "squid_adaptive_graph_create",
+      "name": "ifn_adaptive_graph_create",
       "returns": "int32",
       "parameters": [
         {"name": "d_anchor", "type": "pointer<const,int32>"},
@@ -814,7 +814,7 @@
       ]
     },
     {
-      "name": "squid_adaptive_graph_branch_begin",
+      "name": "ifn_adaptive_graph_branch_begin",
       "returns": "int32",
       "parameters": [
         {"name": "graph", "type": "pointer<void>"},
@@ -823,21 +823,21 @@
       ]
     },
     {
-      "name": "squid_adaptive_graph_branch_end",
+      "name": "ifn_adaptive_graph_branch_end",
       "returns": "int32",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_adaptive_graph_instantiate",
+      "name": "ifn_adaptive_graph_instantiate",
       "returns": "int32",
       "parameters": [
         {"name": "graph", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_adaptive_graph_launch",
+      "name": "ifn_adaptive_graph_launch",
       "returns": "int32",
       "parameters": [
         {"name": "graph", "type": "pointer<void>"},
@@ -845,14 +845,14 @@
       ]
     },
     {
-      "name": "squid_adaptive_graph_destroy",
+      "name": "ifn_adaptive_graph_destroy",
       "returns": "int32",
       "parameters": [
         {"name": "graph", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_launch_spec_verify",
+      "name": "ifn_launch_spec_verify",
       "returns": "void",
       "parameters": [
         {"name": "target_preds", "type": "pointer<const,int32>"},
@@ -866,7 +866,7 @@
       ]
     },
     {
-      "name": "squid_launch_inc_pos_and_copy_tok",
+      "name": "ifn_launch_inc_pos_and_copy_tok",
       "returns": "void",
       "parameters": [
         {"name": "d_pos", "type": "pointer<int32>"},
@@ -876,7 +876,7 @@
       ]
     },
     {
-      "name": "squid_launch_inc_pos_by",
+      "name": "ifn_launch_inc_pos_by",
       "returns": "void",
       "parameters": [
         {"name": "d_pos", "type": "pointer<int32>"},
@@ -885,7 +885,7 @@
       ]
     },
     {
-      "name": "squid_launch_assemble_verify_tokens",
+      "name": "ifn_launch_assemble_verify_tokens",
       "returns": "void",
       "parameters": [
         {"name": "d_anchor", "type": "pointer<const,int32>"},
@@ -896,20 +896,20 @@
       ]
     },
     {
-      "name": "squid_sizeof_expert_groups",
+      "name": "ifn_sizeof_expert_groups",
       "returns": "usize",
       "parameters": [
       ]
     },
     {
-      "name": "squid_launch_prefill_warmup_cublas",
+      "name": "ifn_launch_prefill_warmup_cublas",
       "returns": "void",
       "parameters": [
         {"name": "stream", "type": "pointer<void>"}
       ]
     },
     {
-      "name": "squid_launch_prefill_f32_to_f16",
+      "name": "ifn_launch_prefill_f32_to_f16",
       "returns": "void",
       "parameters": [
         {"name": "src", "type": "pointer<const,float32>"},
@@ -919,10 +919,10 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_gemm_h",
+      "name": "ifn_launch_prefill_gemm_h",
       "returns": "void",
       "parameters": [
-        {"name": "w", "type": "pointer<const,CLinearWeight>"},
+        {"name": "w", "type": "pointer<const,ifn_cuda_c_linear_weight>"},
         {"name": "x_h", "type": "pointer<const,void>"},
         {"name": "y", "type": "pointer<float32>"},
         {"name": "w_f16_scratch", "type": "pointer<void>"},
@@ -931,7 +931,7 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_sconv_post_res",
+      "name": "ifn_launch_prefill_sconv_post_res",
       "returns": "void",
       "parameters": [
         {"name": "src_or_slots", "type": "pointer<const,float32>"},
@@ -954,7 +954,7 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_copy_taps",
+      "name": "ifn_launch_prefill_copy_taps",
       "returns": "void",
       "parameters": [
         {"name": "src", "type": "pointer<const,float32>"},
@@ -965,7 +965,7 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_local_sconv_prep_store",
+      "name": "ifn_launch_prefill_local_sconv_prep_store",
       "returns": "void",
       "parameters": [
         {"name": "qrgs", "type": "pointer<float32>"},
@@ -986,7 +986,7 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_global_sconv_prep_store",
+      "name": "ifn_launch_prefill_global_sconv_prep_store",
       "returns": "void",
       "parameters": [
         {"name": "qrgs", "type": "pointer<float32>"},
@@ -1016,7 +1016,7 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_flash_attn_tc",
+      "name": "ifn_launch_prefill_flash_attn_tc",
       "returns": "void",
       "parameters": [
         {"name": "qrgs", "type": "pointer<const,float32>"},
@@ -1035,14 +1035,14 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_controller_one",
+      "name": "ifn_launch_prefill_controller_one",
       "returns": "void",
       "parameters": [
         {"name": "x", "type": "pointer<const,float32>"},
         {"name": "saved", "type": "pointer<const,float32>"},
         {"name": "prior_last", "type": "pointer<const,float32>"},
         {"name": "cp_q", "type": "pointer<const,float32>"},
-        {"name": "cw", "type": "pointer<const,CControllerWeights>"},
+        {"name": "cw", "type": "pointer<const,ifn_cuda_c_controller_weights>"},
         {"name": "post_norm", "type": "pointer<const,void>"},
         {"name": "out", "type": "pointer<float32>"},
         {"name": "out_h", "type": "pointer<void>"},
@@ -1058,7 +1058,7 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_route_and_sort",
+      "name": "ifn_launch_prefill_route_and_sort",
       "returns": "void",
       "parameters": [
         {"name": "router_logits", "type": "pointer<const,float32>"},
@@ -1074,10 +1074,10 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_moe_gate_up_h",
+      "name": "ifn_launch_prefill_moe_gate_up_h",
       "returns": "void",
       "parameters": [
-        {"name": "w13", "type": "pointer<const,CExpertBank>"},
+        {"name": "w13", "type": "pointer<const,ifn_cuda_c_expert_bank>"},
         {"name": "x_h", "type": "pointer<const,void>"},
         {"name": "expert_offsets", "type": "pointer<const,int32>"},
         {"name": "sorted_tok", "type": "pointer<const,int32>"},
@@ -1088,10 +1088,10 @@
       ]
     },
     {
-      "name": "squid_launch_prefill_moe_down_h",
+      "name": "ifn_launch_prefill_moe_down_h",
       "returns": "void",
       "parameters": [
-        {"name": "w2", "type": "pointer<const,CExpertBank>"},
+        {"name": "w2", "type": "pointer<const,ifn_cuda_c_expert_bank>"},
         {"name": "act_h", "type": "pointer<const,void>"},
         {"name": "expert_offsets", "type": "pointer<const,int32>"},
         {"name": "sorted_tok", "type": "pointer<const,int32>"},

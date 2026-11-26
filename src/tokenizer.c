@@ -6,17 +6,17 @@
 #include "tokenizer.h"
 #include <string.h>
 
-static bool cp_is_newline(uint32_t cp) {
+static bool ifn_tokenizer_local_cp_is_newline(uint32_t cp) {
     return cp == '\r' || cp == '\n';
 }
 
-static bool cp_is_space(uint32_t cp) {
+static bool ifn_tokenizer_local_cp_is_space(uint32_t cp) {
     return cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' || cp == 0x0B || cp == 0x0C ||
            cp == 0x0085 || cp == 0x00A0 || cp == 0x1680 || (cp >= 0x2000 && cp <= 0x200A) ||
            cp == 0x2028 || cp == 0x2029 || cp == 0x202F || cp == 0x205F || cp == 0x3000;
 }
 
-static bool cp_is_digit(uint32_t cp) {
+static bool ifn_tokenizer_local_cp_is_digit(uint32_t cp) {
     if (cp >= '0' && cp <= '9')
         return true;
     if (cp < 0x80)
@@ -25,7 +25,7 @@ static bool cp_is_digit(uint32_t cp) {
            (cp >= 0x0966 && cp <= 0x096F) || (cp >= 0xFF10 && cp <= 0xFF19);
 }
 
-static bool cp_is_upper(uint32_t cp) {
+static bool ifn_tokenizer_local_cp_is_upper(uint32_t cp) {
     if (cp >= 'A' && cp <= 'Z')
         return true;
     if (cp < 0x80)
@@ -35,7 +35,7 @@ static bool cp_is_upper(uint32_t cp) {
            (cp >= 0xFF21 && cp <= 0xFF3A);
 }
 
-static bool cp_is_lower(uint32_t cp) {
+static bool ifn_tokenizer_local_cp_is_lower(uint32_t cp) {
     if (cp >= 'a' && cp <= 'z')
         return true;
     if (cp < 0x80)
@@ -45,7 +45,7 @@ static bool cp_is_lower(uint32_t cp) {
            (cp >= 0xFF41 && cp <= 0xFF5A);
 }
 
-static bool cp_is_other_letter_or_mark(uint32_t cp) {
+static bool ifn_tokenizer_local_cp_is_other_letter_or_mark(uint32_t cp) {
     if (cp < 0x80)
         return false;
     return (cp >= 0x0100 && cp <= 0x024F) || (cp >= 0x0300 && cp <= 0x036F) ||
@@ -54,16 +54,19 @@ static bool cp_is_other_letter_or_mark(uint32_t cp) {
            (cp >= 0xAC00 && cp <= 0xD7AF) || (cp >= 0xF900 && cp <= 0xFAFF);
 }
 
-static bool cp_is_letter(uint32_t cp) {
-    return cp_is_upper(cp) || cp_is_lower(cp) || cp_is_other_letter_or_mark(cp);
+static bool ifn_tokenizer_local_cp_is_letter(uint32_t cp) {
+    return ifn_tokenizer_local_cp_is_upper(cp) || ifn_tokenizer_local_cp_is_lower(cp) ||
+           ifn_tokenizer_local_cp_is_other_letter_or_mark(cp);
 }
 
-static bool cp_is_cat_U(uint32_t cp) {
-    return cp_is_upper(cp) || cp_is_other_letter_or_mark(cp);
+static bool ifn_tokenizer_local_cp_is_cat_U(uint32_t cp) {
+    return ifn_tokenizer_local_cp_is_upper(cp) ||
+           ifn_tokenizer_local_cp_is_other_letter_or_mark(cp);
 }
 
-static bool cp_is_cat_L(uint32_t cp) {
-    return cp_is_lower(cp) || cp_is_other_letter_or_mark(cp);
+static bool ifn_tokenizer_local_cp_is_cat_L(uint32_t cp) {
+    return ifn_tokenizer_local_cp_is_lower(cp) ||
+           ifn_tokenizer_local_cp_is_other_letter_or_mark(cp);
 }
 
 bool ifn_utf8_next(const unsigned char *s, size_t n, size_t *pos, uint32_t *out) {
@@ -100,7 +103,7 @@ bool ifn_utf8_next(const unsigned char *s, size_t n, size_t *pos, uint32_t *out)
     return true;
 }
 
-static bool valid_utf8(const char *text, size_t bytes) {
+static bool ifn_tokenizer_local_valid_utf8(const char *text, size_t bytes) {
     size_t p = 0;
     uint32_t cp;
     while (p < bytes)
@@ -109,7 +112,7 @@ static bool valid_utf8(const char *text, size_t bytes) {
     return true;
 }
 
-static size_t contraction(const uint32_t *c, size_t n, size_t i) {
+static size_t ifn_tokenizer_local_contraction(const uint32_t *c, size_t n, size_t i) {
     if (i + 1 >= n || c[i] != '\'')
         return 0;
     uint32_t a = c[i + 1];
@@ -127,37 +130,39 @@ static size_t contraction(const uint32_t *c, size_t n, size_t i) {
     return 0;
 }
 
-static size_t branch1(const uint32_t *c, size_t n, size_t start) {
+static size_t ifn_tokenizer_local_branch1(const uint32_t *c, size_t n, size_t start) {
     size_t j = start;
-    if (j < n && !cp_is_newline(c[j]) && !cp_is_letter(c[j]) && !cp_is_digit(c[j]))
+    if (j < n && !ifn_tokenizer_local_cp_is_newline(c[j]) &&
+        !ifn_tokenizer_local_cp_is_letter(c[j]) && !ifn_tokenizer_local_cp_is_digit(c[j]))
         j++;
     size_t run = j;
-    while (j < n && cp_is_letter(c[j]))
+    while (j < n && ifn_tokenizer_local_cp_is_letter(c[j]))
         j++;
     size_t u = run;
-    while (u < j && cp_is_cat_U(c[u]))
+    while (u < j && ifn_tokenizer_local_cp_is_cat_U(c[u]))
         u++;
     size_t l = u;
-    if (l == j && u > run && cp_is_cat_L(c[u - 1]))
+    if (l == j && u > run && ifn_tokenizer_local_cp_is_cat_L(c[u - 1]))
         l = u - 1;
     size_t end = l;
-    while (end < j && cp_is_cat_L(c[end]))
+    while (end < j && ifn_tokenizer_local_cp_is_cat_L(c[end]))
         end++;
-    return end > l ? end + contraction(c, n, end) : 0;
+    return end > l ? end + ifn_tokenizer_local_contraction(c, n, end) : 0;
 }
 
-static size_t branch2(const uint32_t *c, size_t n, size_t start) {
+static size_t ifn_tokenizer_local_branch2(const uint32_t *c, size_t n, size_t start) {
     size_t j = start;
-    if (j < n && !cp_is_newline(c[j]) && !cp_is_letter(c[j]) && !cp_is_digit(c[j]))
+    if (j < n && !ifn_tokenizer_local_cp_is_newline(c[j]) &&
+        !ifn_tokenizer_local_cp_is_letter(c[j]) && !ifn_tokenizer_local_cp_is_digit(c[j]))
         j++;
     size_t u = j;
-    while (j < n && cp_is_cat_U(c[j]))
+    while (j < n && ifn_tokenizer_local_cp_is_cat_U(c[j]))
         j++;
     if (j == u)
         return 0;
-    while (j < n && cp_is_cat_L(c[j]))
+    while (j < n && ifn_tokenizer_local_cp_is_cat_L(c[j]))
         j++;
-    return j + contraction(c, n, j);
+    return j + ifn_tokenizer_local_contraction(c, n, j);
 }
 
 void ifn_tokenizer_scratch_destroy(ifn_tokenizer_scratch *s) {
@@ -201,15 +206,15 @@ ifn_status ifn_tokenizer_scratch_create(const ifn_options *options, ifn_tokenize
 typedef struct {
     int32_t *ids;
     size_t capacity, count;
-} sink;
+} ifn_tokenizer_local_sink;
 
-static void emit(sink *out, int32_t id) {
+static void ifn_tokenizer_local_emit(ifn_tokenizer_local_sink *out, int32_t id) {
     if (out->count < out->capacity)
         out->ids[out->count] = id;
     out->count++;
 }
 
-static const ifn_merge *merge(const ifn_tokenizer *t, int32_t a, int32_t b) {
+static const ifn_merge *ifn_tokenizer_local_merge(const ifn_tokenizer *t, int32_t a, int32_t b) {
     uint64_t pair = ((uint64_t)(uint32_t)a << 32) | (uint32_t)b;
     size_t slot = (size_t)ifn_pair_hash(pair) & (t->merge_slots - 1);
     for (size_t i = 0; i < t->merge_slots; i++, slot = (slot + 1) & (t->merge_slots - 1)) {
@@ -221,8 +226,8 @@ static const ifn_merge *merge(const ifn_tokenizer *t, int32_t a, int32_t b) {
     return NULL;
 }
 
-static void piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
-                  ifn_tokenizer_scratch *s, sink *out) {
+static void ifn_tokenizer_local_piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
+                                      ifn_tokenizer_scratch *s, ifn_tokenizer_local_sink *out) {
     size_t offset = 0;
     while (offset < n) {
         size_t end = n - offset > IFN_TOK_PIECE ? offset + IFN_TOK_PIECE : n;
@@ -240,7 +245,7 @@ static void piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
             const ifn_merge *best = NULL;
             size_t index = 0;
             for (size_t i = 0; i + 1 < count; i++) {
-                const ifn_merge *candidate = merge(t, s->bpe[i], s->bpe[i + 1]);
+                const ifn_merge *candidate = ifn_tokenizer_local_merge(t, s->bpe[i], s->bpe[i + 1]);
                 if (candidate && (!best || candidate->rank < best->rank)) {
                     best = candidate;
                     index = i;
@@ -260,13 +265,14 @@ static void piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
             count = write;
         }
         for (size_t i = 0; i < count; i++)
-            emit(out, s->bpe[i]);
+            ifn_tokenizer_local_emit(out, s->bpe[i]);
         offset = end;
     }
 }
 
-static void chunk(const ifn_tokenizer *t, const unsigned char *text, size_t bytes,
-                  ifn_tokenizer_scratch *s, sink *out) {
+static void ifn_tokenizer_local_chunk(const ifn_tokenizer *t, const unsigned char *text,
+                                      size_t bytes, ifn_tokenizer_scratch *s,
+                                      ifn_tokenizer_local_sink *out) {
     size_t n = 0, p = 0;
     while (p < bytes) {
         s->offsets[n] = (uint32_t)p;
@@ -276,31 +282,36 @@ static void chunk(const ifn_tokenizer *t, const unsigned char *text, size_t byte
     s->offsets[n] = (uint32_t)bytes;
     const uint32_t *c = s->codepoints;
     for (size_t i = 0; i < n;) {
-        size_t end = branch1(c, n, i);
+        size_t end = ifn_tokenizer_local_branch1(c, n, i);
         if (end <= i)
-            end = branch2(c, n, i);
+            end = ifn_tokenizer_local_branch2(c, n, i);
         if (end <= i) {
-            if (cp_is_digit(c[i])) {
+            if (ifn_tokenizer_local_cp_is_digit(c[i])) {
                 end = i + 1;
-                if (end < n && cp_is_digit(c[end]))
+                if (end < n && ifn_tokenizer_local_cp_is_digit(c[end]))
                     end++;
-                if (end < n && cp_is_digit(c[end]))
+                if (end < n && ifn_tokenizer_local_cp_is_digit(c[end]))
                     end++;
             } else {
                 size_t j = i;
-                if (c[j] == ' ' && j + 1 < n && !cp_is_space(c[j + 1]) && !cp_is_letter(c[j + 1]) &&
-                    !cp_is_digit(c[j + 1]))
+                if (c[j] == ' ' && j + 1 < n && !ifn_tokenizer_local_cp_is_space(c[j + 1]) &&
+                    !ifn_tokenizer_local_cp_is_letter(c[j + 1]) &&
+                    !ifn_tokenizer_local_cp_is_digit(c[j + 1]))
                     j++;
-                if (!cp_is_space(c[j]) && !cp_is_letter(c[j]) && !cp_is_digit(c[j])) {
-                    while (j < n && !cp_is_space(c[j]) && !cp_is_letter(c[j]) && !cp_is_digit(c[j]))
+                if (!ifn_tokenizer_local_cp_is_space(c[j]) &&
+                    !ifn_tokenizer_local_cp_is_letter(c[j]) &&
+                    !ifn_tokenizer_local_cp_is_digit(c[j])) {
+                    while (j < n && !ifn_tokenizer_local_cp_is_space(c[j]) &&
+                           !ifn_tokenizer_local_cp_is_letter(c[j]) &&
+                           !ifn_tokenizer_local_cp_is_digit(c[j]))
                         j++;
                     while (j < n && (c[j] == '\r' || c[j] == '\n' || c[j] == '/'))
                         j++;
                     end = j;
-                } else if (cp_is_space(c[i])) {
+                } else if (ifn_tokenizer_local_cp_is_space(c[i])) {
                     size_t ws = i, last = SIZE_MAX;
-                    while (ws < n && cp_is_space(c[ws])) {
-                        if (cp_is_newline(c[ws]))
+                    while (ws < n && ifn_tokenizer_local_cp_is_space(c[ws])) {
+                        if (ifn_tokenizer_local_cp_is_newline(c[ws]))
                             last = ws;
                         ws++;
                     }
@@ -316,13 +327,14 @@ static void chunk(const ifn_tokenizer *t, const unsigned char *text, size_t byte
                     end = i + 1;
             }
         }
-        piece(t, text + s->offsets[i], s->offsets[end] - s->offsets[i], s, out);
+        ifn_tokenizer_local_piece(t, text + s->offsets[i], s->offsets[end] - s->offsets[i], s, out);
         i = end;
     }
 }
 
-static void ordinary(const ifn_tokenizer *t, const unsigned char *text, size_t bytes,
-                     ifn_tokenizer_scratch *s, sink *out) {
+static void ifn_tokenizer_local_ordinary(const ifn_tokenizer *t, const unsigned char *text,
+                                         size_t bytes, ifn_tokenizer_scratch *s,
+                                         ifn_tokenizer_local_sink *out) {
     size_t off = 0;
     while (off < bytes) {
         size_t end = bytes - off > IFN_TOK_CHUNK ? off + IFN_TOK_CHUNK : bytes;
@@ -355,7 +367,7 @@ static void ordinary(const ifn_tokenizer *t, const unsigned char *text, size_t b
                 }
             }
         }
-        chunk(t, text + off, end - off, s, out);
+        ifn_tokenizer_local_chunk(t, text + off, end - off, s, out);
         off = end;
     }
 }
@@ -367,9 +379,9 @@ ifn_status ifn_tokenizer_encode(const ifn_tokenizer *t, const char *text, size_t
         *needed = 0;
     if (!t || !s || !needed || (!text && bytes) || (!ids && capacity) || parse_special > 1)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid encode arguments");
-    if (!valid_utf8(text, bytes))
+    if (!ifn_tokenizer_local_valid_utf8(text, bytes))
         return ifn_error(IFN_FORMAT, "tokenizer input is not valid UTF-8");
-    sink out = {ids, capacity, 0};
+    ifn_tokenizer_local_sink out = {ids, capacity, 0};
     const unsigned char *input = (const unsigned char *)text;
     size_t segment = 0, p = 0;
     if (parse_special)
@@ -386,15 +398,15 @@ ifn_status ifn_tokenizer_encode(const ifn_tokenizer *t, const char *text, size_t
                 i++;
             }
             if (i < t->special_count) {
-                ordinary(t, input + segment, p - segment, s, &out);
-                emit(&out, t->specials[i]);
+                ifn_tokenizer_local_ordinary(t, input + segment, p - segment, s, &out);
+                ifn_tokenizer_local_emit(&out, t->specials[i]);
                 p += t->entries[t->specials[i]].length;
                 segment = p;
             } else
                 p += 2;
         }
     if (segment < bytes)
-        ordinary(t, input + segment, bytes - segment, s, &out);
+        ifn_tokenizer_local_ordinary(t, input + segment, bytes - segment, s, &out);
     *needed = out.count;
     return ifn_error(out.count > capacity ? IFN_BUFFER_TOO_SMALL : IFN_OK,
                      out.count > capacity ? "token buffer too small" : "");
@@ -422,7 +434,7 @@ ifn_status ifn_render_user_prompt(const char *text, size_t bytes, ifn_thinking_e
         *needed = 0;
     if (!needed || (!text && bytes) || (!out && capacity) || effort > IFN_THINK_MAX)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid prompt arguments");
-    if (!valid_utf8(text, bytes))
+    if (!ifn_tokenizer_local_valid_utf8(text, bytes))
         return ifn_error(IFN_FORMAT, "prompt is not valid UTF-8");
     const char *levels[] = {"0", "0.1", "0.2", "0.7", "0.9", "0.99"};
     const char *prefix = "<|message_system|><|content_text|>Thinking effort level: ";
@@ -436,18 +448,18 @@ ifn_status ifn_render_user_prompt(const char *text, size_t bytes, ifn_thinking_e
     if (capacity < n)
         return ifn_error(IFN_BUFFER_TOO_SMALL, "prompt buffer too small");
     size_t at = 0;
-#define APPEND(p, k)                                                                               \
+#define IFN_TOKENIZER_LOCAL_APPEND(p, k)                                                           \
     do {                                                                                           \
         size_t z = (k);                                                                            \
         if (z)                                                                                     \
             memcpy(out + at, (p), z);                                                              \
         at += z;                                                                                   \
     } while (0)
-    APPEND(prefix, strlen(prefix));
-    APPEND(levels[effort], strlen(levels[effort]));
-    APPEND(middle, strlen(middle));
-    APPEND(text, bytes);
-    APPEND(suffix, strlen(suffix));
-#undef APPEND
+    IFN_TOKENIZER_LOCAL_APPEND(prefix, strlen(prefix));
+    IFN_TOKENIZER_LOCAL_APPEND(levels[effort], strlen(levels[effort]));
+    IFN_TOKENIZER_LOCAL_APPEND(middle, strlen(middle));
+    IFN_TOKENIZER_LOCAL_APPEND(text, bytes);
+    IFN_TOKENIZER_LOCAL_APPEND(suffix, strlen(suffix));
+#undef IFN_TOKENIZER_LOCAL_APPEND
     return ifn_error(IFN_OK, "");
 }

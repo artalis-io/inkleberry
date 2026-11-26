@@ -23,7 +23,8 @@ def main():
     cases = [(mode, mtp, 0) for mode in range(3) for mtp in range(2)]
     cases += [(1, 1, 1), (2, 1, 1)]
     for mode, mtp, force in cases:
-        env = dict(os.environ, SQUID_DRAFT_VOCAB='full', SQUID_MTP_BF16=str(force))
+        env = dict(os.environ, INKLEBERRY_MTP_BF16=str(force))
+        env['SQUID_DRAFT_VOCAB'] = 'full'  # Frozen Zig reference option.
         command = [sys.executable, 'tools/run_cuda_smoke.py', args.cuda_lib,
                    args.oracle, args.model, str(mode), str(mtp)]
         peak = 0

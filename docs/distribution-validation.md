@@ -57,3 +57,50 @@ and formatting. CUDA pins, LICENSE and NOTICE are unchanged.
 This is functional qualification of the renamed distributions on the listed
 hardware/model, not a new performance campaign or a claim about other models.
 Model inputs remain external to every package.
+
+## Complete native namespace qualification
+
+The native implementation now uses `ifn_` / `IFN_` throughout, including C helpers,
+CUDA namespaces, kernel functions, bridge records, constants and macros. No old
+C/CUDA compatibility symbols remain. Standard/toolchain entry points, locals and
+members retain their required conventions. The checked-in Zig reference is unchanged.
+
+All nine retained CUDA files carry an identifier-only modification notice.
+Reversing `config/native-namespace.json` reproduces their original byte hashes;
+the upstream hashes were not replaced. A token audit of 96 implementation/test
+files confirmed only reviewed names and formatting changed.
+
+Executed on the same GPU 1/model/toolchain described above:
+
+- Host/install checks on macOS and Linux; generated ABI and namespace regressions.
+- Native archive/provider symbol audit: all 76 bridge functions use the new names.
+- Independent C/C++ ABI probe: 76 prototypes, seven records, 72 layout checks pass.
+- Extracted modular provider, amalgamated SDK and packaged CLI native acceptance
+  pass again after renaming the CUDA implementation.
+- A real C/Zig comparison with NVFP4 weights, FP8 KV and graphs enabled:
+  33 prompt tokens, 1,000,290 logits compared, 32 generated tokens; parity passed.
+  Temporary Zig copies adapt only link names; original sources remain byte-identical.
+- Source/runtime/embedding extraction checks and reference-free host builds pass.
+
+Native logs on core:
+`/data/scratch/inkleberry-native-namespace-build-final-20261126.log`,
+`/data/scratch/inkleberry-native-namespace-inference-20261126.log`, and
+`/data/scratch/inkleberry-native-namespace-oracle-20261126.log`.
+
+Additional checks passed for this namespace change: Linux ASan/UBSan;
+modular/amalgamated fuzz smoke (3,000 runs per harness); negative bridge tests
+rejecting signature/layout mismatches; native packing and sampling-kernel
+regressions. Full context/throughput benchmarking was not repeated: no numerical
+or tuning expressions changed.
+
+The pre-merge review additionally found 52 template-kernel identifiers behind
+CUDA launch-bound attributes. Those identifiers are now prefixed too. The source
+gate balances nested attribute expressions, tests that previously missed form,
+and rejects attempts to rename compiler-reserved identifiers. Reversing the
+complete map still reproduces all original CUDA hashes.
+
+The final correction passed host/install, lint, package extraction, native symbol
+and ABI checks. Extracted modular/amalgamated inference and packaged generation
+passed again on idle GPU 0 after GPU 1 became occupied; its idle guard refused
+execution there and no unrelated workload was interrupted. Final log on core:
+`/data/scratch/inkleberry-final-kernel-namespace-inference-gpu0-20261126.log`.

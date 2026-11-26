@@ -23,7 +23,7 @@ snapshot. Use focused feature branches; never rewrite the preserved snapshot.
 | `include/ifn*.h` | Public API, types and ownership contracts |
 | `src/` | Canonical C host, readers, tokenizer, inference and execution state |
 | `src/cuda/` | Checked adapters around the retained native implementation |
-| `cuda/` | Pinned CUDA C++20 kernels and bridge |
+| `cuda/` | Namespace-adapted CUDA C++20 kernels and bridge |
 | `abi/cuda.json` | Internal bridge schema; generated declarations/layout checks |
 | `config/sources.mk` | Canonical source groups for modular/amalgamated builds |
 | `dist/ifn.h`, `dist/ifn.c` | Generated embedding distribution |
@@ -35,8 +35,10 @@ snapshot. Use focused feature branches; never rewrite the preserved snapshot.
 Public functions/types use `ifn_`, macros/constants `IFN_`, environment controls
 `INKLEBERRY_`. The CLI is `inkleberry`; library names begin with `libinkleberry`.
 The backend identity is `artalis.inkleberry`. There are no pre-release `sq_` API
-aliases. The pinned internal CUDA `squid_*` symbols and its own environment knobs
-are upstream implementation details, not the public library API.
+aliases. All project-owned native symbols, including internal helpers, CUDA
+namespaces, kernel functions and bridge records, use `ifn_` / `IFN_`. Local
+variables/members and identifiers required by CUDA, the standard library, `main`
+and libFuzzer retain their external conventions. Frozen Zig sources are exempt.
 
 ## Library contract
 
@@ -63,9 +65,14 @@ Edit canonical modules and regenerate with `make amalgamation`. Do not hand-edit
 Generate the internal CUDA contract with `tools/generate_cuda_abi.py` from
 `abi/cuda.json`; never hand-edit generated declarations or layout assertions.
 `make generated-check` verifies production pins/schema output;
-`make reference-check` additionally checks frozen reference bytes. Preserve
-upstream hashes and relocation entries in `UPSTREAM.json`; a dependency update
-requires an explicit reviewed change, never a silent hash refresh.
+`make reference-check` additionally checks frozen reference bytes.
+Optional Zig comparisons adapt link names in disposable build-directory copies;
+never modify the checked-in Zig reference to match production names. Preserve
+upstream hashes and relocation entries in `UPSTREAM.json`. CUDA files carry an
+identifier-only modification notice; `tools/native_namespace.py` reverses
+`config/native-namespace.json` and must reproduce the original pinned bytes.
+Do not expand the map to hide algorithm changes. A dependency update requires
+an explicit reviewed change, never a silent hash refresh.
 Preserve Apache-2.0 LICENSE, NOTICE and translation attribution.
 
 ## Validation

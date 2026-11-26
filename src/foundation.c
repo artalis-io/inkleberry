@@ -49,12 +49,12 @@ bool ifn_size_align(size_t value, size_t alignment, size_t *out) {
     return true;
 }
 
-static void *default_allocate(void *context, size_t bytes) {
+static void *ifn_foundation_local_default_allocate(void *context, size_t bytes) {
     (void)context;
     return malloc(bytes);
 }
 
-static void default_release(void *context, void *allocation) {
+static void ifn_foundation_local_default_release(void *context, void *allocation) {
     (void)context;
     free(allocation);
 }
@@ -69,8 +69,8 @@ ifn_status ifn_options_resolve(const ifn_options *input, ifn_options *out) {
             return ifn_error(IFN_INVALID_ARGUMENT, "allocator callbacks must be paired");
     }
     if (!out->allocate) {
-        out->allocate = default_allocate;
-        out->release = default_release;
+        out->allocate = ifn_foundation_local_default_allocate;
+        out->release = ifn_foundation_local_default_release;
     }
     return IFN_OK;
 }
