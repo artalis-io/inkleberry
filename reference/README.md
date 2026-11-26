@@ -6,9 +6,10 @@ These files are an optional test oracle, not a second maintained runtime.
 Production sources are C11 under `src/`; normal C builds do not invoke Zig.
 
 Original upstream names and hashes remain in `UPSTREAM.json`. Its
-`relocated_files` map records where the original files now live. The verifier,
-CUDA ABI generator and oracle preparation tools resolve those names through that
-map. Original source paths in attribution comments, NOTICE and historical
+`relocated_files` map records where the original files now live. The full verifier and oracle preparation tools resolve those names through that
+map. CUDA ABI generation uses [the native ABI schema](../abi/README.md) independently of
+this reference tree. `make reference-check` verifies all reference bytes; normal
+`make generated-check` verifies production pins and schema artifacts. Original source paths in attribution comments, NOTICE and historical
 benchmark receipts refer to their recorded source revision/layout and remain unchanged.
 
 There is only one kernel tree: `upstream/cuda` is a relative symlink to the

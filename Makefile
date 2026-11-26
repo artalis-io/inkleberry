@@ -52,8 +52,12 @@ squid-c: cli/main.c libsq.a .build/config
 .build/concurrency: test/concurrency.c libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 generated-check:
-	python3 tools/verify_upstream.py
+	python3 tools/verify_upstream.py --production-only
 	python3 tools/generate_cuda_abi.py --check
+	python3 test/cuda_abi_schema.py
+.PHONY: reference-check
+reference-check: generated-check
+	python3 tools/verify_upstream.py
 .build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
 	python3 $< $@
 .build/tokenizer-test: test/tokenizer.c libsq.a .build/config
@@ -159,7 +163,7 @@ squid-c-weights: .build/gpu-context.o .build/gpu-weight-main.o libsq-gpu.a libsq
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 ZIG ?= zig
 .PHONY: gpu-weight-oracle
-gpu-weight-oracle: generated-check .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a
+gpu-weight-oracle: reference-check .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a
 	$(ZIG) build-exe -O ReleaseFast --dep weights -Mroot=test/oracle/weights.zig -Mweights=reference/upstream/src/weights.zig .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/gpu-weight-oracle
 
 .build/gpu-context.o: test/gpu_context.cu include/sq_gpu.h .build/config
@@ -191,7 +195,7 @@ squid-c-generate: .build/generate.o libsq-gpu.a libsq.a
 .build/ar-compare.o: test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: ar-oracle
-ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a
+ar-oracle: reference-check .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a
 	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/engine.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/ar-oracle
 
 .build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
@@ -208,7 +212,7 @@ ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gp
 .build/decode-compare.o: test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: decode-oracle
-decode-oracle: generated-check .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a
+decode-oracle: reference-check .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a
 	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/decode.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/decode-oracle
 .build/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
@@ -227,7 +231,7 @@ sampling-kernel-check: generated-check .build/sampling-kernels
 .build/adaptive-compare.o: test/adaptive_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: adaptive-oracle
-adaptive-oracle: generated-check .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a
+adaptive-oracle: reference-check .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a
 	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/adaptive.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/adaptive-oracle
 
 .build/lookup-test: test/lookup.c libsq.a .build/config
@@ -245,7 +249,7 @@ adaptive-oracle: generated-check .build/session-context.o .build/adaptive-compar
 .build/prefix-compare.o: test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: prefix-oracle
-prefix-oracle: generated-check .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a
+prefix-oracle: reference-check .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a
 	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/prefix.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/prefix-oracle
 .build/prefix-recovery.o: test/prefix_recovery.c test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
@@ -259,7 +263,7 @@ prefix-oracle: generated-check .build/session-context.o .build/prefix-compare.o 
 .build/stream-driver: test/stream_driver.c include/sq_chat.h libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .PHONY: chat-oracle
-chat-oracle: generated-check
+chat-oracle: reference-check
 	python3 tools/prepare_chat_oracle.py
 	$(ZIG) build-exe -O ReleaseFast --dep server -Mroot=test/oracle/chat.zig -Mserver=.build/chat-oracle-src/server.zig -lc -femit-bin=.build/chat-oracle
 .build/chat-native.o: test/chat_native.c test/decode_compare.c test/ar_compare.c include/sq_chat.h .build/config
@@ -324,3 +328,9 @@ install-infer-backend: install-gpu infer-shared
 infer-provider-check: infer-shared
 	python3 test/infer_exports.py ./libsq_backend.so.1
 	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' python3 test/infer_ffi.py ./libsq_backend.so.1
+
+.PHONY: cuda-abi-negative-check reference-free-check
+cuda-abi-negative-check: cuda-abi-check
+	python3 test/cuda_abi_negative.py --cc '$(CC)' --cxx '$(CXX)' --nvcc '$(NVCC)' --cuda-root '$(CUDA_ROOT)' --cuda-flags '$(CUDAFLAGS)' --cuda-objects '$(CUDA_OBJECTS)'
+reference-free-check:
+	python3 test/reference_free.py --cc '$(CC)' --cxx '$(CXX)'
