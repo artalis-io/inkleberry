@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """The embedding distribution must preserve every host library global symbol."""
 import subprocess
+import os
 import sys
 
 def symbols(path):
     result=set()
-    for line in subprocess.check_output(['nm','-g',path],text=True).splitlines():
+    for line in subprocess.check_output(['llvm-nm' if os.name == 'nt' else 'nm','-g',path],text=True).splitlines():
         fields=line.split()
         if len(fields)<3 or fields[-2] in ['U','w','v']:continue
         name=fields[-1]

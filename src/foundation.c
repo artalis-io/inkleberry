@@ -41,6 +41,15 @@ ifn_status ifn_os_error(ifn_status status, int code, const char *message) {
     return status;
 }
 
+ifn_status ifn_win32_error(ifn_status status, uint32_t code, const char *message) {
+    ifn_error(status, message);
+    if (status && code) {
+        ifn_foundation_diagnostic.provider = 5;
+        ifn_foundation_diagnostic.code = code;
+    }
+    return status;
+}
+
 ifn_status ifn_native_error(ifn_status status, int code, const char *message) {
     ifn_error(status, message);
     if (status && code > 0) {

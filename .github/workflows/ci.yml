@@ -52,3 +52,30 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - run: make thread-sanitize SAN_CC=clang SAN_CXX=clang++
+
+  windows-native:
+    name: Windows (${{ matrix.cc }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [cl, clang-cl]
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # Preserve pinned CUDA bytes and deterministic generated sources.
+          fetch-depth: 1
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          release: false
+          install: make
+      - name: Native host, ABI, concurrency, mmap and installed consumers
+        run: |
+          source scripts/msvc-env.sh
+          export PATH="/c/Program Files/LLVM/bin:$PATH"
+          make -j4 CC=${{ matrix.cc }} PYTHON=python check install-check install-contract-check windows-sdk-check

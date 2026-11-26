@@ -73,7 +73,7 @@ ifn_status ifn_infer_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1
         return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
     if (!ifn_infer_lock(&s->busy))
         return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
-    ifn_infer_memory_plan_v1 v;
+    ifn_infer_memory_plan_v1 v = {0};
     ifn_status rc = ifn_infer_session_local_plan_locked(s, &v);
     if (!rc)
         rc = ifn_infer_output(out, &v, sizeof v);
@@ -87,7 +87,7 @@ ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e
     if (!ifn_infer_lock(&s->busy))
         return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_PREPARE, "session busy");
     ifn_status rc = s->state == IFN_HANDLE_CREATED ? IFN_OK : IFN_INFER_INVALID_STATE;
-    ifn_infer_memory_plan_v1 v;
+    ifn_infer_memory_plan_v1 v = {0};
     if (!rc)
         rc = ifn_infer_session_local_plan_locked(s, &v);
     if (!rc && v.peak_owned_device_bytes > s->device_budget)

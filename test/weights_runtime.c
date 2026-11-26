@@ -105,8 +105,9 @@ int main(int argc, char **argv) {
         m.fail_nth = nth[i];
         IFN_MOCK_GPU_LOCAL_CHECK(ifn_weights_create(&config, NULL, &b, &w) == IFN_OK);
         ifn_status status = ifn_weights_load(w, checkpoint);
-        IFN_MOCK_GPU_LOCAL_CHECK(status == (ops[i] == ALLOC ? IFN_OUT_OF_MEMORY : IFN_GPU_ERROR) &&
-                                 !w->ready);
+        IFN_MOCK_GPU_LOCAL_CHECK(
+            status == (ifn_status)(ops[i] == ALLOC ? IFN_OUT_OF_MEMORY : IFN_GPU_ERROR) &&
+            !w->ready);
         m.fail_op = -1;
         IFN_MOCK_GPU_LOCAL_CHECK(ifn_weights_destroy(&w) == IFN_OK && !w && !m.live && !m.stream);
         if (ops[i] != LEAVE)
@@ -143,11 +144,11 @@ int main(int argc, char **argv) {
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_weights_create(&config, NULL, &b, &w) == IFN_OK);
     atomic_store(&m.pause, 1);
     ifn_weights_runtime_local_thread_args args = {w, checkpoint, IFN_INVALID_ARGUMENT};
-    pthread_t thread;
+    ifn_test_thread thread;
     IFN_MOCK_GPU_LOCAL_CHECK(
-        !pthread_create(&thread, NULL, ifn_weights_runtime_local_load_thread, &args));
+        !ifn_test_thread_create(&thread, NULL, ifn_weights_runtime_local_load_thread, &args));
     while (!atomic_load(&m.arrived))
-        sched_yield();
+        ifn_test_yield();
     ifn_weight_span span;
     ifn_weight_view v;
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_weights_load(w, checkpoint) == IFN_BUSY &&
@@ -157,7 +158,7 @@ int main(int argc, char **argv) {
                              ifn_weights_read(w, 0, 0, &byte, 1) == IFN_BUSY &&
                              ifn_weights_destroy(&w) == IFN_BUSY && w);
     atomic_store(&m.resume, 1);
-    IFN_MOCK_GPU_LOCAL_CHECK(!pthread_join(thread, NULL) && args.status == IFN_OK);
+    IFN_MOCK_GPU_LOCAL_CHECK(!ifn_test_thread_join(thread, NULL) && args.status == IFN_OK);
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_weights_destroy(&w) == IFN_OK && !w && !m.live && !m.stream);
     ifn_inkling_checkpoint_close(checkpoint);
     puts("GPU ownership simulation: allocation/operation/cleanup failures, retained retry handles, "

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "ifn.h"
-#include <pthread.h>
+#include "platform.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +32,7 @@ int main(void) {
     ifn_safetensors *file = NULL;
     if (ifn_safetensors_open_memory(input, sizeof input, NULL, &file) != IFN_OK)
         return 1;
-    pthread_t threads[4];
+    ifn_test_thread threads[4];
     /* This thread's error must survive other threads' successful and failed calls. */
     ifn_safetensors *out = NULL;
     if (ifn_safetensors_open("/nonexistent/inkleberry/model", NULL, &out) != IFN_IO)
@@ -42,14 +42,14 @@ int main(void) {
     size_t created = 0;
     int failed = 0;
     for (; created < 4; created++) {
-        if (pthread_create(&threads[created], NULL, ifn_concurrency_local_worker, file)) {
+        if (ifn_test_thread_create(&threads[created], NULL, ifn_concurrency_local_worker, file)) {
             failed = 1;
             break;
         }
     }
     for (size_t i = 0; i < created; i++) {
         void *result;
-        if (pthread_join(threads[i], &result) || result)
+        if (ifn_test_thread_join(threads[i], &result) || result)
             failed = 1;
     }
     if (strcmp(original, ifn_last_error()))

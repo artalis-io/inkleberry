@@ -3,6 +3,7 @@
 from pathlib import Path
 import re
 import subprocess
+import os
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from amalgamate import TOKEN
@@ -42,12 +43,20 @@ for directory in ['src', 'cuda', 'include', 'cli', 'examples', 'test', 'fuzz']:
         for name in re.findall(r'^}\s*(\w+)\s*;', code, re.M):
             assert name.startswith('ifn_'), (path, name)
 for filename in sys.argv[1:]:
-    output = subprocess.check_output(['nm', '-g', filename], text=True)
+    if os.name == 'nt' and filename.lower().endswith('.dll'):
+        output = subprocess.check_output(['llvm-readobj', '--coff-exports', filename], text=True)
+        names = re.findall(r'^  Name: (.+)$', output, re.M)
+        assert names and all(n.startswith('ifn_') for n in names), names
+        assert 'ifn_status_string' in names
+        continue
+    output = subprocess.check_output(['llvm-nm' if os.name == 'nt' else 'nm', '-g', filename], text=True)
     defined = []
     for line in output.splitlines():
         fields = line.split()
         if len(fields) >= 3 and fields[-2] not in ('U', 'w', 'v'):
-            name = fields[-1].removeprefix('_')
+            name = fields[-1]
+            if name.startswith('_ifn_'): name = name[1:]
+            if os.name == 'nt' and (name in ('@feat.00', '@comp.id', 'snprintf', 'vsnprintf', '_Atomic_exchange8', '_Atomic_store8', '_Check_memory_order', '?_OptionsStorage@?1??__local_stdio_printf_options@@9@9') or name.startswith('??_C@')): continue
             assert name.startswith('ifn_') or name.startswith(('__', '.')), name
             defined.append(name)
     assert 'ifn_status_string' in defined, filename

@@ -1,5 +1,6 @@
 # C library/installed-consumer conventions adapted from artalis-io/jev-bush (0BSD).
 .DEFAULT_GOAL := all
+.DELETE_ON_ERROR:
 CC ?= cc
 CXX ?= c++
 AR ?= ar
@@ -27,17 +28,17 @@ PROGRAM_HARDEN = -pie
 LDFLAGS += -Wl,-z,relro,-z,now,-z,noexecstack
 endif
 endif
-CUDA_ROOT ?= /usr/local/cuda
+CUDA_ROOT ?= $(if $(CUDA_PATH),$(subst \,/,$(CUDA_PATH)),/usr/local/cuda)
 NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
 include config/sources.mk
-OBJ = $(HOST:src/%.c=.build/%.o)
-PIC = $(HOST:src/%.c=.build/%.pic.o)
+OBJ = $(HOST:src/%.c=$(BUILD_DIR)/%.o)
+PIC = $(HOST:src/%.c=$(BUILD_DIR)/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
 CUDA_MATH = kernels_gemv kernels_inkling kernels_dspark kernels_prefill
-CUDA_OBJECTS = $(addprefix .build/,$(addsuffix .cuda.o,$(CUDA_MATH)))
+CUDA_OBJECTS = $(addprefix $(BUILD_DIR)/,$(addsuffix .cuda.o,$(CUDA_MATH)))
 ifeq ($(shell uname -s),Darwin)
 SHARED = libinkleberry.dylib
 SHARED_REAL = libinkleberry.$(IFN_VERSION).dylib
@@ -51,435 +52,487 @@ SHARED_ABI = libinkleberry.so.1
 SHARED_FLAGS = -shared -Wl,-soname,$(SHARED_ABI)
 PLAIN_SHARED_FLAGS = -shared
 endif
+include mk/toolchain.mk
+export CC CXX PYTHON BUILD_DIR IFN_WINDOWS
+
 .PHONY: all check clean sanitize thread-sanitize fuzz-smoke generated-check format lint install install-check cuda-abi-check cuda-check FORCE
-all: inkleberry libinkleberry.a $(SHARED)
-.build:
+all: $(CLI) $(HOST_STATIC) $(SHARED)
+$(BUILD_DIR):
 	mkdir -p $@
 FORCE:
-.build/config: FORCE | .build
-	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS) $(IFN_VERSION) $(HARDEN) $(PROGRAM_COMPILE) $(PROGRAM_HARDEN)' > $@.tmp
+$(BUILD_DIR)/config: FORCE | $(BUILD_DIR)
+	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) $(CXX_WARNFLAGS) $(CUDA_LIBS) $(IFN_LINKER) $(PROVIDER_FLAGS) $(IFN_VERSION) $(HARDEN) $(PROGRAM_COMPILE) $(PROGRAM_HARDEN)' > $@.tmp
 	@cmp -s $@.tmp $@ || mv $@.tmp $@
 	@rm -f $@.tmp
-.build/%.o: src/%.c include/ifn.h src/internal.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -MMD -MP -c $< -o $@
-.build/%.pic.o: src/%.c include/ifn.h src/internal.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -fvisibility=hidden -DIFN_SHARED -DIFN_BUILD_SHARED -MMD -MP -c $< -o $@
-libinkleberry.a: $(OBJ)
-	$(AR) rcs $@ $^
+$(BUILD_DIR)/%.o: src/%.c include/ifn.h src/internal.h $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(DEPFLAGS),$<,$@)
+$(BUILD_DIR)/%.pic.o: src/%.c include/ifn.h src/internal.h $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PIC_FLAGS) $(HIDDEN_FLAGS) -DIFN_SHARED -DIFN_BUILD_SHARED $(DEPFLAGS),$<,$@)
+$(HOST_STATIC): $(OBJ)
+	$(call ifn_archive,$@,$^)
 $(SHARED_REAL): $(PIC)
-	$(CC) $(SHARED_FLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(call ifn_shared,$(CC),,$^,$(SHARED_FLAGS) $(LDFLAGS) $(LDLIBS),$@)
+ifneq ($(SHARED),$(SHARED_REAL))
 $(SHARED): $(SHARED_REAL)
 	ln -sf $(SHARED_REAL) $(SHARED)
 	ln -sf $(SHARED_REAL) $(SHARED_ABI)
-inkleberry: cli/main.c $(PIC) .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE) $< $(PIC) $(LDFLAGS) $(PROGRAM_HARDEN) $(LDLIBS) -o $@
-.build/unit: test/unit.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/concurrency: test/concurrency.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+endif
+$(CLI): cli/main.c $(CLI_HOST) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE),$< $(CLI_HOST),$(LDFLAGS) $(PROGRAM_HARDEN) $(LDLIBS),$@)
+$(BUILD_DIR)/unit$(EXE): test/unit.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/concurrency$(EXE): test/concurrency.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
 generated-check:
-	python3 tools/version.py --check
-	python3 tools/verify_upstream.py
-	python3 tools/generate_cuda_abi.py --check
-	python3 test/cuda_abi_schema.py
-	python3 test/native_namespace.py
-	python3 test/cuda_guard.py
-.build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
-	python3 $< $@
-.build/tokenizer-test: test/tokenizer.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-.build/inkling-test: test/inkling.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/weights-test: test/weights_runtime.c test/mock_gpu.h libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-check: .build/chat-native.o .build/chat-test .build/stream-driver .build/chat-fixture.json .build/prefix-recovery.o .build/prefix-compare.o .build/adaptive-compare.o .build/adaptive-recovery.o .build/lookup-test .build/sampling-test .build/decode-compare.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/generate.o .build/check-ar-cpp.o .build/engine-test .build/weights-test all generated-check .build/unit .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/inkling-test
-	.build/chat-test .build/chat-fixture.json
-	python3 test/stream_cases.py .build/stream-driver
-	.build/unit
-	python3 test/namespace.py libinkleberry.a $(SHARED)
-	.build/engine-test
-	.build/sampling-test
-	.build/lookup-test
-	python3 test/weights_plan.py ./inkleberry
-	.build/inkling-test
-	python3 test/inkling_cases.py .build/inkling-test ./inkleberry .build/weights-test .build/infer-test .build/chat-fixture.json
-	.build/tokenizer-test .build/tokenizer-fixture.json
-	python3 test/tokenizer_cases.py .build/tokenizer-test ./inkleberry
-	.build/concurrency
-	python3 test/safetensors_cases.py ./inkleberry
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c test/cuda_abi_c.c -o .build/cuda_abi_c.o
-	$(CXX) -std=c++11 -Wall -Wextra -Werror -Iinclude -x c++ -c test/installed_consumer.c -o .build/cpp-consumer.o
-	$(CC) .build/cpp-consumer.o libinkleberry.a $(LDFLAGS) $(LDLIBS) -o .build/cpp-consumer
-	.build/cpp-consumer
+	$(PYTHON) tools/version.py --check
+	$(PYTHON) tools/verify_upstream.py
+	$(PYTHON) tools/generate_cuda_abi.py --check
+	$(PYTHON) test/cuda_abi_schema.py
+	$(PYTHON) test/native_namespace.py
+	$(PYTHON) test/cuda_guard.py
+$(BUILD_DIR)/tokenizer-fixture.json: test/tokenizer_fixtures.py | $(BUILD_DIR)
+	$(PYTHON) $< $@
+$(BUILD_DIR)/tokenizer-test$(EXE): test/tokenizer.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/inkling-test$(EXE): test/inkling.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/weights-test$(EXE): test/weights_runtime.c test/mock_gpu.h $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
+check: $(BUILD_DIR)/chat-native.o $(BUILD_DIR)/chat-test$(EXE) $(BUILD_DIR)/stream-driver$(EXE) $(BUILD_DIR)/chat-fixture.json $(BUILD_DIR)/prefix-recovery.o $(BUILD_DIR)/prefix-compare.o $(BUILD_DIR)/adaptive-compare.o $(BUILD_DIR)/adaptive-recovery.o $(BUILD_DIR)/lookup-test$(EXE) $(BUILD_DIR)/sampling-test$(EXE) $(BUILD_DIR)/decode-compare.o $(BUILD_DIR)/engine_forward.o $(BUILD_DIR)/engine_spec.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(BUILD_DIR)/engine_prefill.o $(BUILD_DIR)/generate.o $(BUILD_DIR)/check-ar-cpp.o $(BUILD_DIR)/engine-test$(EXE) $(BUILD_DIR)/weights-test$(EXE) all generated-check $(BUILD_DIR)/unit$(EXE) $(BUILD_DIR)/concurrency$(EXE) $(BUILD_DIR)/tokenizer-test$(EXE) $(BUILD_DIR)/tokenizer-fixture.json $(BUILD_DIR)/inkling-test$(EXE)
+	$(BUILD_DIR)/chat-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(PYTHON) test/stream_cases.py $(BUILD_DIR)/stream-driver$(EXE)
+	$(BUILD_DIR)/unit$(EXE)
+	$(PYTHON) test/namespace.py $(HOST_STATIC) $(SHARED)
+	$(BUILD_DIR)/engine-test$(EXE)
+	$(BUILD_DIR)/sampling-test$(EXE)
+	$(BUILD_DIR)/lookup-test$(EXE)
+	$(PYTHON) test/weights_plan.py ./$(CLI)
+	$(BUILD_DIR)/inkling-test$(EXE)
+	$(PYTHON) test/inkling_cases.py $(BUILD_DIR)/inkling-test$(EXE) ./$(CLI) $(BUILD_DIR)/weights-test$(EXE) $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(BUILD_DIR)/tokenizer-test$(EXE) $(BUILD_DIR)/tokenizer-fixture.json
+	$(PYTHON) test/tokenizer_cases.py $(BUILD_DIR)/tokenizer-test$(EXE) ./$(CLI)
+	$(BUILD_DIR)/concurrency$(EXE)
+	$(PYTHON) test/safetensors_cases.py ./$(CLI)
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),test/cuda_abi_c.c,$(BUILD_DIR)/cuda_abi_c.o)
+	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -Iinclude $(CXX_LANGUAGE),test/installed_consumer.c,$(BUILD_DIR)/cpp-consumer.o)
+	$(call ifn_program,$(CC),,$(BUILD_DIR)/cpp-consumer.o $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$(BUILD_DIR)/cpp-consumer$(EXE))
+	$(BUILD_DIR)/cpp-consumer$(EXE)
 sanitize:
 	$(MAKE) clean
 	$(MAKE) CC='$(SAN_CC)' CXX='$(SAN_CXX)' CFLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all' LDFLAGS='-fsanitize=address,undefined' check
 thread-sanitize:
 	$(MAKE) clean
-	$(MAKE) CC='$(SAN_CC)' CXX='$(SAN_CXX)' CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' .build/infer-test .build/concurrency .build/tokenizer-test .build/tokenizer-fixture.json .build/weights-test .build/inkling-test .build/engine-test .build/sampling-test .build/lookup-test .build/chat-test .build/chat-fixture.json inkleberry
-	.build/infer-test .build/chat-fixture.json
-	.build/concurrency
-	.build/tokenizer-test .build/tokenizer-fixture.json
-	python3 test/inkling_cases.py .build/inkling-test ./inkleberry .build/weights-test .build/infer-test .build/chat-fixture.json
-	.build/engine-test
-	.build/sampling-test
-	.build/lookup-test
-	.build/chat-test .build/chat-fixture.json
-fuzz-smoke: | .build
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) $(INFER) test/infer_mock.c fuzz/fuzz_infer.c -pthread -o .build/fuzz-infer
-	.build/fuzz-infer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=4096
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_stream.c -o .build/fuzz-stream
-	.build/fuzz-stream -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768
-	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
-	.build/fuzz-safetensors -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=262144 .build/fuzz-corpus
-	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_tokenizer.c -o .build/fuzz-tokenizer
-	.build/fuzz-tokenizer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768 .build/tokenizer-corpus
+	$(MAKE) CC='$(SAN_CC)' CXX='$(SAN_CXX)' CFLAGS='-O1 -g -fsanitize=thread' LDFLAGS='-fsanitize=thread' $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/concurrency$(EXE) $(BUILD_DIR)/tokenizer-test$(EXE) $(BUILD_DIR)/tokenizer-fixture.json $(BUILD_DIR)/weights-test$(EXE) $(BUILD_DIR)/inkling-test$(EXE) $(BUILD_DIR)/engine-test$(EXE) $(BUILD_DIR)/sampling-test$(EXE) $(BUILD_DIR)/lookup-test$(EXE) $(BUILD_DIR)/chat-test$(EXE) $(BUILD_DIR)/chat-fixture.json $(CLI)
+	$(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(BUILD_DIR)/concurrency$(EXE)
+	$(BUILD_DIR)/tokenizer-test$(EXE) $(BUILD_DIR)/tokenizer-fixture.json
+	$(PYTHON) test/inkling_cases.py $(BUILD_DIR)/inkling-test$(EXE) ./$(CLI) $(BUILD_DIR)/weights-test$(EXE) $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(BUILD_DIR)/engine-test$(EXE)
+	$(BUILD_DIR)/sampling-test$(EXE)
+	$(BUILD_DIR)/lookup-test$(EXE)
+	$(BUILD_DIR)/chat-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+fuzz-smoke: | $(BUILD_DIR)
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) $(INFER) test/infer_mock.c fuzz/fuzz_infer.c $(THREAD_LIBS) -o $(BUILD_DIR)/fuzz-infer
+	$(BUILD_DIR)/fuzz-infer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=4096
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_stream.c -o $(BUILD_DIR)/fuzz-stream
+	$(BUILD_DIR)/fuzz-stream -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768
+	$(PYTHON) test/safetensors_cases.py --corpus $(BUILD_DIR)/fuzz-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o $(BUILD_DIR)/fuzz-safetensors
+	$(BUILD_DIR)/fuzz-safetensors -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=262144 $(BUILD_DIR)/fuzz-corpus
+	$(PYTHON) test/tokenizer_cases.py --corpus $(BUILD_DIR)/tokenizer-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_tokenizer.c -o $(BUILD_DIR)/fuzz-tokenizer
+	$(BUILD_DIR)/fuzz-tokenizer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768 $(BUILD_DIR)/tokenizer-corpus
 format:
 	tools/format.sh
 lint: generated-check
 	tools/format.sh --check
-	python3 tools/lint.py
-	python3 test/lint_boundaries.py
+	$(PYTHON) tools/lint.py
+	$(PYTHON) test/lint_boundaries.py
 install: all infer
 	mkdir -p $(DESTDIR)$(INCLUDEDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(PKGCONFIGDIR) $(DESTDIR)$(BINDIR)
 	cp $(PUBLIC_HEADERS) $(DESTDIR)$(INCLUDEDIR)/
-	cp libinkleberry-infer.a libinkleberry.a $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/
+	cp $(INFER_STATIC) $(HOST_STATIC) $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/
+ifneq ($(IFN_WINDOWS),1)
 	ln -sf $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/$(SHARED)
 	ln -sf $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/$(SHARED_ABI)
-	cp inkleberry $(DESTDIR)$(BINDIR)/
+else
+	cp $(BUILD_DIR)/inkleberry-1.lib $(DESTDIR)$(LIBDIR)/
+	cp $(SHARED_REAL) $(DESTDIR)$(BINDIR)/
+endif
+	cp $(CLI) $(DESTDIR)$(BINDIR)/
+ifneq ($(IFN_WINDOWS),1)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' inkleberry.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry.pc
+endif
 .PHONY: uninstall uninstall-infer-backend
 uninstall-infer-backend:
-	rm -f $(addprefix $(DESTDIR)$(LIBDIR)/,libinkleberry_backend.so libinkleberry_backend.so.1)
+	rm -f $(addprefix $(DESTDIR)$(LIBDIR)/,libinkleberry_backend.so $(notdir $(PROVIDER)) $(BACKEND_IMPORT))
 	rm -f $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-infer.pc
 uninstall: uninstall-infer-backend
 	rm -f $(addprefix $(DESTDIR)$(INCLUDEDIR)/,$(notdir $(PUBLIC_HEADERS)))
-	rm -f $(addprefix $(DESTDIR)$(LIBDIR)/,libinkleberry.a libinkleberry-infer.a libinkleberry-gpu.a $(SHARED) $(SHARED_REAL) $(SHARED_ABI))
-	rm -f $(DESTDIR)$(BINDIR)/inkleberry $(DESTDIR)$(BINDIR)/inkleberry-generate $(DESTDIR)$(BINDIR)/inkleberry-weights
+	rm -f $(addprefix $(DESTDIR)$(LIBDIR)/,$(notdir $(HOST_STATIC) $(INFER_STATIC) $(GPU_STATIC) $(SHARED) $(SHARED_REAL) $(SHARED_ABI) $(HOST_IMPORT)))
+	rm -f $(addprefix $(DESTDIR)$(BINDIR)/,$(notdir $(CLI) $(GENERATE) $(WEIGHTS_CLI)) $(INSTALLED_DLLS))
 	rm -f $(addprefix $(DESTDIR)$(PKGCONFIGDIR)/,inkleberry.pc inkleberry-infer.pc inkleberry-static-infer.pc)
-install-check: DESTDIR = $(CURDIR)/.build/stage
+install-check: DESTDIR = $(CURDIR)/$(BUILD_DIR)/stage
 install-check: PREFIX = /usr/local
 install-check: install
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include test/installed_consumer.c .build/stage/usr/local/lib/libinkleberry.a $(LDFLAGS) $(LDLIBS) -o .build/installed-static
-	.build/installed-static
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include test/installed_consumer.c -L.build/stage/usr/local/lib -linkleberry -Wl,-rpath,'$(CURDIR)/.build/stage/usr/local/lib' $(LDFLAGS) $(LDLIBS) -o .build/installed-shared
-	.build/installed-shared
-.build/%.cuda.o: cuda/%.cu $(CUDA_HEADERS) .build/config
+	$(call ifn_program,$(CC),$(CFLAGS) $(WARNFLAGS) -I$(BUILD_DIR)/stage/usr/local/include,test/installed_consumer.c $(BUILD_DIR)/stage/usr/local/lib/$(notdir $(HOST_STATIC)),$(LDFLAGS) $(LDLIBS),$(BUILD_DIR)/installed-static$(EXE))
+	$(BUILD_DIR)/installed-static$(EXE)
+	$(call ifn_program,$(CC),$(CFLAGS) $(WARNFLAGS) -I$(BUILD_DIR)/stage/usr/local/include,test/installed_consumer.c $(RPATH_STAGE),$(INSTALLED_SHARED_LINK) $(LDFLAGS) $(LDLIBS),$(INSTALLED_SHARED_PROGRAM))
+	$(INSTALLED_SHARED_PROGRAM)
+$(BUILD_DIR)/%.cuda.o: cuda/%.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-.build/abi-probe.o: test/cuda_abi_probe.cu src/cuda_abi.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+$(BUILD_DIR)/abi-probe.o: test/cuda_abi_probe.cu src/cuda_abi.h cuda/cuda_abi.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
-.build/abi-c.o: test/cuda_abi_c.c src/cuda_abi.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/abi-probe: .build/abi-probe.o .build/abi-c.o $(CUDA_OBJECTS)
-	$(CXX) $^ $(CUDA_LIBS) -o $@
-cuda-abi-check: generated-check .build/abi-probe
-	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/abi-probe
-.build/cuda-smoke.o: test/cuda_smoke.c src/cuda_abi.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/cuda-smoke: .build/cuda-smoke.o .build/cuda_abi.cuda.o $(CUDA_OBJECTS)
-	$(CXX) $^ $(CUDA_LIBS) -o $@
-cuda-check: cuda-abi-check .build/cuda-smoke
-	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/cuda-smoke
+$(BUILD_DIR)/abi-c.o: test/cuda_abi_c.c src/cuda_abi.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/abi-probe$(EXE): $(BUILD_DIR)/abi-probe.o $(BUILD_DIR)/abi-c.o $(CUDA_OBJECTS)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
+cuda-abi-check: generated-check $(BUILD_DIR)/abi-probe$(EXE)
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' $(BUILD_DIR)/abi-probe$(EXE)
+$(BUILD_DIR)/cuda-smoke.o: test/cuda_smoke.c src/cuda_abi.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/cuda-smoke$(EXE): $(BUILD_DIR)/cuda-smoke.o $(BUILD_DIR)/cuda_abi.cuda.o $(CUDA_OBJECTS)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
+cuda-check: cuda-abi-check $(BUILD_DIR)/cuda-smoke$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/cuda-smoke$(EXE)
 clean:
-	rm -rf .build $(SHARED_REAL) $(SHARED_ABI) inkleberry libinkleberry.a libinkleberry.so libinkleberry.dylib libinkleberry-gpu.a libinkleberry-infer.a libinkleberry_backend.so.1 libinkleberry-cuda.a inkleberry-weights inkleberry-generate
--include $(wildcard .build/*.d)
+	rm -rf $(BUILD_DIR) $(SHARED_REAL) $(SHARED_ABI) $(CLI) $(HOST_STATIC) libinkleberry.so libinkleberry.dylib $(GPU_STATIC) $(INFER_STATIC) $(PROVIDER) $(CUDA_STATIC) $(WEIGHTS_CLI) $(GENERATE)
+-include $(wildcard $(BUILD_DIR)/*.d)
 
 # GPU backend is opt-in; the host library still builds without CUDA.
 .PHONY: gpu
-gpu: generated-check libinkleberry-gpu.a
-.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/cuda/capability.h src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+gpu: generated-check $(GPU_STATIC)
+$(BUILD_DIR)/checked-weights.cuda.o: src/cuda/checked_weights.cu src/cuda/capability.h src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-libinkleberry-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
+$(GPU_STATIC): $(BUILD_DIR)/checked-prefill.cuda.o $(BUILD_DIR)/engine_bind.o $(BUILD_DIR)/engine_layout.o $(BUILD_DIR)/engine_forward.o $(BUILD_DIR)/engine_spec.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(BUILD_DIR)/engine_prefill.o $(BUILD_DIR)/engine_runtime.o $(BUILD_DIR)/gpu_cuda.o $(BUILD_DIR)/checked-weights.cuda.o $(filter-out $(BUILD_DIR)/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@
-	$(AR) rcs $@ $^
-.build/gpu-weight-compare.o: test/gpu_weights_compare.c include/ifn_gpu.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/gpu-weight-main.o: test/gpu_weights_compare.c include/ifn_gpu.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_STANDALONE_WEIGHTS -c $< -o $@
-inkleberry-weights: .build/gpu-context.o .build/gpu-weight-main.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+	$(call ifn_archive,$@,$^)
+$(BUILD_DIR)/gpu-weight-compare.o: test/gpu_weights_compare.c include/ifn_gpu.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/gpu-weight-main.o: test/gpu_weights_compare.c include/ifn_gpu.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_STANDALONE_WEIGHTS,$<,$@)
+$(WEIGHTS_CLI): $(BUILD_DIR)/gpu-context.o $(BUILD_DIR)/gpu-weight-main.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
-.build/gpu-context.o: test/gpu_context.cu include/ifn_gpu.h .build/config
+$(BUILD_DIR)/gpu-context.o: test/gpu_context.cu include/ifn_gpu.h $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
-.build/packing.o: test/packing.cu src/checked_cuda.h .build/config
+$(BUILD_DIR)/packing.o: test/packing.cu src/checked_cuda.h $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
-.build/packing: .build/packing.o libinkleberry-gpu.a
-	$(CXX) $^ $(CUDA_LIBS) -o $@
+$(BUILD_DIR)/packing$(EXE): $(BUILD_DIR)/packing.o $(GPU_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: gpu-packing-check install-gpu
-gpu-packing-check: generated-check .build/packing
-	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/packing
+gpu-packing-check: generated-check $(BUILD_DIR)/packing$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/packing$(EXE)
 install-gpu: install gpu
+ifneq ($(IFN_WINDOWS),1)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' -e 's|@CUDA_ROOT@|$(CUDA_ROOT)|g' inkleberry-static-infer.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-static-infer.pc
-	cp libinkleberry-gpu.a $(DESTDIR)$(LIBDIR)/
+endif
+	cp $(GPU_STATIC) $(DESTDIR)$(LIBDIR)/
 
 .PHONY: gpu-install-check
-gpu-install-check: DESTDIR = $(CURDIR)/.build/gpu-stage
+gpu-install-check: DESTDIR = $(CURDIR)/$(BUILD_DIR)/gpu-stage
 gpu-install-check: PREFIX = /usr/local
 gpu-install-check: install-gpu
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/gpu-stage/usr/local/include -c test/installed_gpu_consumer.c -o .build/installed-gpu.o
-	$(CXX) .build/installed-gpu.o .build/gpu-stage/usr/local/lib/libinkleberry-gpu.a .build/gpu-stage/usr/local/lib/libinkleberry.a $(CUDA_LIBS) -o .build/installed-gpu
-	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/installed-gpu
-	$(CXX) -std=c++11 -Wall -Wextra -Werror -I.build/gpu-stage/usr/local/include -x c++ -c test/installed_gpu_consumer.c -o .build/installed-gpu-cpp.o
-	$(CXX) .build/installed-gpu-cpp.o .build/gpu-stage/usr/local/lib/libinkleberry-gpu.a .build/gpu-stage/usr/local/lib/libinkleberry.a $(CUDA_LIBS) -o .build/installed-gpu-cpp
-	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/installed-gpu-cpp
-.build/generate.o: cli/generate.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE) -c $< -o $@
-.build/ar-compare.o: test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+	$(call ifn_compile,$(CC),$(CFLAGS) $(WARNFLAGS) -I$(BUILD_DIR)/gpu-stage/usr/local/include,test/installed_gpu_consumer.c,$(BUILD_DIR)/installed-gpu.o)
+	$(call ifn_program,$(CXX),,$(BUILD_DIR)/installed-gpu.o $(BUILD_DIR)/gpu-stage/usr/local/lib/$(GPU_STATIC) $(BUILD_DIR)/gpu-stage/usr/local/lib/$(HOST_STATIC),$(CUDA_LIBS),$(BUILD_DIR)/installed-gpu$(EXE))
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' $(BUILD_DIR)/installed-gpu
+	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -I$(BUILD_DIR)/gpu-stage/usr/local/include $(CXX_LANGUAGE),test/installed_gpu_consumer.c,$(BUILD_DIR)/installed-gpu-cpp.o)
+	$(call ifn_program,$(CXX),,$(BUILD_DIR)/installed-gpu-cpp.o $(BUILD_DIR)/gpu-stage/usr/local/lib/$(GPU_STATIC) $(BUILD_DIR)/gpu-stage/usr/local/lib/$(HOST_STATIC),$(CUDA_LIBS),$(BUILD_DIR)/installed-gpu-cpp$(EXE))
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' $(BUILD_DIR)/installed-gpu-cpp
+$(BUILD_DIR)/generate.o: cli/generate.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE),$<,$@)
+$(BUILD_DIR)/ar-compare.o: test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
 
-.build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
+$(BUILD_DIR)/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 
-.build/engine-test: test/engine.c test/mock_gpu.h .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o .build/engine_adaptive.o .build/engine_prefix.o libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) test/engine.c .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o .build/engine_adaptive.o .build/engine_prefix.o libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+$(BUILD_DIR)/engine-test$(EXE): test/engine.c test/mock_gpu.h $(BUILD_DIR)/engine_bind.o $(BUILD_DIR)/engine_layout.o $(BUILD_DIR)/engine_runtime.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),test/engine.c $(BUILD_DIR)/engine_bind.o $(BUILD_DIR)/engine_layout.o $(BUILD_DIR)/engine_runtime.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
 
-.build/session-context.o: test/session_context.cu include/ifn_engine.h .build/config
+$(BUILD_DIR)/session-context.o: test/session_context.cu include/ifn_engine.h $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
 
-.build/check-ar-cpp.o: test/installed_gpu_consumer.c include/ifn_engine.h .build/config
-	$(CXX) -std=c++11 -Wall -Wextra -Werror -Iinclude -x c++ -c $< -o $@
-.build/decode-compare.o: test/decode_compare.c test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) .build/config
+$(BUILD_DIR)/check-ar-cpp.o: test/installed_gpu_consumer.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -Iinclude $(CXX_LANGUAGE),$<,$@)
+$(BUILD_DIR)/decode-compare.o: test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-.build/sampling-kernels: .build/sampling-kernels.o
-	$(CXX) $^ $(CUDA_LIBS) -o $@
+$(BUILD_DIR)/sampling-kernels$(EXE): $(BUILD_DIR)/sampling-kernels.o
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: sampling-kernel-check
-sampling-kernel-check: generated-check .build/sampling-kernels
-	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/sampling-kernels
+sampling-kernel-check: generated-check $(BUILD_DIR)/sampling-kernels$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/sampling-kernels$(EXE)
 
-.build/sampling-test: test/sampling.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/decode-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/decode-recovery: .build/decode-recovery.o .build/session-context.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
-.build/adaptive-compare.o: test/adaptive_compare.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+$(BUILD_DIR)/sampling-test$(EXE): test/sampling.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/decode-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/decode-recovery$(EXE): $(BUILD_DIR)/decode-recovery.o $(BUILD_DIR)/session-context.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+$(BUILD_DIR)/adaptive-compare.o: test/adaptive_compare.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
 
-.build/lookup-test: test/lookup.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/adaptive-graph.o: test/adaptive_graph.cu src/checked_cuda.h .build/config
+$(BUILD_DIR)/lookup-test$(EXE): test/lookup.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/adaptive-graph.o: test/adaptive_graph.cu src/checked_cuda.h $(BUILD_DIR)/config
 	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
-.build/adaptive-graph: .build/adaptive-graph.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) -o $@
+$(BUILD_DIR)/adaptive-graph$(EXE): $(BUILD_DIR)/adaptive-graph.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 
-.build/adaptive-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_TEST_ADAPTIVE=1 -c $< -o $@
-.build/adaptive-recovery: .build/adaptive-recovery.o .build/session-context.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(BUILD_DIR)/adaptive-recovery.o: test/decode_recovery.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_TEST_ADAPTIVE=1,$<,$@)
+$(BUILD_DIR)/adaptive-recovery$(EXE): $(BUILD_DIR)/adaptive-recovery.o $(BUILD_DIR)/session-context.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
-.build/prefix-compare.o: test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/prefix-recovery.o: test/prefix_recovery.c test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/prefix-recovery: .build/prefix-recovery.o .build/session-context.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(BUILD_DIR)/prefix-compare.o: test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/prefix-recovery.o: test/prefix_recovery.c test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/prefix-recovery$(EXE): $(BUILD_DIR)/prefix-recovery.o $(BUILD_DIR)/session-context.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
-.build/chat-fixture.json: test/chat_fixtures.py test/tokenizer_fixtures.py | .build
-	python3 test/chat_fixtures.py $@
-.build/chat-test: test/chat.c include/ifn_chat.h libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/stream-driver: test/stream_driver.c include/ifn_chat.h libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/chat-native.o: test/chat_native.c test/decode_compare.c test/ar_compare.c include/ifn_chat.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/chat-native: .build/chat-native.o .build/session-context.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(BUILD_DIR)/chat-fixture.json: test/chat_fixtures.py test/tokenizer_fixtures.py | $(BUILD_DIR)
+	$(PYTHON) test/chat_fixtures.py $@
+$(BUILD_DIR)/chat-test$(EXE): test/chat.c include/ifn_chat.h $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/stream-driver$(EXE): test/stream_driver.c include/ifn_chat.h $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/chat-native.o: test/chat_native.c test/decode_compare.c test/ar_compare.c include/ifn_chat.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/chat-native$(EXE): $(BUILD_DIR)/chat-native.o $(BUILD_DIR)/session-context.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
 # Serving ABI: separate from libinkleberry's CPU-only parser/tokenizer contract.
-INFER_OBJ = $(INFER:src/%.c=.build/%.o)
+INFER_OBJ = $(INFER:src/%.c=$(BUILD_DIR)/%.o)
 .PHONY: infer infer-check infer-shared
-infer: libinkleberry-infer.a
-libinkleberry-infer.a: $(INFER_OBJ)
-	$(AR) rcs $@ $^
-.build/infer-test: test/infer.c test/infer_mock.c libinkleberry-infer.a libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) test/infer.c test/infer_mock.c libinkleberry-infer.a libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-infer-check: .build/infer-test .build/chat-fixture.json
-	.build/infer-test .build/chat-fixture.json
+infer: $(INFER_STATIC)
+$(INFER_STATIC): $(INFER_OBJ)
+	$(call ifn_archive,$@,$^)
+$(BUILD_DIR)/infer-test$(EXE): test/infer.c test/infer_mock.c $(INFER_STATIC) $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),test/infer.c test/infer_mock.c $(INFER_STATIC) $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
+infer-check: $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
 check: infer-check
 BACKEND_C = $(INFER) $(GPU_HOST)
-BACKEND_OBJ = $(BACKEND_C:src/%.c=.build/backend-%.o)
-BACKEND_CUDA = $(addprefix .build/backend-,$(addsuffix .cuda.o,kernels_gemv kernels_inkling kernels_dspark)) .build/backend-checked-weights.cuda.o .build/backend-checked-prefill.cuda.o
-.build/backend-%.o: src/%.c .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -fvisibility=hidden -DIFN_SHARED -MMD -MP -c $< -o $@
-.build/backend-%.cuda.o: cuda/%.cu $(CUDA_HEADERS) .build/config
-	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
-.build/backend-checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
-	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
-.build/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
-	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
+BACKEND_OBJ = $(BACKEND_C:src/%.c=$(BUILD_DIR)/backend-%.o)
+BACKEND_CUDA = $(addprefix $(BUILD_DIR)/backend-,$(addsuffix .cuda.o,kernels_gemv kernels_inkling kernels_dspark)) $(BUILD_DIR)/backend-checked-weights.cuda.o $(BUILD_DIR)/backend-checked-prefill.cuda.o
+$(BUILD_DIR)/backend-%.o: src/%.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PIC_FLAGS) $(HIDDEN_FLAGS) $(BACKEND_DEFS) $(DEPFLAGS),$<,$@)
+$(BUILD_DIR)/backend-%.cuda.o: cuda/%.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
+$(BUILD_DIR)/backend-checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
+$(BUILD_DIR)/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
 # Reuse the existing PIC host/kernel objects; static SDK code generation is unchanged.
-inkleberry-generate: .build/generate.o $(GPU_HOST:src/%.c=.build/backend-%.o) $(BACKEND_CUDA) $(PIC)
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) $(PROGRAM_HARDEN) -o $@
-libinkleberry_backend.so.1: $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) src/infer.exports
-	$(CXX) -shared -Wl,-soname,libinkleberry_backend.so.1 -Wl,--version-script=src/infer.exports -Wl,-z,defs $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) $(CUDA_LIBS) $(LDFLAGS) -o $@
-infer-shared: generated-check libinkleberry_backend.so.1
-.build/infer-native.o: test/infer_native.c include/ifn_infer.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/infer-native: .build/infer-native.o libinkleberry-infer.a libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(GENERATE): $(BUILD_DIR)/generate.o $(GPU_HOST:src/%.c=$(BUILD_DIR)/backend-%.o) $(BACKEND_CUDA) $(PIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS) $(PROGRAM_HARDEN),$@)
+$(PROVIDER): $(BACKEND_OBJ) $(BACKEND_CUDA) $(PROVIDER_HOST) src/infer.exports src/infer.def
+	$(call ifn_shared,$(CXX),,$(BACKEND_OBJ) $(BACKEND_CUDA) $(PROVIDER_HOST),$(PROVIDER_FLAGS) $(CUDA_LIBS) $(LDFLAGS),$@)
+infer-shared: generated-check $(PROVIDER)
+$(BUILD_DIR)/infer-native.o: test/infer_native.c include/ifn_infer.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/infer-native$(EXE): $(BUILD_DIR)/infer-native.o $(INFER_STATIC) $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
-.build/infer-consumer: test/infer_consumer.c .build/stage/usr/local/include/ifn_infer.h libinkleberry-infer.a libinkleberry.a .build/config
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include -Iinclude -Isrc test/infer_consumer.c test/infer_mock.c .build/stage/usr/local/lib/libinkleberry-infer.a .build/stage/usr/local/lib/libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
-.build/stage/usr/local/include/ifn_infer.h: install
-.build/infer-mock.pic.o: test/infer_mock.c .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -MMD -MP -c $< -o $@
-.build/infer-mock.so: $(INFER:src/%.c=.build/%.pic.o) $(PIC) .build/infer-mock.pic.o
-	$(CC) $(PLAIN_SHARED_FLAGS) $^ -pthread $(LDFLAGS) $(LDLIBS) -o $@
+$(BUILD_DIR)/infer-consumer$(EXE): test/infer_consumer.c $(BUILD_DIR)/stage/usr/local/include/ifn_infer.h $(INFER_STATIC) $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CFLAGS) $(WARNFLAGS) -I$(BUILD_DIR)/stage/usr/local/include -Iinclude -Isrc,test/infer_consumer.c test/infer_mock.c $(BUILD_DIR)/stage/usr/local/lib/$(notdir $(INFER_STATIC)) $(BUILD_DIR)/stage/usr/local/lib/$(notdir $(HOST_STATIC)),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/stage/usr/local/include/ifn_infer.h: install
+$(BUILD_DIR)/infer-mock.pic.o: test/infer_mock.c $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PIC_FLAGS) $(DEPFLAGS),$<,$@)
+$(MOCK_PROVIDER): $(INFER:src/%.c=$(BUILD_DIR)/%.pic.o) $(PROVIDER_HOST) $(BUILD_DIR)/infer-mock.pic.o
+	$(call ifn_shared,$(CC),,$^,$(PLAIN_SHARED_FLAGS) $(MOCK_EXPORT_FLAGS) $(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
 .PHONY: infer-consumer-check
-infer-consumer-check: .build/infer-consumer .build/infer-mock.so
-	.build/infer-consumer
-	$(CXX) -std=c++11 -Wall -Wextra -Werror -I.build/stage/usr/local/include -x c++ -c test/infer_consumer.c -o .build/infer-consumer-cpp.o
-	$(CC) .build/infer-consumer-cpp.o .build/infer-mock.pic.o libinkleberry-infer.a libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o .build/infer-consumer-cpp
-	.build/infer-consumer-cpp
-	python3 test/infer_ffi.py ./.build/infer-mock.so
+infer-consumer-check: $(BUILD_DIR)/infer-consumer$(EXE) $(MOCK_PROVIDER)
+	$(BUILD_DIR)/infer-consumer$(EXE)
+	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -I$(BUILD_DIR)/stage/usr/local/include $(CXX_LANGUAGE),test/infer_consumer.c,$(BUILD_DIR)/infer-consumer-cpp.o)
+	$(call ifn_program,$(CC),,$(BUILD_DIR)/infer-consumer-cpp.o $(BUILD_DIR)/infer-mock.pic.o $(INFER_STATIC) $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$(BUILD_DIR)/infer-consumer-cpp$(EXE))
+	$(BUILD_DIR)/infer-consumer-cpp$(EXE)
+	$(PYTHON) test/infer_ffi.py ./$(MOCK_PROVIDER)
 install-check: infer-consumer-check
-.build/infer-native-shared: .build/infer-native.o libinkleberry_backend.so.1
-	$(CC) $^ -Wl,-rpath,'$(CURDIR)' -pthread $(LDFLAGS) -o $@
+$(BUILD_DIR)/infer-native-shared$(EXE): $(BUILD_DIR)/infer-native.o $(PROVIDER)
+	$(call ifn_program,$(CC),,$^ $(RPATH_ROOT),$(THREAD_LIBS) $(LDFLAGS),$@)
 .PHONY: install-infer-backend
 install-infer-backend: install-gpu infer-shared
-	cp libinkleberry_backend.so.1 $(DESTDIR)$(LIBDIR)/
-	ln -sf libinkleberry_backend.so.1 $(DESTDIR)$(LIBDIR)/libinkleberry_backend.so
+	cp $(PROVIDER) $(DESTDIR)$(LIBDIR)/
+ifneq ($(IFN_WINDOWS),1)
+	ln -sf $(PROVIDER) $(DESTDIR)$(LIBDIR)/libinkleberry_backend.so
+else
+	cp $(BUILD_DIR)/inkleberry_backend-1.lib $(DESTDIR)$(LIBDIR)/
+endif
+ifneq ($(IFN_WINDOWS),1)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' inkleberry-infer.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-infer.pc
+endif
 .PHONY: infer-provider-check
 infer-provider-check: infer-shared
-	python3 test/infer_exports.py ./libinkleberry_backend.so.1
-	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' python3 test/infer_ffi.py ./libinkleberry_backend.so.1
+	$(PYTHON) test/infer_exports.py ./$(PROVIDER)
+	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' $(PYTHON) test/infer_ffi.py ./$(PROVIDER)
 
 .PHONY: cuda-abi-negative-check reference-free-check
 cuda-abi-negative-check: cuda-abi-check
-	python3 test/cuda_abi_negative.py --cc '$(CC)' --cxx '$(CXX)' --nvcc '$(NVCC)' --cuda-root '$(CUDA_ROOT)' --cuda-flags '$(CUDAFLAGS)' --cuda-objects '$(CUDA_OBJECTS)'
+	$(PYTHON) test/cuda_abi_negative.py --cc '$(CC)' --cxx '$(CXX)' --nvcc '$(NVCC)' --cuda-root '$(CUDA_ROOT)' --cuda-flags '$(CUDAFLAGS)' --cuda-objects '$(CUDA_OBJECTS)'
 reference-free-check:
-	python3 test/reference_free.py --cc '$(CC)' --cxx '$(CXX)'
+	$(PYTHON) test/reference_free.py --cc '$(CC)' --cxx '$(CXX)'
 
 
 .PHONY: amalgamation amalgamation-check amalgamation-test
 amalgamation:
-	python3 tools/amalgamate.py
+	$(PYTHON) tools/amalgamate.py
 amalgamation-check:
-	python3 tools/amalgamate.py --check
-	python3 test/amalgamate_generator.py
-.build/amalgam.o: dist/ifn.c dist/ifn.h .build/config
-	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist -c $< -o $@
-.build/amalgam-gpu.o: dist/ifn.c dist/ifn.h .build/config
-	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist -DIFN_ENABLE_CUDA -c $< -o $@
-.build/amalgam-%: test/%.c .build/amalgam.o .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< .build/amalgam.o -pthread $(LDFLAGS) $(LDLIBS) -o $@
-.build/embedding-consumer: examples/inspect.c .build/amalgam.o .build/config
-	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist $< .build/amalgam.o $(LDFLAGS) $(LDLIBS) -o $@
-.build/embedding-consumer-cpp.o: examples/inspect.c dist/ifn.h .build/config
-	$(CXX) -std=c++11 -Wall -Wextra -Werror -Idist -x c++ -c $< -o $@
-.build/mmap-test: test/mmap.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
-amalgamation-test: amalgamation-check .build/embedding-generate.o .build/amalgam-unit .build/amalgam-tokenizer .build/amalgam-chat .build/amalgam-stream_driver .build/amalgam-concurrency .build/amalgam-mmap .build/embedding-consumer .build/embedding-consumer-cpp.o .build/tokenizer-fixture.json .build/chat-fixture.json libinkleberry.a
-	.build/amalgam-unit
-	.build/amalgam-tokenizer .build/tokenizer-fixture.json
-	.build/amalgam-chat .build/chat-fixture.json
-	python3 test/stream_cases.py .build/amalgam-stream_driver
-	.build/amalgam-concurrency
-	.build/amalgam-mmap
-	python3 test/amalgamation.py libinkleberry.a .build/amalgam.o
+	$(PYTHON) tools/amalgamate.py --check
+	$(PYTHON) test/amalgamate_generator.py
+$(BUILD_DIR)/amalgam.o: dist/ifn.c dist/ifn.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CFLAGS) $(WARNFLAGS) -Idist,$<,$@)
+$(BUILD_DIR)/amalgam-gpu.o: dist/ifn.c dist/ifn.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CFLAGS) $(WARNFLAGS) -Idist -DIFN_ENABLE_CUDA,$<,$@)
+$(BUILD_DIR)/amalgam-%$(EXE): test/%.c $(BUILD_DIR)/amalgam.o $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(BUILD_DIR)/amalgam.o,$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/embedding-consumer$(EXE): examples/inspect.c $(BUILD_DIR)/amalgam.o $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CFLAGS) $(WARNFLAGS) -Idist,$< $(BUILD_DIR)/amalgam.o,$(LDFLAGS) $(LDLIBS),$@)
+$(BUILD_DIR)/embedding-consumer-cpp.o: examples/inspect.c dist/ifn.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -Idist $(CXX_LANGUAGE),$<,$@)
+$(BUILD_DIR)/mmap-test$(EXE): test/mmap.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+amalgamation-test: amalgamation-check $(BUILD_DIR)/embedding-generate.o $(BUILD_DIR)/amalgam-unit$(EXE) $(BUILD_DIR)/amalgam-tokenizer$(EXE) $(BUILD_DIR)/amalgam-chat$(EXE) $(BUILD_DIR)/amalgam-stream_driver$(EXE) $(BUILD_DIR)/amalgam-concurrency$(EXE) $(BUILD_DIR)/amalgam-mmap$(EXE) $(BUILD_DIR)/embedding-consumer$(EXE) $(BUILD_DIR)/embedding-consumer-cpp.o $(BUILD_DIR)/tokenizer-fixture.json $(BUILD_DIR)/chat-fixture.json $(HOST_STATIC)
+	$(BUILD_DIR)/amalgam-unit$(EXE)
+	$(BUILD_DIR)/amalgam-tokenizer$(EXE) $(BUILD_DIR)/tokenizer-fixture.json
+	$(BUILD_DIR)/amalgam-chat$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(PYTHON) test/stream_cases.py $(BUILD_DIR)/amalgam-stream_driver$(EXE)
+	$(BUILD_DIR)/amalgam-concurrency$(EXE)
+	$(BUILD_DIR)/amalgam-mmap$(EXE)
+	$(PYTHON) test/amalgamation.py $(HOST_STATIC) $(BUILD_DIR)/amalgam.o
 check: amalgamation-test mmap-check
 .PHONY: mmap-check
-mmap-check: .build/mmap-test
-	.build/mmap-test
+mmap-check: $(BUILD_DIR)/mmap-test$(EXE)
+	$(BUILD_DIR)/mmap-test$(EXE)
+	$(BUILD_DIR)/mmap-test$(EXE) --large
 lint: amalgamation-check
 # CUDA-only archive supports the single C host without duplicate host objects.
-libinkleberry-cuda.a: .build/checked-prefill.cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
-	$(AR) rcs $@ $^
-.build/infer-native-amalgam: .build/infer-native.o .build/amalgam-gpu.o libinkleberry-cuda.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(CUDA_STATIC): $(BUILD_DIR)/checked-prefill.cuda.o $(BUILD_DIR)/checked-weights.cuda.o $(filter-out $(BUILD_DIR)/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
+	$(call ifn_archive,$@,$^)
+$(BUILD_DIR)/infer-native-amalgam$(EXE): $(BUILD_DIR)/infer-native.o $(BUILD_DIR)/amalgam-gpu.o $(CUDA_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
 .PHONY: source-package embedding-package runtime-package runtime-gpu-package packages release-check
 VERSION ?= $(IFN_VERSION)
 source-package: generated-check amalgamation-check
-	python3 tools/release.py source --version '$(VERSION)'
+	$(PYTHON) tools/release.py source --version '$(VERSION)'
 embedding-package: amalgamation-check
-	python3 tools/release.py embedding --version '$(VERSION)'
+	$(PYTHON) tools/release.py embedding --version '$(VERSION)'
 runtime-package: all
-	python3 tools/release.py runtime --version '$(VERSION)'
-runtime-gpu-package: all inkleberry-generate infer-shared libinkleberry-cuda.a libinkleberry-gpu.a libinkleberry-infer.a
-	python3 tools/release.py runtime --gpu --version '$(VERSION)'
+	$(PYTHON) tools/release.py runtime --version '$(VERSION)'
+runtime-gpu-package: all $(GENERATE) infer-shared $(CUDA_STATIC) $(GPU_STATIC) $(INFER_STATIC)
+	$(PYTHON) tools/release.py runtime --gpu --version '$(VERSION)'
 packages: source-package embedding-package runtime-package
 release-check: all amalgamation-check
-	python3 test/package_policy.py
-	python3 test/release.py --cc '$(CC)' --cxx '$(CXX)'
+	$(PYTHON) test/package_policy.py
+	$(PYTHON) test/release.py --cc '$(CC)' --cxx '$(CXX)'
 
-.build/embedding-generate.o: examples/generate.c dist/ifn.h .build/config
-	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist -c $< -o $@
-.build/embedding-generate: .build/embedding-generate.o .build/amalgam-gpu.o libinkleberry-cuda.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(BUILD_DIR)/embedding-generate.o: examples/generate.c dist/ifn.h $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CFLAGS) $(WARNFLAGS) -Idist,$<,$@)
+$(BUILD_DIR)/embedding-generate$(EXE): $(BUILD_DIR)/embedding-generate.o $(BUILD_DIR)/amalgam-gpu.o $(CUDA_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
 .PHONY: native-release-check
 native-release-check: generated-check all amalgamation-check
-	python3 test/native_release.py --model '$(MODEL_DIR)' --cuda-root '$(CUDA_ROOT)' --cc '$(CC)' --cxx '$(CXX)'
+	$(PYTHON) test/native_release.py --model '$(MODEL_DIR)' --cuda-root '$(CUDA_ROOT)' --cc '$(CC)' --cxx '$(CXX)'
 
 .PHONY: amalgamation-fuzz-smoke
-amalgamation-fuzz-smoke: | .build
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_stream.c -o .build/fuzz-amalgam-stream
-	.build/fuzz-amalgam-stream -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768
-	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_safetensors.c -o .build/fuzz-amalgam-safetensors
-	.build/fuzz-amalgam-safetensors -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=262144 .build/fuzz-corpus
-	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
-	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_tokenizer.c -o .build/fuzz-amalgam-tokenizer
-	.build/fuzz-amalgam-tokenizer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768 .build/tokenizer-corpus
+amalgamation-fuzz-smoke: | $(BUILD_DIR)
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_stream.c -o $(BUILD_DIR)/fuzz-amalgam-stream
+	$(BUILD_DIR)/fuzz-amalgam-stream -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768
+	$(PYTHON) test/safetensors_cases.py --corpus $(BUILD_DIR)/fuzz-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_safetensors.c -o $(BUILD_DIR)/fuzz-amalgam-safetensors
+	$(BUILD_DIR)/fuzz-amalgam-safetensors -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=262144 $(BUILD_DIR)/fuzz-corpus
+	$(PYTHON) test/tokenizer_cases.py --corpus $(BUILD_DIR)/tokenizer-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_tokenizer.c -o $(BUILD_DIR)/fuzz-amalgam-tokenizer
+	$(BUILD_DIR)/fuzz-amalgam-tokenizer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768 $(BUILD_DIR)/tokenizer-corpus
 
 .PHONY: native-namespace-check
-native-namespace-check: libinkleberry-cuda.a libinkleberry_backend.so.1
-	python3 test/native_symbols.py libinkleberry-cuda.a libinkleberry_backend.so.1
+native-namespace-check: $(CUDA_STATIC) $(PROVIDER)
+	$(PYTHON) test/native_symbols.py $(CUDA_STATIC) $(PROVIDER)
 
 .PHONY: host-error-check
-host-error-check: | .build
-	$(CXX) -O2 -std=c++20 -Wall -Wextra -Werror -Itest/cuda-stubs -Icuda test/host_cuda_errors.cpp -pthread -o .build/host-cuda-errors
-	.build/host-cuda-errors
+host-error-check: | $(BUILD_DIR)
+	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) -Itest/cuda-stubs -Icuda,test/host_cuda_errors.cpp,$(THREAD_LIBS),$(BUILD_DIR)/host-cuda-errors$(EXE))
+	$(BUILD_DIR)/host-cuda-errors$(EXE)
 check: host-error-check
 
-.build/hash-test: test/hash.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
+$(BUILD_DIR)/hash-test$(EXE): test/hash.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
 .PHONY: identity-check
-identity-check: .build/hash-test .build/infer-test .build/chat-fixture.json
-	python3 test/hashes.py .build/hash-test
-	python3 test/identity_admission.py .build/infer-test .build/chat-fixture.json
+identity-check: $(BUILD_DIR)/hash-test$(EXE) $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
+	$(PYTHON) test/hashes.py $(BUILD_DIR)/hash-test$(EXE)
+	$(PYTHON) test/identity_admission.py $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
 check: identity-check
-.build/native-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/native-benchmark: .build/native-benchmark.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
-.build/verify.o: examples/verify.c $(PUBLIC_HEADERS) .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.build/verify: .build/verify.o libinkleberry_backend.so.1 libinkleberry.a
-	$(CC) $^ -Wl,-rpath,'$(CURDIR)' -pthread $(LDFLAGS) -o $@
+$(BUILD_DIR)/native-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/native-benchmark$(EXE): $(BUILD_DIR)/native-benchmark.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+$(BUILD_DIR)/verify.o: examples/verify.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/verify$(EXE): $(BUILD_DIR)/verify.o $(PROVIDER) $(HOST_STATIC)
+	$(call ifn_program,$(CC),,$^ $(RPATH_ROOT),$(THREAD_LIBS) $(LDFLAGS),$@)
 
 .PHONY: public-example-check
 public-example-check:
-	$(CC) -std=c11 -Wall -Wextra -Werror -Iinclude -fsyntax-only examples/generate.c examples/verify.c
-	$(CC) -std=c11 -Wall -Wextra -Werror -Idist -fsyntax-only examples/generate.c examples/verify.c
+	$(CC) $(WARNFLAGS) -Iinclude $(SYNTAX_ONLY) examples/generate.c examples/verify.c
+	$(CC) $(WARNFLAGS) -Idist $(SYNTAX_ONLY) examples/generate.c examples/verify.c
 check: public-example-check
 
-.build/abi-contract: test/abi_contract.c $(PUBLIC_HEADERS) .build/config
-	$(CC) -std=c11 -Iinclude $< -o $@
+$(BUILD_DIR)/abi-contract$(EXE): test/abi_contract.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(C_STD) -Iinclude,$<,,$@)
 .PHONY: abi-contract-check install-contract-check harden-check performance-gate-check
-abi-contract-check: .build/abi-contract
-	.build/abi-contract > .build/abi-current.json
-	python3 -c 'import json; assert json.load(open(".build/abi-current.json")) == json.load(open("test/fixtures/abi-1.0.json")), "ABI 1.0 layout/value regression"'
+abi-contract-check: $(BUILD_DIR)/abi-contract$(EXE)
+	$(BUILD_DIR)/abi-contract$(EXE) > $(BUILD_DIR)/abi-current.json
+	$(PYTHON) -c 'import json; assert json.load(open("$(BUILD_DIR)/abi-current.json")) == json.load(open("test/fixtures/abi-1.0.json")), "ABI 1.0 layout/value regression"'
 install-contract-check: all infer
-	python3 test/install_contract.py
+ifeq ($(IFN_WINDOWS),1)
+	$(PYTHON) test/windows_install.py
+else
+	$(PYTHON) test/install_contract.py
+endif
 harden-check: all
-	python3 tools/check_hardening.py inkleberry libinkleberry.so
+	$(PYTHON) tools/check_hardening.py $(CLI) libinkleberry.so
 performance-gate-check:
-	python3 test/performance_gate.py
+	$(PYTHON) test/performance_gate.py
 check: abi-contract-check performance-gate-check release-gate-check
-.build/facade-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_BENCH_FACADE -c $< -o $@
-.build/facade-benchmark: .build/facade-benchmark.o libinkleberry-infer.a libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+$(BUILD_DIR)/facade-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_BENCH_FACADE,$<,$@)
+$(BUILD_DIR)/facade-benchmark$(EXE): $(BUILD_DIR)/facade-benchmark.o $(INFER_STATIC) $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
 .PHONY: release-gate-check harden-regression-check
 release-gate-check:
-	python3 test/release_gate.py
+	$(PYTHON) test/release_gate.py
 harden-regression-check:
-	python3 test/hardening.py --cc '$(CC)' --cxx '$(CXX)'
+	$(PYTHON) test/hardening.py --cc '$(CC)' --cxx '$(CXX)'
+
+$(BUILD_DIR)/host-clock$(EXE): test/host_clock.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+platform-check: $(BUILD_DIR)/host-clock$(EXE)
+check: platform-check
+$(BUILD_DIR)/platform-map$(EXE): test/platform_map.c $(HOST_STATIC) $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
+platform-check: $(BUILD_DIR)/platform-map$(EXE)
+	$(PYTHON) test/host_clock.py $(BUILD_DIR)/host-clock$(EXE)
+	$(BUILD_DIR)/platform-map$(EXE)
+.PHONY: windows-sdk-check
+windows-sdk-check: all infer
+	$(PYTHON) test/windows_sdk.py
+ifeq ($(IFN_WINDOWS),1)
+windows-pe-check: all $(MOCK_PROVIDER)
+	$(PYTHON) test/windows_pe.py $(CLI) $(SHARED) $(MOCK_PROVIDER)
+check: windows-pe-check
+endif
+
+ifeq ($(IFN_WINDOWS),1)
+.PHONY: windows-cuda-build-check
+windows-cuda-build-check: gpu infer-shared $(GENERATE) $(CUDA_STATIC) $(BUILD_DIR)/abi-probe$(EXE)
+	$(PYTHON) test/infer_exports.py $(PROVIDER)
+	$(PYTHON) test/windows_pe.py $(GENERATE) $(PROVIDER)
+	$(PYTHON) test/infer_ffi.py $(PROVIDER)
+	PATH="$$(cygpath -u '$(CUDA_ROOT)/bin/x64'):$$(cygpath -u '$(CUDA_ROOT)/bin'):$$PATH" $(BUILD_DIR)/abi-probe$(EXE)
+endif

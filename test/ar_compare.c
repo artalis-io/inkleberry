@@ -2,8 +2,9 @@
  * Native C public-API qualification shared by native recovery tests. */
 #define _POSIX_C_SOURCE 200809L
 #include "ifn_engine.h"
-#include <pthread.h>
+#include "platform.h"
 #include <time.h>
+#include "host_clock.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -173,24 +174,26 @@ int ifn_ar_test_reuse(void) {
 }
 
 static double ifn_ar_compare_local_now(void) {
-    struct timespec t;
-    (void)clock_gettime(CLOCK_MONOTONIC, &t);
-    return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+    return (double)ifn_host_now_ns() / 1e9;
 }
 
 static void *ifn_ar_compare_local_cancel_thread(void *context) {
     double *requested = context;
+#ifdef _WIN32
+    Sleep(50);
+#else
     struct timespec delay = {0, 50000000};
     (void)nanosleep(&delay, NULL);
+#endif
     *requested = ifn_ar_compare_local_now();
     (void)ifn_session_cancel(ifn_ar_compare_local_session);
     return NULL;
 }
 
 int ifn_ar_test_cancel_prefill(void) {
-    pthread_t thread;
+    ifn_test_thread thread;
     double requested = 0;
-    if (pthread_create(&thread, NULL, ifn_ar_compare_local_cancel_thread, &requested))
+    if (ifn_test_thread_create(&thread, NULL, ifn_ar_compare_local_cancel_thread, &requested))
         return 1;
     int32_t output[64];
     ifn_generate_stats stats;
@@ -198,7 +201,7 @@ int ifn_ar_test_cancel_prefill(void) {
         ifn_session_generate(ifn_ar_compare_local_session, ifn_ar_compare_local_tokens,
                              ifn_ar_compare_local_token_count, 32, output, 64, NULL, NULL, &stats);
     double finished = ifn_ar_compare_local_now();
-    if (pthread_join(thread, NULL) || rc != IFN_CANCELLED ||
+    if (ifn_test_thread_join(thread, NULL) || rc != IFN_CANCELLED ||
         stats.finish_reason != IFN_FINISH_CANCELLED)
         return 1;
     ifn_ar_compare_local_cancel_seconds = finished - requested;

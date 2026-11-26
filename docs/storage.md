@@ -27,3 +27,12 @@ complete allocation cleanup. Linux additionally checks the live mapping's inode
 and `r--p` protection using `/proc/self/maps`. The same regression runs against the
 modular library and generated embedding implementation. It uses no private model
 or dataset and is a memory/lifetime check, not a throughput benchmark.
+
+On native Windows, file paths are strict UTF-8, decoded to UTF-16 for
+`CreateFileW`. Immutable inputs use read-only file-backed views; construction
+handles are closed after the view is established. Closing the reader unmaps the
+view. There is no whole-checkpoint heap fallback. Windows sharing/deletion
+semantics may differ from POSIX; neither platform's mapping is an immutable
+snapshot, so callers must keep backing bytes unchanged for its entire lifetime.
+Named device paths are rejected. Native mapping failures preserve Win32 error
+codes separately from CRT/POSIX errno.

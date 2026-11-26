@@ -66,7 +66,9 @@ else:
    if ok:assert json.loads(r.stdout)['format']=='safetensors'
   for name in ('fifo', 'directory', 'missing'):
    special=Path(folder)/name
-   if name=='fifo':os.mkfifo(special)
+   if name=='fifo':
+    if os.name == 'nt':special=Path(r'\\.\pipe\ifn-refuse-device')
+    else:os.mkfifo(special)
    if name=='directory':special.mkdir()
    r=subprocess.run([a.binary,'inspect',str(special)],capture_output=True,text=True,timeout=5)
    if r.returncode!=1 or 'Sanitizer' in r.stderr or 'runtime error:' in r.stderr:raise SystemExit(name+': expected normal failure, got '+str(r.returncode)+r.stderr)

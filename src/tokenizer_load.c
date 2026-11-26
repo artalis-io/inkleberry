@@ -6,12 +6,8 @@
 #include "tokenizer.h"
 #include "json.h"
 #include "tokenizer_profile.h"
-#include <fcntl.h>
-#include <errno.h>
+#include "file_map.h"
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 uint64_t ifn_token_hash(const void *data, size_t size) {
     const unsigned char *p = data;
@@ -406,27 +402,18 @@ ifn_status ifn_tokenizer_open_verified(const char *path, const ifn_options *opti
     ifn_status status = ifn_options_resolve(options, &checked);
     if (status != IFN_OK)
         return status;
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
-    if (fd < 0)
-        return ifn_os_error(IFN_IO, errno, "cannot open tokenizer");
-    struct stat st;
-    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
-        (uintmax_t)st.st_size > IFN_TOK_JSON) {
-        (void)close(fd);
-        return ifn_error(IFN_FORMAT, "invalid tokenizer file size/type");
-    }
-    size_t n = (size_t)st.st_size;
-    void *map = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
-    int map_errno = errno;
-    (void)close(fd);
-    if (map == MAP_FAILED)
-        return ifn_os_error(IFN_IO, map_errno, "cannot map tokenizer");
+    ifn_file_map mapping;
+    status = ifn_file_map_open(path, 1, IFN_TOK_JSON, &checked, &mapping);
+    if (status != IFN_OK)
+        return status;
+    const void *map = mapping.data;
+    size_t n = mapping.size;
     unsigned char digest[32];
     if (expected && (!ifn_sha256_hash(map, n, digest) || memcmp(digest, expected, 32)))
         status = ifn_error(IFN_FORMAT, "tokenizer checksum mismatch");
     else
         status = ifn_tokenizer_open_memory(map, n, &checked, out);
-    (void)munmap(map, n);
+    ifn_file_map_close(&mapping);
     return status;
 }
 

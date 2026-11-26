@@ -19,7 +19,7 @@ def main():
         root = Path(tmp)
         for name in ['VERSION', 'Makefile', 'LICENSE', 'UPSTREAM.json', 'inkleberry.pc.in', 'inkleberry-infer.pc.in']:
             shutil.copy2(ROOT / name, root / name)
-        for name in ['include', 'src', 'cuda', 'cli', 'test', 'tools', 'abi', 'config', 'dist', 'examples', 'fuzz']:
+        for name in ['include', 'src', 'cuda', 'cli', 'test', 'tools', 'abi', 'config', 'dist', 'examples', 'fuzz', 'mk', 'scripts']:
             shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns('__pycache__', '*.zig'))
         assert not (root / 'reference').exists() and not list(root.rglob('*.zig'))
         verifier = [sys.executable, str(root / 'tools/verify_upstream.py')]

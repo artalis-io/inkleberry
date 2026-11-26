@@ -203,3 +203,10 @@ Actual third-party harness conformance awaits that server. The interface and
 examples are Apache-2.0; dependency/model licenses remain separate.
 
 Executed checks and native evidence: [validation report](../reference/reports/inference-abi-validation.md).
+
+On Windows x64, the native provider uses the same frozen ABI 1.0 record layouts
+and C calling convention. Its PE export table contains only
+`ifn_infer_get_api`; ELF symbol versions and SONAME apply only on Linux.
+`IFN_PROVIDER_OS` (1) continues to mean errno; `IFN_PROVIDER_WIN32` (5) reports
+`GetLastError` values without reinterpreting them as errno. The error record's
+layout is unchanged.

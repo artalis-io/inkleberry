@@ -93,3 +93,5 @@ Historical designs and qualification receipts live
 under `reference/`, outside the production distribution. Attribution and source
 provenance are retained in [LICENSE](LICENSE), [NOTICE](NOTICE),
 [THIRD_PARTY.md](THIRD_PARTY.md) and `UPSTREAM.json`.
+
+Native Windows x64 MSVC/clang-cl build instructions are in [docs/build.md](docs/build.md#native-windows-x64). GPU architecture qualification remains separate from host portability.

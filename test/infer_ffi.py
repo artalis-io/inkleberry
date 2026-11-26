@@ -2,6 +2,16 @@
 """An independent ctypes consumer of ABI negotiation/discovery; no CUDA claim."""
 import ctypes as c
 import sys
+import os
+from pathlib import Path
+# Python 3.8+ uses an explicit DLL dependency search path on Windows. Handles
+# remain alive through the library call; nothing is installed or copied.
+ifn_dll_directories = []
+if os.name == 'nt' and os.environ.get('CUDA_PATH'):
+    for suffix in ['bin', 'bin/x64']:
+        directory = Path(os.environ['CUDA_PATH']) / suffix
+        if directory.is_dir():
+            ifn_dll_directories.append(os.add_dll_directory(str(directory)))
 
 class Bytes(c.Structure):
     _fields_ = [('data', c.c_void_p), ('bytes', c.c_uint64)]

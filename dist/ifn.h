@@ -618,7 +618,8 @@ enum {
     IFN_PROVIDER_OS = 1,
     IFN_PROVIDER_CUDA = 2,
     IFN_PROVIDER_CUBLAS = 3,
-    IFN_PROVIDER_CUDA_DRIVER = 4
+    IFN_PROVIDER_CUDA_DRIVER = 4,
+    IFN_PROVIDER_WIN32 = 5 /* GetLastError; IFN_PROVIDER_OS remains errno. */
 };
 
 /* Capabilities describe supported contracts, not marketing architecture labels. */

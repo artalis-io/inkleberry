@@ -2,8 +2,8 @@
  * Public-ABI consumer. Run only through tools/run_cuda_smoke.py idle UUID guard. */
 #include "ifn_infer.h"
 #include "ifn_infer_inkling.h"
-#include <pthread.h>
-#include <sched.h>
+#include "platform.h"
+#include "platform.h"
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -37,7 +37,7 @@ static uint32_t ifn_infer_native_local_collect(void *ctx, const ifn_infer_event_
     if (o->block) {
         atomic_store(&o->arrived, true);
         while (!atomic_load(&o->resume))
-            sched_yield();
+            ifn_test_yield();
     }
     return IFN_CALLBACK_CONTINUE;
 }
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     ifn_infer_model *model = NULL;
     ifn_infer_session *session = NULL;
     ifn_infer_request *requests[6] = {0};
-    pthread_t thread;
+    ifn_test_thread thread;
     int thread_live = 0;
     ifn_infer_native_local_output outputs[6];
     for (size_t i = 0; i < 6; i++)
@@ -168,10 +168,10 @@ int main(int argc, char **argv) {
     outputs[2].block = 1;
     ifn_infer_native_local_task work = {api, requests[2], &outputs[2], 999};
     IFN_INFER_NATIVE_LOCAL_REQUIRE(
-        !pthread_create(&thread, NULL, ifn_infer_native_local_run, &work));
+        !ifn_test_thread_create(&thread, NULL, ifn_infer_native_local_run, &work));
     thread_live = 1;
     while (!atomic_load(&outputs[2].arrived))
-        sched_yield();
+        ifn_test_yield();
     uint32_t disposition;
     IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_cancel(requests[0], &disposition, NULL) == IFN_OK &&
                                    disposition == IFN_CANCEL_TOO_LATE);
@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
     IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_cancel(requests[2], &disposition, NULL) == IFN_OK &&
                                    disposition == IFN_CANCEL_ACCEPTED);
     atomic_store(&outputs[2].resume, true);
-    IFN_INFER_NATIVE_LOCAL_REQUIRE(!pthread_join(thread, NULL));
+    IFN_INFER_NATIVE_LOCAL_REQUIRE(!ifn_test_thread_join(thread, NULL));
     thread_live = 0;
     IFN_INFER_NATIVE_LOCAL_REQUIRE(work.status == IFN_CANCELLED);
     IFN_INFER_NATIVE_LOCAL_REQUIRE(api->request_result(requests[2], &result, NULL) == IFN_OK &&
@@ -206,7 +206,7 @@ int main(int argc, char **argv) {
 done:
     if (thread_live) {
         atomic_store(&outputs[2].resume, true);
-        (void)pthread_join(thread, NULL);
+        (void)ifn_test_thread_join(thread, NULL);
     }
     if (api) {
         for (size_t i = 0; i < 6; i++)

@@ -48,8 +48,8 @@ def package(kind, output, version=None, gpu=False, build_root=ROOT):
     if version != expected_version: raise ValueError('Package version must match VERSION and the compiled header')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', version):
         raise ValueError('Invalid package version')
-    if gpu and (kind != 'runtime' or platform.system() != 'Linux'):
-        raise ValueError('GPU runtime packaging currently requires Linux')
+    if gpu and (kind != 'runtime' or platform.system() not in ('Linux', 'Windows')):
+        raise ValueError('GPU runtime packaging requires Linux or native Windows')
     policy = json.loads((ROOT / 'config/package.json').read_text())
     entries = {}
     modes = {}
@@ -76,6 +76,29 @@ def package(kind, output, version=None, gpu=False, build_root=ROOT):
             add(name, ROOT / name)
         entries['README.md'] = read_file(ROOT / 'docs/embedding.md')
         modes['README.md'] = 0o644
+    elif kind == 'runtime' and platform.system() == 'Windows':
+        add('bin/inkleberry.exe', build_root / 'inkleberry.exe', True, build_root)
+        add('bin/inkleberry-1.dll', build_root / 'inkleberry-1.dll', True, build_root)
+        for name in ['inkleberry.lib', 'inkleberry-1.lib']:
+            add('lib/' + name, build_root / name, base=build_root)
+        for name in policy['public_headers']:
+            add('include/' + Path(name).name, ROOT / name)
+        if gpu:
+            for name in ['inkleberry-generate.exe', 'inkleberry_backend-1.dll']:
+                add('bin/' + name, build_root / name, True, build_root)
+            for name in ['inkleberry_backend-1.lib', 'inkleberry-cuda.lib',
+                         'inkleberry-gpu.lib', 'inkleberry-infer.lib']:
+                add('lib/' + name, build_root / name, base=build_root)
+        dependencies = {
+            'system': ['Windows x64', 'Microsoft Visual C++ runtime (dynamic CRT)'],
+            'gpu': ['compatible NVIDIA driver', 'CUDA runtime and cuBLAS'] if gpu else [],
+            'bundled_sdk_driver_libraries': False,
+            'python_required_at_runtime': False, 'zig_required_at_runtime': False,
+            'model_files_bundled': False,
+        }
+        entries['DEPENDENCIES.json'] = (json.dumps(dependencies, indent=2) + '\n').encode()
+        entries['README.md'] = read_file(ROOT / 'docs/runtime-package.md')
+        modes.update({'README.md': 0o644, 'DEPENDENCIES.json': 0o644})
     elif kind == 'runtime':
         add('bin/inkleberry', build_root / 'inkleberry', True, build_root)
         shared = 'libinkleberry.dylib' if platform.system() == 'Darwin' else 'libinkleberry.so'

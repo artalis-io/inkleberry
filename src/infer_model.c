@@ -199,7 +199,7 @@ ifn_status ifn_infer_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s
     char paths[3][4096];
     if (!rc)
         rc = ifn_infer_model_local_source_paths(s, paths);
-    ifn_weight_plan plan;
+    ifn_weight_plan plan = {0};
     if (!rc)
         rc = ifn_weights_plan(&m->weights_config, &m->allocator, &plan);
     if (!rc && plan.peak_device_bytes > m->device_budget)

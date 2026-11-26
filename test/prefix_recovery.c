@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * C-only prefix invalidation, cancellation, snapshot reuse and teardown. */
+#include "platform.h"
 #include "prefix_compare.c"
 static unsigned ifn_prefix_recovery_local_seen;
 
@@ -120,15 +121,15 @@ int main(int argc, char **argv) {
         !info.reused_tokens &&
         stats.generation.generated_tokens == initial.generation.generated_tokens &&
         !memcmp(out, baseline, stats.generation.generated_tokens * 4));
-    pthread_t thread;
+    ifn_test_thread thread;
     double requested = 0;
     IFN_PREFIX_RECOVERY_LOCAL_REQUIRE(
-        !pthread_create(&thread, NULL, ifn_ar_compare_local_cancel_thread, &requested));
+        !ifn_test_thread_create(&thread, NULL, ifn_ar_compare_local_cancel_thread, &requested));
     ifn_status rc =
         ifn_session_generate_ex(ifn_ar_compare_local_session, ifn_ar_compare_local_tokens, 8192, 16,
                                 &o, out, 64, NULL, NULL, &stats);
     double finished = ifn_ar_compare_local_now();
-    IFN_PREFIX_RECOVERY_LOCAL_REQUIRE(!pthread_join(thread, NULL) && rc == IFN_CANCELLED);
+    IFN_PREFIX_RECOVERY_LOCAL_REQUIRE(!ifn_test_thread_join(thread, NULL) && rc == IFN_CANCELLED);
     IFN_PREFIX_RECOVERY_LOCAL_REQUIRE(
         ifn_session_generate_ex(ifn_ar_compare_local_session, ifn_ar_compare_local_tokens, 2049, 16,
                                 &o, out, 64, NULL, NULL, &stats) == IFN_OK);

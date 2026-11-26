@@ -37,3 +37,9 @@ Jev Bush's 0BSD grant for copied formatting/adapted build conventions:
 > LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 > OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 > PERFORMANCE OF THIS SOFTWARE.
+
+## Windows environment helper
+
+`scripts/msvc-env.sh` is adapted from `artalis-io/keel` at
+`ff25928069ee1822c3529479f840a248999f644d`, copyright 2026 Artalis, MIT.
+The complete MIT notice is retained in that script.
