@@ -64,3 +64,25 @@ the repository root when the reference tree is present.
 its installed GCC 13 runtime directory avoids an incomplete GCC search path:
 `SAN_CC='clang --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13'`, with matching
 `SAN_CXX`. This is a local compiler argument, not a system/toolchain modification.
+
+
+## Required and optional CI
+
+Pull requests and pushes run Linux GCC/Clang host checks, ASan/UBSan with timed
+fuzzing, lint and TSan. All five are required merge checks on `artalis`, bound to
+the GitHub Actions app. Branches must be up to date; administrators are subject
+to the same checks. The desired configuration is checked in at
+[.github/branch-protection.json](../.github/branch-protection.json). Changes to
+these job names must update the required-check configuration as well.
+
+macOS tests only the portable host C library. It is an optional manual workflow,
+not a PR/push dependency and not CUDA qualification:
+
+```sh
+gh workflow run macos-portability.yml --repo artalis-io/inkleberry --ref artalis
+```
+
+The workflow becomes available on the default branch once its PR is merged.
+The trusted, manually initiated model-backed GPU workflow remains separate.
+Native release qualification still requires a reserved device and external model
+assets; Linux CPU CI does not replace it.

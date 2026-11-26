@@ -3,7 +3,8 @@
 The experimental v1 facade is implemented in `include/ifn_infer.h`. Native GPU
 execution remains Linux AMD64/Blackwell; host tests run without CUDA. The original
 parser, tokenizer, generation CLI and low-level engine APIs remain available.
-CUDA mathematics and the pinned upstream files are unchanged.
+CUDA mathematics is unchanged. Reviewed namespace/host-error adapters retain
+reconstructable upstream provenance.
 
 ## Multiple streams
 
@@ -119,9 +120,10 @@ Backend ID: `artalis.inkleberry`. Current defaults:
 
 Compiled capabilities, configured model support and enabled state are distinct.
 Speculation is unsupported without MTP weights. Required unknown features fail.
-Model/tokenizer IDs are descriptive; artifact fingerprints remain empty and
-`fingerprint_verified` false until content hashing is implemented. Do not use IDs
-as integrity evidence. Source files must stay immutable while loading; no remote
+Model/tokenizer IDs are descriptive. The optional artifact-manifest extension
+verifies exact mapped tokenizer/checkpoint bytes; successful verified loading
+populates the fingerprint. Ordinary loads remain unverified. See
+[library integration](library-integration.md) for the hash contract. Source files must stay immutable while loading; no remote
 code or automatic downloads are executed. Profile enumeration is not implemented;
 only these documented identifiers are accepted.
 
@@ -176,9 +178,10 @@ reports a conservative prompt-processed count (zero until native return), not a
 continuous prefill counter. Do not expose a fabricated percentage in a server.
 
 Result spans are borrowed until request closure. Errors use caller-owned records;
-no cross-thread dependence on `ifn_last_error`. Native diagnostics currently expose
-normalized statuses rather than a reliable provider-specific numeric code:
-provider NONE means unavailable, not CUDA success. Secondary reset failures and
+no cross-thread dependence on `ifn_last_error`. Native diagnostics preserve available OS/CUDA/cuBLAS/driver families and numeric
+codes; provider NONE means unavailable, not CUDA success. Optional per-model
+logging and secondary-code encoding are documented in
+[library integration](library-integration.md). Secondary reset failures and
 poisoned/partial-output states are explicit. Never automatically retry a partial
 response. All API error records are optional and otherwise must be initialized.
 

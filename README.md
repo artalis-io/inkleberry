@@ -1,5 +1,7 @@
 # Inkleberry Finn
 
+![Inkleberry Finn logo](logo.png)
+
 Inkleberry Finn is a C11 inference library for Inkling-2-Mini, with checkpoint
 loading, tokenization and native Blackwell GPU execution.
 It provides explicit resource ownership, recoverable errors, streaming generation
@@ -82,6 +84,7 @@ See [release contents](docs/releases.md).
 - [Embedding and amalgamation](docs/embedding.md)
 - [Checkpoint storage and memory mapping](docs/storage.md)
 - [Inference API](docs/inference-abi.md)
+- [Serving contract design](docs/serving-contract.md)
 - [Conversations and streaming](docs/conversation-streaming.md)
 - [Native ABI schema](abi/README.md)
 
