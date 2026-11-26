@@ -76,4 +76,4 @@ not weaken kernel verification. Oracle targets depend on `reference-check`, whic
 also verifies every pinned Zig file before compiling the optional comparisons.
 The original reference remains available; it no longer defines the C build's ABI.
 
-Executed validation: [schema/ABI qualification](../docs/cuda-abi-schema-validation.md).
+Executed validation: [schema/ABI qualification](../reference/reports/cuda-abi-schema-validation.md).

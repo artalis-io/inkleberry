@@ -22,7 +22,7 @@ changes. No kernel copy was introduced and no license/NOTICE content removed.
 `UPSTREAM.json` retains the original upstream names, exact hashes and revision.
 Its `relocated_files` map identifies the new local paths. `tools/upstream.py`
 resolves these for full reference verification and chat-oracle preparation. Native
-ABI generation now uses [the independent schema](../abi/README.md).
+ABI generation now uses [the independent schema](../../abi/README.md).
 Generated ABI declarations and layout probes remain byte-identical. Historical
 receipts keep their recorded paths; use their original commit or this relocation
 mapping when interpreting them. Do not rewrite past evidence to current paths.
@@ -43,7 +43,7 @@ Normal production builds and checks need neither a Zig compiler nor Zig source
 files. `make generated-check` verifies production pins and the independent ABI
 schema; `make reference-check` additionally verifies the optional pinned reference.
 Zig itself is needed only for explicit oracle targets.
-See [reference operations](../reference/README.md) for those commands and for
+See [reference operations](../README.md) for those commands and for
 building the original upstream executable. The legacy ablation tool's default
 reference executable/corpus paths were updated; its algorithm was not changed.
 

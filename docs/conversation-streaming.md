@@ -3,7 +3,7 @@
 The host library now exposes `sq_chat.h`. This slice precedes HTTP: transport,
 worker admission, authentication and SSE framing remain separate. The HTTP
 adapter is to use the latest Keel release, resolved and pinned when implemented.
-Original CUDA and Zig sources remain at the hash-verified evaluated revision.
+The native implementation and its optional comparison material retain their pinned provenance.
 
 ## Conversation encoding
 
@@ -32,7 +32,7 @@ untouched when capacity is insufficient. No trailing messages are dropped.
 
 A NULL assistant content pointer denotes absent content, while a non-NULL empty
 span denotes empty text. An empty assistant text block is omitted when a kept,
-nonempty reasoning block exists, matching Zig. Reasoning is intentionally omitted
+nonempty reasoning block exists, matching the qualified template. Reasoning is intentionally omitted
 unless the keep-history option is enabled. Tools, images and content-part arrays
 are outside this typed text interface; a future JSON adapter must reject fields
 it cannot represent. The legacy single-user renderer/CLI behavior is unchanged.
@@ -84,7 +84,7 @@ make sanitize
 make thread-sanitize
 make fuzz-smoke                    # adds a stream partition fuzzer
 make ZIG=/path/to/zig chat-oracle
-python3 tools/validate_chat.py --model /external/model-directory \
+python3 reference/validation/validate_chat.py --model /external/model-directory \
   --library ./libsq.so --oracle .build/chat-oracle
 make -j8 CUDA_ROOT=/usr/local/cuda-13.5 .build/chat-native
 export SQ_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID
@@ -114,6 +114,6 @@ Native Inkling on the reserved RTX PRO 6000 generated `7` for a multi-turn
 arithmetic conversation. Streaming/collected output and cold/warm generated IDs
 matched; 846 prompt tokens were reused. Custom stop and a subsequent full replay
 passed. Full native memcheck reported zero errors and zero leaked bytes.
-See [the evidence manifest](../benchmarks/chat-2026-11-25.json) for exact scope.
+See [the evidence manifest](../reference/benchmarks/chat-2026-11-25.json) for exact scope.
 These checks establish this text interface, not broad OpenAI/tool compatibility,
 a performance benchmark or qualification of an HTTP service.

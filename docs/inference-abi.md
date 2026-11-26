@@ -125,7 +125,7 @@ as integrity evidence. Source files must stay immutable while loading; no remote
 code or automatic downloads are executed. Profile enumeration is not implemented;
 only these documented identifiers are accepted.
 
-`sq_infer_squid.h` defines the versioned Squid request extension (ID 1, version 1):
+`sq_infer_squid.h` defines the versioned backend request extension (ID 1, version 1):
 draft width 0..7, adaptive/lookup mode, confidence threshold, thinking effort and
 thinking enablement. Adaptive mode requires seven drafts, graphs and a valid
 threshold. Prompt lookup requires adaptive mode. Template controls require chat
@@ -199,4 +199,4 @@ candidates, multimodal) must produce actionable errors, not silent degradation.
 Actual third-party harness conformance awaits that server. The interface and
 examples are Apache-2.0; dependency/model licenses remain separate.
 
-Executed checks and native evidence: [validation report](inference-abi-validation.md).
+Executed checks and native evidence: [validation report](../reference/reports/inference-abi-validation.md).

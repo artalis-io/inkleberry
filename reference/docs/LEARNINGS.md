@@ -2,7 +2,7 @@
 
 Complete consolidated engineering reference for `squid5090`: roofline analysis, Blackwell `sm_120a` decode & prefill kernels, Hybrid Prompt-Lookup + DSpark speculative decoding, 1M-context memory architecture, TigerStyle Zig systems design, an explicit audit against [`sybil-solutions/inference-optimisation-skill`](https://github.com/sybil-solutions/inference-optimisation-skill) (what we applied *and* what remains unexploited), and the complete Fisher-LDA runtime-gated abliteration math and `uv` generation workflow.
 
-*(For a high-level plain-English 3Blue1Brown-style overview, read [`LITE.md`](LITE.md). For quickstart build & install, see [`README.md`](README.md).)*
+*(For a high-level plain-English 3Blue1Brown-style overview, read [`LITE.md`](LITE.md). For quickstart build & install, see [`README.md`](../../README.md).)*
 
 ---
 
@@ -26,7 +26,7 @@ Complete consolidated engineering reference for `squid5090`: roofline analysis, 
 
 ### Built-In Exact FP64 KLD vs. Official `exact/bf16`
 
-#### A. Long-Context Reproducible Corpus — [`tools/kld_corpus.txt`](tools/kld_corpus.txt) (`7,784` tokens, 7.6× past 1,024-tok local window)
+#### A. Long-Context Reproducible Corpus — [`tools/kld_corpus.txt`](../tools/kld_corpus.txt) (`7,784` tokens, 7.6× past 1,024-tok local window)
 Directly stresses the 8 quantized global KV layers across Python, C++/CUDA, Zig, math, and cross-section recall (`ref_PPL = 2.7048`):
 
 | Mode | KV Format | Mean KLD (nats) | Median KLD | p95 KLD | Top-1 Match | Candidate PPL | ΔPPL |

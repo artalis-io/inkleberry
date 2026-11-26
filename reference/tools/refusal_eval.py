@@ -11,9 +11,9 @@ Runs a fixed set of mild prompts that safety-tuned models commonly over-refuse, 
 completion and whether it looks like a refusal, and can compare two runs (original vs abliterated).
 `--thinking` lets the model reason first (low effort) and judges the final answer.
 
-    uv run tools/refusal_eval.py --base-url http://127.0.0.1:8000/v1 --label original \
+    uv run reference/tools/refusal_eval.py --base-url http://127.0.0.1:8000/v1 --label original \
         --out results/refusals-original.json
-    uv run tools/refusal_eval.py --compare results/refusals-original.json results/refusals-abliterated.json
+    uv run reference/tools/refusal_eval.py --compare results/refusals-original.json results/refusals-abliterated.json
 """
 from __future__ import annotations
 

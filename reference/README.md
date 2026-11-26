@@ -1,38 +1,46 @@
-# Pinned upstream reference
+# Reference material
 
-`upstream/` contains the unmodified Zig host and build script from
-`tensorfish/squid5090` at `d10c0abb2c8990be81c08ba84c66a8333a691b33`.
-These files are an optional test oracle, not a second maintained runtime.
-Production sources are C11 under `src/`; normal C builds do not invoke Zig.
+This tree is separate from the maintained C library and excluded from production
+source, embedding and runtime packages. Nothing here is started by normal builds.
 
-Original upstream names and hashes remain in `UPSTREAM.json`. Its
-`relocated_files` map records where the original files now live. The full verifier and oracle preparation tools resolve those names through that
-map. CUDA ABI generation uses [the native ABI schema](../abi/README.md) independently of
-this reference tree. `make reference-check` verifies all reference bytes; normal
-`make generated-check` verifies production pins and schema artifacts. Original source paths in attribution comments, NOTICE and historical
-benchmark receipts refer to their recorded source revision/layout and remain unchanged.
+| Directory | Purpose |
+| --- | --- |
+| `upstream/` | Frozen implementation/build script and original documentation |
+| `oracle/` | Optional comparison harnesses |
+| `validation/` | Scripts driving those comparisons from the repository root |
+| `tools/` | Inherited experimental Python utilities and their optional environment |
+| `design/` | Historical architecture/port designs and superseded interface draft |
+| `reports/`, `benchmarks/` | Qualification reports and immutable result receipts |
+| `docs/`, `assets/` | Historical upstream plans, notes and illustrations |
+| `deploy/` | Legacy service example for the reference implementation |
 
-There is only one kernel tree: `upstream/cuda` is a relative symlink to the
-repository's `cuda/`. Neither the CUDA kernels nor the reference Zig files were
-edited during relocation. The repository [LICENSE](../LICENSE),
-[NOTICE](../NOTICE) and [third-party inventory](../THIRD_PARTY.md) still apply.
+`UPSTREAM.json` at the repository root preserves the exact revision, original
+file names and hashes. Its relocation map identifies the frozen files here.
+`upstream/cuda` points to the single canonical `cuda/` directory; kernels are not
+duplicated. LICENSE, NOTICE and THIRD_PARTY.md at the root retain attribution.
 
-From the repository root, optional comparison builds use the usual targets:
+## Optional comparisons
 
-```sh
-make ZIG=/path/to/zig chat-oracle
-make ZIG=/path/to/zig ar-oracle
-make ZIG=/path/to/zig gpu-weight-oracle
-make ZIG=/path/to/zig decode-oracle adaptive-oracle prefix-oracle
-```
-
-To build the original upstream executable itself, run from its reference root:
+Run from the repository root with an explicitly installed reference compiler:
 
 ```sh
-cd reference/upstream
-/path/to/zig build
+make reference-check
+make ZIG=/path/to/zig ar-oracle chat-oracle
+python3 reference/validation/validate_ar.py --model /external/model-directory \
+  --cuda-lib /usr/local/cuda/lib64
 ```
 
-This is for explicit oracle work; do not start its HTTP server as part of the C
-runtime. Model files stay external. GPU tests still require the documented idle-
-device guard. The current upstream Zig version/build requirements are unchanged.
+Weight, decode, adaptive and prefix oracle targets are also defined in
+`oracles.mk`. Actual GPU runs require the approved idle-device UUID through the
+normal guard; do not run comparisons on a busy device. These tests remain useful
+coverage and are not a second maintained production engine.
+
+To build the frozen executable itself, enter `upstream/` and run `/path/to/zig
+build`. The legacy deployment example is not a service definition for the C
+library. No reference service should be started by production packaging.
+
+The experimental utilities in `tools/` retain their original behavior/attribution.
+Their third-party environment is optional and isolated in that directory; it is
+not required for library development or runtime. Experiments and old reports
+refer to their recorded revision, commands and benchmark inputs. Do not rewrite
+historical JSON receipts as if they described a new build.

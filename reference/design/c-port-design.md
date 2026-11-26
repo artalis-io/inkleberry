@@ -336,20 +336,20 @@ Selected for kickoff: squid-c / sq_, the evaluated upstream revision, and librar
 
 The stacked C AR slice implements the P2 forward/prefill/greedy-decode path,
 including scoped cuBLAS, graphs, three KV formats, logits and cooperative
-cancellation. See [AR validation](ar-validation.md) for the exact tested matrix,
+cancellation. See [AR validation](../reports/ar-validation.md) for the exact tested matrix,
 limits and reproducible commands. The subsequent sampling/fixed-width DSpark slice is documented in
-[speculation validation](speculation-validation.md); the larger P3/P4/P5
+[speculation validation](../reports/speculation-validation.md); the larger P3/P4/P5
 release gates remain separate; the implemented typed API uses an explicit GPU
 weight-image handle rather than presenting an unfinished all-in-one model API.
 One live C session is enforced while immutable weight images remain separately
 owned and retained. No serving or broad performance qualification is implied.
 
 The adaptive/lookup slice adds conditional 2/4/8 verification, overlapped next-draft
-execution and verified prompt lookup. See [adaptive validation](adaptive-validation.md).
-The opt-in [prefix-cache slice](prefix-validation.md) adds the four-checkpoint
+execution and verified prompt lookup. See [adaptive validation](../reports/adaptive-validation.md).
+The opt-in [prefix-cache slice](../reports/prefix-validation.md) adds the four-checkpoint
 and short-side-request shield path. Serving and broader release gates remain
 outstanding.
 
-The [text conversation/stream slice](conversation-streaming.md) adds safe multi-turn
+The [text conversation/stream slice](../../docs/conversation-streaming.md) adds safe multi-turn
 encoding and a shared Unicode/stop filter. HTTP remains separate and will use the
 latest Keel release, pinned after its adapter/API review.

@@ -15,7 +15,7 @@ NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
-HOST = src/foundation.c src/json.c src/safetensors.c src/tokenizer_load.c src/tokenizer.c src/inkling.c src/weights_runtime.c src/weights_recipe.c src/sampling.c src/lookup.c src/chat.c src/stream.c
+include config/sources.mk
 OBJ = $(HOST:src/%.c=.build/%.o)
 PIC = $(HOST:src/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
@@ -144,7 +144,7 @@ cuda-abi-check: generated-check .build/abi-probe
 cuda-check: cuda-abi-check .build/cuda-smoke
 	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/cuda-smoke
 clean:
-	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a libsq-infer.a libsq_backend.so.1 squid-c-weights squid-c-generate
+	rm -rf .build squid-c libsq.a libsq.so libsq.dylib libsq-gpu.a libsq-infer.a libsq_backend.so.1 libsq-cuda.a squid-c-weights squid-c-generate
 -include $(wildcard .build/*.d)
 
 # GPU backend is opt-in; the host library still builds without CUDA.
@@ -161,10 +161,6 @@ libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_la
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DSQ_STANDALONE_WEIGHTS -c $< -o $@
 squid-c-weights: .build/gpu-context.o .build/gpu-weight-main.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
-ZIG ?= zig
-.PHONY: gpu-weight-oracle
-gpu-weight-oracle: reference-check .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep weights -Mroot=test/oracle/weights.zig -Mweights=reference/upstream/src/weights.zig .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/gpu-weight-oracle
 
 .build/gpu-context.o: test/gpu_context.cu include/sq_gpu.h .build/config
 	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
@@ -194,9 +190,6 @@ squid-c-generate: .build/generate.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 .build/ar-compare.o: test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.PHONY: ar-oracle
-ar-oracle: reference-check .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/engine.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/ar-oracle
 
 .build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
@@ -211,9 +204,6 @@ ar-oracle: reference-check .build/session-context.o .build/ar-compare.o libsq-gp
 	$(CXX) -std=c++11 -Wall -Wextra -Werror -Iinclude -x c++ -c $< -o $@
 .build/decode-compare.o: test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.PHONY: decode-oracle
-decode-oracle: reference-check .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/decode.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/decode-oracle
 .build/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 .build/sampling-kernels: .build/sampling-kernels.o
@@ -230,9 +220,6 @@ sampling-kernel-check: generated-check .build/sampling-kernels
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 .build/adaptive-compare.o: test/adaptive_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.PHONY: adaptive-oracle
-adaptive-oracle: reference-check .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/adaptive.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/adaptive-oracle
 
 .build/lookup-test: test/lookup.c libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
@@ -248,9 +235,6 @@ adaptive-oracle: reference-check .build/session-context.o .build/adaptive-compar
 
 .build/prefix-compare.o: test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-.PHONY: prefix-oracle
-prefix-oracle: reference-check .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/prefix.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/prefix-oracle
 .build/prefix-recovery.o: test/prefix_recovery.c test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/prefix-recovery: .build/prefix-recovery.o .build/session-context.o libsq-gpu.a libsq.a
@@ -262,17 +246,12 @@ prefix-oracle: reference-check .build/session-context.o .build/prefix-compare.o 
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/stream-driver: test/stream_driver.c include/sq_chat.h libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
-.PHONY: chat-oracle
-chat-oracle: reference-check
-	python3 tools/prepare_chat_oracle.py
-	$(ZIG) build-exe -O ReleaseFast --dep server -Mroot=test/oracle/chat.zig -Mserver=.build/chat-oracle-src/server.zig -lc -femit-bin=.build/chat-oracle
 .build/chat-native.o: test/chat_native.c test/decode_compare.c test/ar_compare.c include/sq_chat.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/chat-native: .build/chat-native.o .build/session-context.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 
 # Serving ABI: separate from libsq's CPU-only parser/tokenizer contract.
-INFER = src/infer.c src/infer_model.c src/infer_session.c src/infer_request.c
 INFER_OBJ = $(INFER:src/%.c=.build/%.o)
 .PHONY: infer infer-check infer-shared
 infer: libsq-infer.a
@@ -283,7 +262,7 @@ libsq-infer.a: $(INFER_OBJ)
 infer-check: .build/infer-test .build/chat-fixture.json
 	.build/infer-test .build/chat-fixture.json
 check: infer-check
-BACKEND_C = $(INFER) src/engine_bind.c src/engine_layout.c src/engine_forward.c src/engine_spec.c src/engine_adaptive.c src/engine_prefix.c src/engine_prefill.c src/engine_runtime.c src/gpu_cuda.c
+BACKEND_C = $(INFER) $(GPU_HOST)
 BACKEND_OBJ = $(BACKEND_C:src/%.c=.build/backend-%.o)
 BACKEND_CUDA = $(addprefix .build/backend-,$(addsuffix .cuda.o,kernels_gemv kernels_inkling kernels_dspark)) .build/backend-checked-weights.cuda.o .build/backend-checked-prefill.cuda.o
 .build/backend-%.o: src/%.c .build/config
@@ -334,3 +313,78 @@ cuda-abi-negative-check: cuda-abi-check
 	python3 test/cuda_abi_negative.py --cc '$(CC)' --cxx '$(CXX)' --nvcc '$(NVCC)' --cuda-root '$(CUDA_ROOT)' --cuda-flags '$(CUDAFLAGS)' --cuda-objects '$(CUDA_OBJECTS)'
 reference-free-check:
 	python3 test/reference_free.py --cc '$(CC)' --cxx '$(CXX)'
+
+# Optional comparison tools are excluded from production source packages.
+-include reference/oracles.mk
+
+.PHONY: amalgamation amalgamation-check amalgamation-test
+amalgamation:
+	python3 tools/amalgamate.py
+amalgamation-check:
+	python3 tools/amalgamate.py --check
+	python3 test/amalgamate_generator.py
+.build/amalgam.o: dist/sq.c dist/sq.h .build/config
+	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist -c $< -o $@
+.build/amalgam-gpu.o: dist/sq.c dist/sq.h .build/config
+	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist -DSQ_ENABLE_CUDA -c $< -o $@
+.build/amalgam-%: test/%.c .build/amalgam.o .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< .build/amalgam.o -pthread $(LDFLAGS) $(LDLIBS) -o $@
+.build/embedding-consumer: examples/inspect.c .build/amalgam.o .build/config
+	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist $< .build/amalgam.o $(LDFLAGS) $(LDLIBS) -o $@
+.build/embedding-consumer-cpp.o: examples/inspect.c dist/sq.h .build/config
+	$(CXX) -std=c++11 -Wall -Wextra -Werror -Idist -x c++ -c $< -o $@
+.build/mmap-test: test/mmap.c libsq.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
+amalgamation-test: amalgamation-check .build/embedding-generate.o .build/amalgam-unit .build/amalgam-tokenizer .build/amalgam-chat .build/amalgam-stream_driver .build/amalgam-concurrency .build/amalgam-mmap .build/embedding-consumer .build/embedding-consumer-cpp.o .build/tokenizer-fixture.json .build/chat-fixture.json libsq.a
+	.build/amalgam-unit
+	.build/amalgam-tokenizer .build/tokenizer-fixture.json
+	.build/amalgam-chat .build/chat-fixture.json
+	python3 test/stream_cases.py .build/amalgam-stream_driver
+	.build/amalgam-concurrency
+	.build/amalgam-mmap
+	python3 test/amalgamation.py libsq.a .build/amalgam.o
+check: amalgamation-test mmap-check
+.PHONY: mmap-check
+mmap-check: .build/mmap-test
+	.build/mmap-test
+lint: amalgamation-check
+# CUDA-only archive supports the single C host without duplicate host objects.
+libsq-cuda.a: .build/checked-prefill.cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
+	$(AR) rcs $@ $^
+.build/infer-native-amalgam: .build/infer-native.o .build/amalgam-gpu.o libsq-cuda.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+
+.PHONY: source-package embedding-package runtime-package runtime-gpu-package packages release-check
+VERSION ?= 0.1.0-dev
+source-package: generated-check amalgamation-check
+	python3 tools/release.py source --version '$(VERSION)'
+embedding-package: amalgamation-check
+	python3 tools/release.py embedding --version '$(VERSION)'
+runtime-package: all
+	python3 tools/release.py runtime --version '$(VERSION)'
+runtime-gpu-package: all squid-c-generate infer-shared libsq-cuda.a
+	python3 tools/release.py runtime --gpu --version '$(VERSION)'
+packages: source-package embedding-package runtime-package
+release-check: all amalgamation-check
+	python3 test/package_policy.py
+	python3 test/release.py --cc '$(CC)' --cxx '$(CXX)'
+
+.build/embedding-generate.o: examples/generate.c dist/sq.h .build/config
+	$(CC) $(CFLAGS) $(WARNFLAGS) -Idist -c $< -o $@
+.build/embedding-generate: .build/embedding-generate.o .build/amalgam-gpu.o libsq-cuda.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+
+.PHONY: native-release-check
+native-release-check: generated-check all amalgamation-check
+	python3 test/native_release.py --model '$(MODEL_DIR)' --cuda-root '$(CUDA_ROOT)' --cc '$(CC)' --cxx '$(CXX)'
+
+.PHONY: amalgamation-fuzz-smoke
+amalgamation-fuzz-smoke: | .build
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/sq.c fuzz/fuzz_stream.c -o .build/fuzz-amalgam-stream
+	.build/fuzz-amalgam-stream -runs=3000 -max_len=32768
+	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/sq.c fuzz/fuzz_safetensors.c -o .build/fuzz-amalgam-safetensors
+	.build/fuzz-amalgam-safetensors -runs=3000 -max_len=262144 .build/fuzz-corpus
+	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
+	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/sq.c fuzz/fuzz_tokenizer.c -o .build/fuzz-amalgam-tokenizer
+	.build/fuzz-amalgam-tokenizer -runs=3000 -max_len=32768 .build/tokenizer-corpus

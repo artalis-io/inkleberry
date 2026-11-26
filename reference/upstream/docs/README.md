@@ -4,17 +4,17 @@
 
 > **Upfront Attribution:** Several core Blackwell kernel designs and features in `squid5090` — including Programmatic Dependent Launch (PDL) overlap, register-permuted `mma.m16n8k16` decode GEMVs, the `128×128×64` `cp.async` MoE prefill pipeline, device-side `{2, 4, 8}` CUDA Graph conditional switch drafting (`cudaGraphCondTypeSwitch`), and the 1.8 MB runtime-gated Fisher-LDA abliteration format & tooling — were adapted from [`satellitedown/inkling-2-mini-abliterated-ingine`](https://github.com/satellitedown/inkling-2-mini-abliterated-ingine) (Apache-2.0). Hybrid prompt-lookup drafting was inspired by [`AtomicBot-ai/atomic-engine`](https://github.com/AtomicBot-ai/atomic-engine), and the roofline workflow follows [`sybil-solutions/inference-optimisation-skill`](https://github.com/sybil-solutions/inference-optimisation-skill). Full attributions live in [`NOTICE`](NOTICE).
 
-![squid5090 RTX 5090 Benchmarks, KLD Frontier & Long-Context Scaling](assets/benchmark.png)
+![squid5090 RTX 5090 Benchmarks, KLD Frontier & Long-Context Scaling](../../../docs/upstream/assets/benchmark.png)
 
 > **Deep Dives:**
-> - **[`LITE.md`](LITE.md)** — Plain-English, 3Blue1Brown-style animated guide to GPU roofline optimization, speculative decoding, and geometric Fisher-LDA abliteration.
-> - **[`LEARNINGS.md`](LEARNINGS.md)** — Complete technical reference: CUDA kernels, roofline math, KLD/quality analysis, remaining optimization headroom, and the `uv` abliteration pipeline.
+> - **[`LITE.md`](../../../docs/upstream/LITE.md)** — Plain-English, 3Blue1Brown-style animated guide to GPU roofline optimization, speculative decoding, and geometric Fisher-LDA abliteration.
+> - **[`LEARNINGS.md`](../../../docs/upstream/LEARNINGS.md)** — Complete technical reference: CUDA kernels, roofline math, KLD/quality analysis, remaining optimization headroom, and the `uv` abliteration pipeline.
 
 ---
 
 ## Benchmarks & Quality (Single RTX 5090, `c=1`)
 
-All numbers below are measured directly on one RTX 5090 (32 GiB GDDR7) with `squid5090`'s built-in `bench`, `kld`, and `generate` commands. Every precision mode is evaluated for **exact FP64 KL divergence vs. the unmodified `exact / bf16` checkpoint** on the checked-in [`tools/kld_corpus.txt`](tools/kld_corpus.txt) (**7,784 tokens**, 7.6× past the 1,024-token local sliding window so all 8 quantized global KV layers are directly tested).
+All numbers below are measured directly on one RTX 5090 (32 GiB GDDR7) with `squid5090`'s built-in `bench`, `kld`, and `generate` commands. Every precision mode is evaluated for **exact FP64 KL divergence vs. the unmodified `exact / bf16` checkpoint** on the checked-in [`tools/kld_corpus.txt`](../../../docs/upstream/tools/kld_corpus.txt) (**7,784 tokens**, 7.6× past the 1,024-token local sliding window so all 8 quantized global KV layers are directly tested).
 
 ### 1. Precision × Long-Context Quality (KLD) × Decode Throughput (`mtp=7`, Adaptive `{2,4,8}` + Prompt-Lookup)
 
@@ -149,15 +149,15 @@ curl -s http://localhost:8000/health
 | `--max-tokens` | `128` (CLI), `16384` (HTTP fallback) | Max generated tokens per request |
 | `--keep-history-thinking` | off | Re-inject prior turns' `reasoning_content` (off by default to prevent multi-turn thinking copy loops) |
 | `--no-prompt-lookup` | off | Disable hybrid O(1) prompt-lookup drafter |
-| `--ablation` | none | Optional 1.8 MB runtime-gated Fisher-LDA `.safetensors` (see [`tools/ablate.py`](tools/ablate.py)) |
+| `--ablation` | none | Optional 1.8 MB runtime-gated Fisher-LDA `.safetensors` (see [`tools/ablate.py`](../../../docs/upstream/tools/ablate.py)) |
 | `--api-key` | `$SQUID_API_KEY` | Optional `Authorization: Bearer <key>` auth for `serve` (constant-time compare, arbitrary key length) |
 
 ---
 
 ## Documentation & Attribution
 
-- **[`LITE.md`](LITE.md)** — High-level, 3Blue1Brown-style animated guide to LLM optimization and abliteration.
-- **[`LEARNINGS.md`](LEARNINGS.md)** — Consolidated technical reference: GPU kernels, KLD analysis, roofline audit, unexploited levers, and the `uv` abliteration pipeline.
-- **[`tools/kld_corpus.txt`](tools/kld_corpus.txt)** — Checked-in 7,784-token multi-domain KLD evaluation corpus.
-- **[`ledger.jsonl`](ledger.jsonl)** — Machine-readable record of every benchmark, KLD sweep, and needle run.
-- **[`LICENSE`](LICENSE)** / **[`NOTICE`](NOTICE)** — Apache-2.0 license and complete open-source attributions.
+- **[`LITE.md`](../../../docs/upstream/LITE.md)** — High-level, 3Blue1Brown-style animated guide to LLM optimization and abliteration.
+- **[`LEARNINGS.md`](../../../docs/upstream/LEARNINGS.md)** — Consolidated technical reference: GPU kernels, KLD analysis, roofline audit, unexploited levers, and the `uv` abliteration pipeline.
+- **[`tools/kld_corpus.txt`](../../../docs/upstream/tools/kld_corpus.txt)** — Checked-in 7,784-token multi-domain KLD evaluation corpus.
+- **[`ledger.jsonl`](../../../docs/upstream/ledger.jsonl)** — Machine-readable record of every benchmark, KLD sweep, and needle run.
+- **[`LICENSE`](../../../docs/upstream/LICENSE)** / **[`NOTICE`](NOTICE)** — Apache-2.0 license and complete open-source attributions.

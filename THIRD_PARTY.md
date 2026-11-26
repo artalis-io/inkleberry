@@ -1,7 +1,7 @@
 # Source and dependency provenance
 
 The project license is Apache-2.0; [LICENSE](LICENSE) and [NOTICE](NOTICE) retain
-upstream terms and attribution. This file records the first C port slice.
+upstream terms and attribution. This inventory applies to the maintained library and generated distributions.
 
 | Material | Source | Treatment |
 |---|---|---|
@@ -15,8 +15,9 @@ upstream terms and attribution. This file records the first C port slice.
 | `src/tokenizer_profile.h` | Public Inkling ByteLevel configuration | Supported-profile schema only; no vocabulary, merges or model bytes embedded |
 | `src/json.c` | Extracted first-port JSON primitives plus strict configuration comparison | Apache-2.0; reused across checkpoint and tokenizer readers |
 | Other C host/test/helper additions | Artalis | Apache-2.0 |
+| Amalgamation distribution pattern | Jev Bush `85fd51f8c99b1b8b7ea26d33e02413e681a9271d` | Generated from this project’s modules; no numerical code imported |
 | CUDA runtime/cuBLAS/toolkit | Operator's installed NVIDIA toolkit | Not vendored; NVIDIA terms govern separately |
-| Inkling model/tokenizer | External operator-supplied checkpoint | Not included in source/build contexts; see model license/AUP links in design |
+| Inkling model/tokenizer | External operator-supplied checkpoint | Not included in source/build contexts; model license/AUP remains separate from the library license |
 
 The retained upstream NOTICE identifies ingine, AtomicBot and optimization-skill
 influences. Retain that attribution chain; changing the host language does not

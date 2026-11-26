@@ -1,0 +1,66 @@
+# Build and validation
+
+The host library needs a C11 compiler and `libm`. Development targets also use
+Make, Python 3 standard library, a C++ compiler for header-consumer checks and
+clang-format 18 for formatting. No Python package installation is required.
+CUDA execution needs a compatible NVIDIA driver, CUDA toolkit and cuBLAS.
+The current GPU qualification target is Linux AMD64/Blackwell `sm_120a` with
+CUDA 13.5. Host checks also run on macOS ARM64; that is not a macOS GPU backend.
+
+```sh
+make -j8
+make check install-check
+make lint
+make sanitize
+make fuzz-smoke
+make thread-sanitize
+```
+
+`make check` tests modular and amalgamated host implementations, including mapped
+inputs, malformed files, ownership, tokenizer/conversation/streaming behavior,
+allocation faults, concurrency and symbol compatibility. `make install-check`
+stages its files under `.build/stage` and tests real installed consumers.
+
+```sh
+make install DESTDIR=/staging/path PREFIX=/usr/local
+make -j8 gpu infer-shared squid-c-generate
+make install-infer-backend DESTDIR=/staging/path PREFIX=/usr/local
+```
+
+`libsq` supplies host input/validation APIs, `libsq-gpu.a` the modular native host,
+and `libsq_backend.so.1` the versioned provider. `libsq-cuda.a` supplies only the
+CUDA implementation for the amalgamated C host. Keep model files external.
+
+## GPU validation
+
+Reserve the selected device; the test guard is a point-in-time idle check, not a
+scheduler. These tests never terminate unrelated workloads or change GPU settings.
+
+```sh
+make cuda-abi-negative-check
+make .build/infer-native-shared .build/infer-native-amalgam
+SQ_TEST_GPU_UUID=GPU-APPROVED-ID SQ_TEST_TIMEOUT_SECONDS=600 \
+  python3 tools/run_cuda_smoke.py /usr/local/cuda/lib64 \
+  .build/infer-native-amalgam /external/model-directory
+```
+
+The guard rejects absent UUIDs, active compute processes and devices with more
+than 256 MiB in use. C/CUDA declaration and layout checks do not execute kernels.
+Native model workflows do. A CPU-only CI result does not qualify GPU execution.
+
+```sh
+make generated-check       # production pins and native ABI schema
+make amalgamation-check    # exact generated distribution freshness
+make reference-free-check  # build with reference files absent
+make release-check         # build/exercise the actual extracted source and SDK
+```
+
+After switching from the previous source layout, use `make clean` once to remove
+old dependency paths. Optional comparison targets are defined separately in
+`reference/oracles.mk`; they are not part of production packages. Run them from
+the repository root when the reference tree is present.
+
+`SAN_CC`/`SAN_CXX` select sanitizer compilers. On the qualified core host, selecting
+its installed GCC 13 runtime directory avoids an incomplete GCC search path:
+`SAN_CC='clang --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13'`, with matching
+`SAN_CXX`. This is a local compiler argument, not a system/toolchain modification.

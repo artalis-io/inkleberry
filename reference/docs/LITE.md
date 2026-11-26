@@ -2,7 +2,7 @@
 
 > *An intuitive, 3Blue1Brown-style tour of how we took an LLM from **76 tokens/sec** (`exact`, `B=1`) to an accuracy-first **422–487 tokens/sec** FP8 Tensor Core default (`0.0061–0.0096` long-context KLD, `ΔPPL <= +0.0035`, `512K` context in `22.6 GiB`) — and up to **589–771 tokens/sec** / **1,000,000-token memory** in opt-in NVFP4 on one RTX 5090 — plus how to surgically remove refusals using a **1.8 MB geometric "bouncer"** with `0` diff on `53/53` tested harmless chat prompts.*
 >
-> **Attribution:** Key Blackwell kernel techniques (PDL overlap, Tensor Core `mma.m16n8k16` decode GEMVs, `128×128×64` MoE prefill, `{2, 4, 8}` CUDA Graph switch drafting) and the 1.8 MB runtime-gated Fisher-LDA abliteration method were adapted from [`satellitedown/inkling-2-mini-abliterated-ingine`](https://github.com/satellitedown/inkling-2-mini-abliterated-ingine) (Apache-2.0). Hybrid prompt-lookup drafting was inspired by [`AtomicBot-ai/atomic-engine`](https://github.com/AtomicBot-ai/atomic-engine) (MIT). See [`NOTICE`](NOTICE).
+> **Attribution:** Key Blackwell kernel techniques (PDL overlap, Tensor Core `mma.m16n8k16` decode GEMVs, `128×128×64` MoE prefill, `{2, 4, 8}` CUDA Graph switch drafting) and the 1.8 MB runtime-gated Fisher-LDA abliteration method were adapted from [`satellitedown/inkling-2-mini-abliterated-ingine`](https://github.com/satellitedown/inkling-2-mini-abliterated-ingine) (Apache-2.0). Hybrid prompt-lookup drafting was inspired by [`AtomicBot-ai/atomic-engine`](https://github.com/AtomicBot-ai/atomic-engine) (MIT). See [`NOTICE`](../../NOTICE).
 
 ---
 
@@ -68,7 +68,7 @@ Normally, generating one token requires the CPU to shout ~600 separate tiny inst
 
 ### Step 3: Pack the Crates Without Breaking the Brain (FP8 Default + Opt-In NVFP4 + Q4 Memory)
 
-If the hallway is the bottleneck, shrinking weight boxes lets you move far more weights per second — **but crushing sensitive layers to 4 bits can hurt quality if you aren't careful**. So we measured exact FP64 KL divergence across **7,784 tokens** ([`tools/kld_corpus.txt`](tools/kld_corpus.txt), 7.6× beyond the 1,024-token local window) and built two clean precision tiers:
+If the hallway is the bottleneck, shrinking weight boxes lets you move far more weights per second — **but crushing sensitive layers to 4 bits can hurt quality if you aren't careful**. So we measured exact FP64 KL divergence across **7,784 tokens** ([`tools/kld_corpus.txt`](../tools/kld_corpus.txt), 7.6× beyond the 1,024-token local window) and built two clean precision tiers:
 
 - **Accuracy-First Default (`--mode fp8`, `16.85 GiB`):** Leaves **all 24 MoE expert layers in 100% official checkpoint precision** (L0–19 native NVFP4 + L20–23 native MXFP8 — zero re-quantization!) and keeps routers & controllers in BF16. Only dense attention & `lm_head` move from BF16 to **FP8 E4M3** (`3.69 GB/tok`), unpacking losslessly into Blackwell Tensor Core `mma.m16n8k16.f32.f16` (exact IEEE FP32 accumulation + PDL). Result: **`0.0061` KLD** (`fp8/fp8`, `ΔPPL -0.0030`) or **`0.0096` KLD** (`fp8/q4`, `ΔPPL +0.0035`) — virtually indistinguishable from unmodified `exact/bf16`!
 - **Opt-In Max-Speed / 1M (`--mode nvfp4`, `14.57 GiB`):** Packs attention, `lm_head`, and L20–23 experts into Blackwell's native 4-bit NVFP4 (`2.80 GB/tok`) for peak speed (`547–771 tok/s`) and full **1,048,576-token** context in `23.2 GiB` (`0.0263` long-ctx KLD, `ΔPPL +0.0559`).

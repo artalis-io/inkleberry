@@ -19,7 +19,7 @@ def main():
         root = Path(tmp)
         for name in ['Makefile', 'LICENSE', 'UPSTREAM.json', 'sq.pc.in', 'squid-infer.pc.in']:
             shutil.copy2(ROOT / name, root / name)
-        for name in ['include', 'src', 'cuda', 'cli', 'test', 'tools', 'abi']:
+        for name in ['include', 'src', 'cuda', 'cli', 'test', 'tools', 'abi', 'config', 'dist', 'examples', 'fuzz']:
             shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns('__pycache__', '*.zig'))
         assert not (root / 'reference').exists() and not list(root.rglob('*.zig'))
         verifier = [sys.executable, str(root / 'tools/verify_upstream.py')]

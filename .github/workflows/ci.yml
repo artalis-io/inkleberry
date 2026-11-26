@@ -23,6 +23,9 @@ jobs:
       - name: Build without Zig reference files
         if: matrix.os == 'ubuntu-24.04' && matrix.cc == 'gcc'
         run: make reference-free-check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
+      - name: Verify extracted production distributions
+        if: matrix.os == 'ubuntu-24.04' && matrix.cc == 'gcc'
+        run: make release-check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
   sanitizers:
     runs-on: ubuntu-24.04
     steps:
@@ -30,7 +33,7 @@ jobs:
       - run: make sanitize CXX=clang++
         env:
           ASAN_OPTIONS: detect_leaks=1
-      - run: make fuzz-smoke
+      - run: make fuzz-smoke amalgamation-fuzz-smoke
         env:
           ASAN_OPTIONS: detect_leaks=1
   lint:
