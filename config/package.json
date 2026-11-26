@@ -191,7 +191,6 @@
     "tools/release.py",
     "tools/run_cuda_smoke.py",
     "tools/run_model_release.py",
-    "tools/upstream.py",
     "tools/verify_upstream.py",
     "tools/version.py"
   ],

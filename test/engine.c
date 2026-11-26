@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
- * Control-flow/resource simulation only. Numerics require real GPU oracle. */
+ * Control-flow/resource simulation only. Numerics require model-backed native qualification. */
 #include "mock_gpu.h"
 #include "engine_internal.h"
 #include "ifn_infer.h"

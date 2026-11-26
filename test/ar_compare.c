@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
- * Native C public-API qualification, invoked by unchanged Zig engine oracle. */
+ * Native C public-API qualification shared by native recovery tests. */
 #define _POSIX_C_SOURCE 200809L
 #include "ifn_engine.h"
 #include <pthread.h>

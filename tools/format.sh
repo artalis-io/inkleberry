@@ -1,5 +1,5 @@
 #!/bin/sh
-# Format only the C port; pinned CUDA/Zig and generated ABI files stay untouched.
+# Format only the C port; pinned CUDA and generated ABI files stay untouched.
 set -eu
 cd "$(dirname "$0")/.."
 fmt=${CLANG_FORMAT:-clang-format-18}

@@ -55,10 +55,9 @@ make reference-free-check  # build with reference files absent
 make release-check         # build/exercise the actual extracted source and SDK
 ```
 
-After switching from the previous source layout, use `make clean` once to remove
-old dependency paths. Optional comparison targets are defined separately in
-`reference/oracles.mk`; they are not part of production packages. Run them from
-the repository root when the reference tree is present.
+The retired Zig host and comparison harnesses are no longer included. Native
+model qualification uses fixed golden tokens, recovery/cancellation tests and
+measured performance gates; see [releases](releases.md).
 
 `SAN_CC`/`SAN_CXX` select sanitizer compilers. On the qualified core host, selecting
 its installed GCC 13 runtime directory avoids an incomplete GCC search path:

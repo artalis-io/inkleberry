@@ -10,7 +10,7 @@ Keep changes focused and explain the behavior, validation and remaining limits.
 - Public namespace: `ifn_` / `IFN_`; project: Inkleberry Finn / `inkleberry`.
 - Edit modular sources; regenerate the two-file `dist/ifn.h` + `dist/ifn.c` SDK.
 - All project-owned native symbols, including CUDA internals, use `ifn_` / `IFN_`.
-  Preserve original dependency hashes, frozen Zig bytes and legal notices.
+  Preserve original CUDA dependency hashes and legal notices.
   The reversible native namespace map and explicit host-only error adapters
   must reproduce the original CUDA bytes;
   never use it to hide a change to kernel mathematics.

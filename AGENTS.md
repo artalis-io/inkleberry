@@ -10,13 +10,9 @@ Do not import Jev Bush's model algorithms or imply its CPU inference applies her
 
 - `README.md`, `docs/build.md`, `docs/inference-abi.md` and `docs/embedding.md`.
 - `UPSTREAM.json` and `THIRD_PARTY.md` before touching retained dependencies.
-- `reference/design/c-port-design.md` for historical port decisions. Historical
-  names in `reference/` are intentional; current public contracts take precedence.
 
 `main` is the integration/release branch. Use focused feature branches based on
-`main` and require Linux CI before merging. The former upstream-main snapshot is
-preserved by tag `reference/upstream-main-51b85dd`; the pinned implementation and
-its frozen oracle remain separately recorded in `UPSTREAM.json` and `reference/`.
+`main` and require Linux CI before merging. Dependency provenance remains recorded in `UPSTREAM.json`.
 Never replace maintained inference code with unqualified upstream changes.
 
 ## Architecture and naming
@@ -33,7 +29,7 @@ Never replace maintained inference code with unqualified upstream changes.
 | `cli/`, `examples/` | Thin clients of the library |
 | `test/`, `fuzz/` | Public consumers, regression tests and malformed-input checks |
 | `tools/` | Maintained Python standard-library build/validation helpers |
-| `reference/` | Optional frozen Zig oracle, experiments and historical evidence |
+| `reference/` | Historical designs and recorded qualification evidence only |
 
 Public functions/types use `ifn_`, macros/constants `IFN_`, environment controls
 `INKLEBERRY_`. The CLI is `inkleberry`; library names begin with `libinkleberry`.
@@ -41,7 +37,7 @@ The backend identity is `artalis.inkleberry`. There are no pre-release `sq_` API
 aliases. All project-owned native symbols, including internal helpers, CUDA
 namespaces, kernel functions and bridge records, use `ifn_` / `IFN_`. Local
 variables/members and identifiers required by CUDA, the standard library, `main`
-and libFuzzer retain their external conventions. Frozen Zig sources are exempt.
+and libFuzzer retain their external conventions.
 
 ## Library contract
 
@@ -67,11 +63,8 @@ Edit canonical modules and regenerate with `make amalgamation`. Do not hand-edit
 `dist/`. Update `config/sources.mk` when source membership changes.
 Generate the internal CUDA contract with `tools/generate_cuda_abi.py` from
 `abi/cuda.json`; never hand-edit generated declarations or layout assertions.
-`make generated-check` verifies production pins/schema output;
-`make reference-check` additionally checks frozen reference bytes.
-Optional Zig comparisons adapt link names in disposable build-directory copies;
-never modify the checked-in Zig reference to match production names. Preserve
-upstream hashes and relocation entries in `UPSTREAM.json`. CUDA files carry a modification notice; `tools/native_namespace.py` reverses
+`make generated-check` verifies retained dependency pins and schema output.
+CUDA files carry a modification notice; `tools/native_namespace.py` reverses
 `config/native-namespace.json` and the exact reviewed host-only error adapters in
 `config/native-host-adaptations.json` to reproduce the original pinned bytes.
 Do not expand the map to hide algorithm changes. A dependency update requires

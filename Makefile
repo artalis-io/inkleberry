@@ -79,13 +79,10 @@ inkleberry: cli/main.c $(PIC) .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 generated-check:
 	python3 tools/version.py --check
-	python3 tools/verify_upstream.py --production-only
+	python3 tools/verify_upstream.py
 	python3 tools/generate_cuda_abi.py --check
 	python3 test/cuda_abi_schema.py
 	python3 test/native_namespace.py
-.PHONY: reference-check
-reference-check: generated-check
-	python3 tools/verify_upstream.py
 .build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
 	python3 $< $@
 .build/tokenizer-test: test/tokenizer.c libinkleberry.a .build/config
@@ -357,8 +354,6 @@ cuda-abi-negative-check: cuda-abi-check
 reference-free-check:
 	python3 test/reference_free.py --cc '$(CC)' --cxx '$(CXX)'
 
-# Optional comparison tools are excluded from production source packages.
--include reference/oracles.mk
 
 .PHONY: amalgamation amalgamation-check amalgamation-test
 amalgamation:

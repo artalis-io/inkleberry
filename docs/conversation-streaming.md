@@ -83,9 +83,6 @@ make lint                         # clang-format 18
 make sanitize
 make thread-sanitize
 make fuzz-smoke                    # adds a stream partition fuzzer
-make ZIG=/path/to/zig chat-oracle
-python3 reference/validation/validate_chat.py --model /external/model-directory \
-  --library ./libinkleberry.so --oracle .build/chat-oracle
 make -j8 CUDA_ROOT=/usr/local/cuda-13.5 .build/chat-native
 export INKLEBERRY_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID
 python3 tools/run_cuda_smoke.py /usr/local/cuda-13.5/lib64 \
@@ -96,10 +93,9 @@ INKLEBERRY_TEST_TIMEOUT_SECONDS=3600 python3 tools/run_cuda_smoke.py \
   .build/chat-native /external/model-directory
 ```
 
-Use `libinkleberry.dylib` on macOS. The oracle needs the already available Zig 0.17.1;
-the C runtime does not. The test adapter copies pinned Zig sources under
-`.build` and changes visibility only, exposing the actual renderer and buffers.
-It does not replace the renderer with a Python reconstruction or patch originals.
+Use `libinkleberry.dylib` on macOS. The historical comparison results below
+were recorded before the Zig oracle was retired; current qualification uses
+the native tests above and fixed release golden tokens.
 
 The real tokenizer matched Zig in 108 cases: six conversation fixtures, six
 efforts and three reasoning/generation configurations. These include Unicode,

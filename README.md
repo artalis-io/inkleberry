@@ -88,7 +88,7 @@ See [release contents](docs/releases.md).
 - [Conversations and streaming](docs/conversation-streaming.md)
 - [Native ABI schema](abi/README.md)
 
-Historical designs, comparison implementations, experiments and receipts live
+Historical designs and qualification receipts live
 under `reference/`, outside the production distribution. Attribution and source
 provenance are retained in [LICENSE](LICENSE), [NOTICE](NOTICE),
 [THIRD_PARTY.md](THIRD_PARTY.md) and `UPSTREAM.json`.
