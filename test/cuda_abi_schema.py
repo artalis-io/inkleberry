@@ -88,7 +88,11 @@ class SchemaTests(unittest.TestCase):
     def test_bad_json(self):
         with tempfile.TemporaryDirectory(prefix='sq-abi-json-') as tmp:
             path = Path(tmp) / 'schema.json'
-            for content in ['{"schema_version":1,"schema_version":2}', '{"x":NaN}', '{', '\ud800', ' ' * (1024 * 1024 + 1)]:
+            # A duplicate in an otherwise valid schema must fail too; rejecting
+            # a schema that is already incomplete would not prove this guard.
+            duplicate = json.dumps(self.schema).replace('"schema_version": 1',
+                        '"schema_version": 1, "schema_version": 1', 1)
+            for content in [duplicate, '{"schema_version":1,"schema_version":2}', '{"x":NaN}', '{', '\ud800', ' ' * (1024 * 1024 + 1)]:
                 with self.subTest(content=content[:40]):
                     path.write_bytes(content.encode(errors='surrogatepass'))
                     with self.assertRaises((ValueError, UnicodeError)):
