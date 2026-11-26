@@ -67,6 +67,7 @@
     "src/chat.c",
     "src/checked_cuda.h",
     "src/checked_prefill.h",
+    "src/cuda/capability.h",
     "src/cuda/checked_prefill.cu",
     "src/cuda/checked_weights.cu",
     "src/cuda_abi.h",

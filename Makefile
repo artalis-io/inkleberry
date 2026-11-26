@@ -189,7 +189,7 @@ clean:
 # GPU backend is opt-in; the host library still builds without CUDA.
 .PHONY: gpu
 gpu: generated-check libinkleberry-gpu.a
-.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/cuda/capability.h src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 libinkleberry-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@

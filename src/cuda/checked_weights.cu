@@ -4,6 +4,7 @@
  * Same launch geometry/math; dedicated stream and recoverable error returns. */
 #include "../../cuda/cuda_abi.cu"
 #include "../checked_cuda.h"
+#include "capability.h"
 #include <cuda.h>
 #define IFN_CHECKED_WEIGHTS_LOCAL_TRY(call)                                                        \
     do {                                                                                           \

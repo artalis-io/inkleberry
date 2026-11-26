@@ -19,12 +19,6 @@ typedef struct {
     void *context;
 } ifn_device_scope;
 
-/* Supported Blackwell families; build CUDA_ARCH for the actual device.
- * Architecture-specific 120a binaries are not a substitute for 121a builds. */
-static inline int ifn_cuda_capability_supported(int major, int minor) {
-    return major == 12 && (minor == 0 || minor == 1);
-}
-
 int ifn_cuda_enter(int, ifn_device_scope *);
 int ifn_cuda_leave(const ifn_device_scope *);
 int ifn_cuda_available(size_t *);

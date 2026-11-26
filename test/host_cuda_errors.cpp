@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "config.hpp"
-#include "../src/checked_cuda.h"
+#include "../src/cuda/capability.h"
 #include <thread>
 #include <cstdio>
 
