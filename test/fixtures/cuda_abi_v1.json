@@ -1,0 +1,10 @@
+{
+  "source_commit": "0c59cd3",
+  "upstream_revision": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "note": "SHA-256 of generated payload after the leading attribution comment; excludes only the source-banner change. Compatibility anchor, not a second ABI definition.",
+  "payload_sha256": {
+    "src/cuda_abi.h": "bb80bfc1082aa719b16151630acb6b8422feaa89590c871564d3cba1b46e17f9",
+    "test/cuda_abi_c.c": "ce5168cb6c87c09cb3ca483990e348f4e09914605ed652b7f47d17dfdf9a6bd3",
+    "test/cuda_abi_probe.cu": "69a31850637a0136bc3552aac29de1028eb38d9d50c0c9cb44af0456aba64457"
+  }
+}

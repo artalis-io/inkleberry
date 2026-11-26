@@ -1,4 +1,4 @@
-/* Generated from pinned src/cuda.zig by tools/generate_cuda_abi.py; do not edit.
+/* Generated from abi/cuda.json by tools/generate_cuda_abi.py; do not edit.
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis */
 #include <cstddef>

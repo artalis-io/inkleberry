@@ -21,7 +21,8 @@ changes. No kernel copy was introduced and no license/NOTICE content removed.
 
 `UPSTREAM.json` retains the original upstream names, exact hashes and revision.
 Its `relocated_files` map identifies the new local paths. `tools/upstream.py`
-resolves these for verification, ABI generation and chat-oracle preparation.
+resolves these for full reference verification and chat-oracle preparation. Native
+ABI generation now uses [the independent schema](../abi/README.md).
 Generated ABI declarations and layout probes remain byte-identical. Historical
 receipts keep their recorded paths; use their original commit or this relocation
 mapping when interpreting them. Do not rewrite past evidence to current paths.
@@ -38,9 +39,10 @@ Old `.build/*.d` files refer to the previous paths. An initial incremental build
 against those files failed with the expected missing-source dependency; the clean
 build passed. No compatibility shim or old source copies are retained.
 
-Normal production builds do not invoke a Zig compiler. Source verification and
-ABI generation still read the pinned reference text, so retain the reference
-files in source checkouts. Zig itself is needed only for explicit oracle targets.
+Normal production builds and checks need neither a Zig compiler nor Zig source
+files. `make generated-check` verifies production pins and the independent ABI
+schema; `make reference-check` additionally verifies the optional pinned reference.
+Zig itself is needed only for explicit oracle targets.
 See [reference operations](../reference/README.md) for those commands and for
 building the original upstream executable. The legacy ablation tool's default
 reference executable/corpus paths were updated; its algorithm was not changed.
@@ -79,6 +81,6 @@ this path-only change. Existing prior qualification evidence is preserved.
 ## Retiring Zig later
 
 Keep this reference until the remaining Zig parity checks have independent,
-maintainable replacements. Removing Zig entirely also requires removing the ABI
-generator's dependency on the pinned Zig declarations. That is a separate change;
-this cleanup keeps the current oracle coverage operational.
+maintainable replacements. The ABI generator's former dependency on pinned Zig
+declarations has been removed using the language-neutral schema. The optional
+oracle coverage remains operational until its independent replacements are ready.

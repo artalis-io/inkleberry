@@ -12,8 +12,10 @@ while porting host code.
   or hidden allocation outside the injected allocator in new library code.
 - Check integer/shape/offset/allocation arithmetic before use. Bound parsers and
   fuzz malformed input. Validate tensor roles/shapes before future device upload.
-- Keep the pinned Zig host as an oracle. Use `make generated-check`; regenerate
-  CUDA declarations through `tools/generate_cuda_abi.py`, never hand-edit them.
+- Keep the pinned Zig host as an optional oracle. `make generated-check` verifies
+  production pins and schema-generated artifacts; `make reference-check` also
+  verifies pinned reference bytes. Generate CUDA declarations from `abi/cuda.json`
+  through `tools/generate_cuda_abi.py`; never hand-edit generated declarations.
 - Follow Jev Bush's C engineering practices, not its model algorithms. Prefer
   small reviewable translation units to an immediate monolith/amalgamation.
 - Run `make check install-check lint`, ASan/UBSan and fuzz smoke for host changes.

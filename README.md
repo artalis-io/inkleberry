@@ -11,7 +11,7 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 - `squid-c inspect`: real checkpoint metadata inspection, including the official Inkling main and MTP files.
 - C byte-level BPE encoding, counted raw-byte decoding, special tokens, reusable scratch and the pinned single-user prompt template. No allocation during encode/decode/render.
 - Architecture-specific readonly checkpoint binding: exact role/dtype/rank/shape validation for 822 main text tensors and 54 optional MTP tensors. Vision tensors are not bound. An explicitly requested missing MTP is an error.
-- Generated declarations for all 76 retained CUDA functions. A two-translation-unit probe compares the actual C and CUDA C++ record layouts and checks all function prototypes.
+- Schema-generated declarations for all 76 retained CUDA functions, independent of Zig. A two-translation-unit probe compares the actual C and CUDA C++ record layouts and checks all function prototypes.
 - A C-hosted CUDA kernel smoke test with eager execution and graph replay; no Zig host required for that test.
 - Host CI, malformed-input tests, allocator fault injection, sanitizer/fuzzer targets, source provenance checks, formatting and installed-library consumers.
 - Optional C greedy AR sessions with retained weights, owned KV/recurrent state, recoverable cuBLAS dispatch, graph/eager execution and cancellation/reset.
@@ -24,7 +24,8 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 Production C sources live directly in `src/`; `src/cuda/` contains the checked
 CUDA adapters and `cuda/` the canonical pinned kernels. The unmodified Zig host
 is [reference-only](reference/README.md) under `reference/upstream/`. Normal C
-builds do not invoke Zig. After upgrading from the old `src/c/` layout, run
+builds and checks need no Zig compiler or source files. The native ABI is defined
+in [the native ABI schema](abi/README.md). After upgrading from the old `src/c/` layout, run
 `make clean` once to discard dependency files containing the previous paths. See
 [layout and validation details](docs/source-layout.md).
 
