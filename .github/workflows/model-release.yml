@@ -1,0 +1,44 @@
+name: Trusted model-backed release qualification
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: External local Inkling model directory on the trusted runner
+        required: true
+        type: string
+      gpu_uuid:
+        description: Independently reserved idle GPU UUID
+        required: true
+        type: string
+      baseline_engine:
+        description: Previous same-device native-engine benchmark JSONL
+        required: true
+        type: string
+      baseline_facade:
+        description: Previous same-device facade benchmark JSONL
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  qualify:
+    if: github.ref == 'refs/heads/artalis'
+    runs-on: [self-hosted, linux, inkleberry-release]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Qualify exact model, native outputs, performance and extracted packages
+        env:
+          IFN_RELEASE_MODEL: ${{ inputs.model }}
+          IFN_RELEASE_GPU: ${{ inputs.gpu_uuid }}
+          IFN_BASELINE_ENGINE: ${{ inputs.baseline_engine }}
+          IFN_BASELINE_FACADE: ${{ inputs.baseline_facade }}
+          IFN_RELEASE_SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          python3 tools/run_model_release.py --model "$IFN_RELEASE_MODEL" --gpu "$IFN_RELEASE_GPU" \
+            --baseline-engine "$IFN_BASELINE_ENGINE" --baseline-facade "$IFN_BASELINE_FACADE" --out .build/release-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: inkleberry-model-release-evidence
+          path: .build/release-evidence/

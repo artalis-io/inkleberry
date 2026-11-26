@@ -16,7 +16,7 @@ extern "C" int ifn_cuda_enter(int device, ifn_device_scope *old) {
     CUcontext context = nullptr;
     CUresult before = cuCtxGetCurrent(&context);
     if (before != CUDA_SUCCESS && before != CUDA_ERROR_NOT_INITIALIZED)
-        return (int)before;
+        return 20000 + (int)before;
     old->context = context;
     IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaGetDevice(&old->device));
     IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaSetDevice(device));
@@ -31,7 +31,7 @@ extern "C" int ifn_cuda_enter(int device, ifn_device_scope *old) {
 extern "C" int ifn_cuda_leave(const ifn_device_scope *old) {
     cudaError_t runtime = cudaSetDevice(old->device);
     CUresult driver = cuCtxSetCurrent(static_cast<CUcontext>(old->context));
-    return runtime != cudaSuccess ? (int)runtime : (int)driver;
+    return runtime != cudaSuccess ? (int)runtime : driver != CUDA_SUCCESS ? 20000 + (int)driver : 0;
 }
 
 extern "C" int ifn_cuda_available(size_t *bytes) {
@@ -46,7 +46,9 @@ extern "C" int ifn_cuda_pack(const void *src, void *dst, void *scales, void *ama
         ifn_cuda_z_quant_bf16_to_fp8_kernel<<<rows, 256, 0, stream>>>(
             static_cast<const __nv_bfloat16 *>(src), static_cast<uint8_t *>(dst),
             static_cast<float *>(scales), rows, cols);
-        return (int)cudaGetLastError();
+        int first = ifn_cuda_take_error();
+        int last = (int)cudaGetLastError();
+        return first ? first : last;
     }
     IFN_CHECKED_WEIGHTS_LOCAL_TRY(cudaMemsetAsync(amax, 0, 4, stream));
     size_t n = (size_t)rows * cols;
@@ -63,7 +65,9 @@ extern "C" int ifn_cuda_pack(const void *src, void *dst, void *scales, void *ama
     ifn_cuda_z_quant_bf16_to_nvfp4_kernel<<<(int)((blocks + 255) / 256), 256, 0, stream>>>(
         static_cast<const __nv_bfloat16 *>(src), static_cast<uint8_t *>(dst),
         static_cast<uint8_t *>(scales), rows, cols, *scale);
-    return (int)cudaGetLastError();
+    int first = ifn_cuda_take_error();
+    int last = (int)cudaGetLastError();
+    return first ? first : last;
 }
 
 extern "C" int ifn_cuda_expert(const void *a, const void *b, void *out, void *scales, void *outer,
@@ -78,14 +82,18 @@ extern "C" int ifn_cuda_expert(const void *a, const void *b, void *out, void *sc
         static_cast<const uint8_t *>(a), static_cast<const uint8_t *>(b),
         static_cast<float *>(outer), static_cast<uint8_t *>(out), static_cast<uint8_t *>(scales), e,
         rows, cols);
-    return (int)cudaGetLastError();
+    int first = ifn_cuda_take_error();
+    int last = (int)cudaGetLastError();
+    return first ? first : last;
 }
 
 extern "C" int ifn_cuda_rnn(const void *src, void *a, void *b, void *c, void *raw_stream) {
     ifn_cuda_z_split_dspark_rnn_kernel<<<768, 256, 0, static_cast<cudaStream_t>(raw_stream)>>>(
         static_cast<const __nv_bfloat16 *>(src), static_cast<__nv_bfloat16 *>(a),
         static_cast<__nv_bfloat16 *>(b), static_cast<__nv_bfloat16 *>(c));
-    return (int)cudaGetLastError();
+    int first = ifn_cuda_take_error();
+    int last = (int)cudaGetLastError();
+    return first ? first : last;
 }
 
 extern "C" int ifn_cuda_fold(const void *u, const void *h, const void *b, void *fb, void *fw,
@@ -101,11 +109,15 @@ extern "C" int ifn_cuda_fold(const void *u, const void *h, const void *b, void *
     ifn_cuda_z_compute_dspark_fold_w_kernel<<<vocab, 256, 0, stream>>>(
         static_cast<const __nv_bfloat16 *>(u), static_cast<const __nv_bfloat16 *>(h),
         static_cast<__nv_bfloat16 *>(fw), vocab, 2304, 256);
-    return (int)cudaGetLastError();
+    int first = ifn_cuda_take_error();
+    int last = (int)cudaGetLastError();
+    return first ? first : last;
 }
 
 extern "C" int ifn_cuda_launch_status(void) {
-    return (int)cudaGetLastError();
+    int first = ifn_cuda_take_error();
+    int last = (int)cudaGetLastError();
+    return first ? first : last;
 }
 
 /* Caller-allocated graph state: retain every acquired handle on failure.

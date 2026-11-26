@@ -9,15 +9,16 @@ static atomic_flag ifn_engine_runtime_local_live_session = ATOMIC_FLAG_INIT;
 
 void ifn_ar_check(ifn_session *s, int rc, const char *op) {
     if (rc && s->status == IFN_OK) {
-        s->status = (rc == 2 || rc == 10003) ? IFN_OUT_OF_MEMORY
-                    : rc == 801              ? IFN_UNSUPPORTED
-                                             : IFN_GPU_ERROR;
+        s->backend_error = rc > 0 ? rc : 0;
+        s->status = (rc == 2 || rc == 10003 || rc == 20002) ? IFN_OUT_OF_MEMORY
+                    : (rc == 801 || rc == 20801)            ? IFN_UNSUPPORTED
+                                                            : IFN_GPU_ERROR;
         (void)snprintf(s->failure, sizeof s->failure, "%s: CUDA status %d", op, rc);
     }
 }
 
 static ifn_status ifn_engine_runtime_local_result(ifn_session *s) {
-    return ifn_error(s->status, s->status == IFN_OK ? "" : s->failure);
+    return ifn_native_error(s->status, s->backend_error, s->status == IFN_OK ? "" : s->failure);
 }
 
 static bool ifn_engine_runtime_local_lock(ifn_session *s) {
@@ -46,6 +47,7 @@ static void ifn_engine_runtime_local_copy(ifn_session *s, void *dst, const void 
 static ifn_device_scope ifn_engine_runtime_local_enter(ifn_session *s) {
     ifn_device_scope scope = {-1, NULL};
     s->status = IFN_OK;
+    s->backend_error = 0;
     s->failure[0] = 0;
     ifn_ar_check(
         s,
@@ -58,8 +60,10 @@ static ifn_status ifn_engine_runtime_local_leave(ifn_session *s, const ifn_devic
     if (scope->device >= 0) {
         int restore = s->weights->backend.leave(s->weights->backend.context, scope);
         /* A normal cancellation must not hide context-restoration failure. */
-        if (restore && s->status == IFN_CANCELLED)
+        if (restore && s->status == IFN_CANCELLED) {
             s->status = IFN_OK;
+            s->backend_error = 0;
+        }
         ifn_ar_check(s, restore, "restore caller context");
     }
     if (s->status != IFN_OK && s->status != IFN_CANCELLED) {
@@ -342,7 +346,7 @@ static bool ifn_engine_runtime_local_emit(ifn_session *s, int32_t token, int32_t
                                           ifn_token_callback callback, void *context,
                                           ifn_generate_stats *stats) {
     if (token < 0 || token >= 200058) {
-        ifn_ar_check(s, 1, "invalid generated token");
+        ifn_ar_check(s, -1, "invalid generated token");
         return false;
     }
     if (out)
@@ -503,7 +507,7 @@ static ifn_status ifn_engine_runtime_local_generate_impl(
                 break;
             if ((options.adaptive && width != 2 && width != 4 && width != 8) || count < 1 ||
                 count > width) {
-                ifn_ar_check(s, 1, "invalid accepted token count");
+                ifn_ar_check(s, -1, "invalid accepted token count");
                 break;
             }
             detail->speculative_steps++;
@@ -641,6 +645,7 @@ ifn_status ifn_session_prefix_cache(ifn_session *s, uint32_t enabled) {
         ifn_prefix_free(s);
     else {
         s->status = IFN_OK;
+        s->backend_error = 0;
         s->failure[0] = 0;
         rc = ifn_prefix_allocate(s);
     }
@@ -692,6 +697,7 @@ ifn_status ifn_session_destroy(ifn_session **handle) {
     }
     const ifn_weight_backend *b = &s->weights->backend;
     s->status = IFN_OK;
+    s->backend_error = 0;
     s->failure[0] = 0;
     if (s->arena || s->stream || ifn_engine_runtime_local_has_graphs(s) || s->blas ||
         s->adaptive_state || s->pinned || s->done_event) {

@@ -10,6 +10,23 @@ LDLIBS += -lm
 WARNFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Werror
 CPPFLAGS += -Iinclude -Isrc -D_FILE_OFFSET_BITS=64
 PREFIX ?= /usr/local
+LIBDIR ?= $(PREFIX)/lib
+INCLUDEDIR ?= $(PREFIX)/include
+BINDIR ?= $(PREFIX)/bin
+PKGCONFIGDIR ?= $(LIBDIR)/pkgconfig
+IFN_VERSION := $(shell cat VERSION)
+FUZZ_RUNS ?= 3000
+FUZZ_SECONDS ?= 0
+HARDEN ?= 1
+ifeq ($(HARDEN),1)
+CFLAGS += -fstack-protector-strong
+ifeq ($(shell uname -s),Linux)
+CPPFLAGS += -D_FORTIFY_SOURCE=3
+PROGRAM_COMPILE = -fPIE
+PROGRAM_HARDEN = -pie
+LDFLAGS += -Wl,-z,relro,-z,now,-z,noexecstack
+endif
+endif
 CUDA_ROOT ?= /usr/local/cuda
 NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
@@ -23,10 +40,16 @@ CUDA_MATH = kernels_gemv kernels_inkling kernels_dspark kernels_prefill
 CUDA_OBJECTS = $(addprefix .build/,$(addsuffix .cuda.o,$(CUDA_MATH)))
 ifeq ($(shell uname -s),Darwin)
 SHARED = libinkleberry.dylib
-SHARED_FLAGS = -dynamiclib -Wl,-install_name,@rpath/libinkleberry.dylib
+SHARED_REAL = libinkleberry.$(IFN_VERSION).dylib
+SHARED_ABI = libinkleberry.1.dylib
+SHARED_FLAGS = -dynamiclib -Wl,-install_name,@rpath/$(SHARED_ABI)
+PLAIN_SHARED_FLAGS = -dynamiclib
 else
 SHARED = libinkleberry.so
-SHARED_FLAGS = -shared
+SHARED_REAL = libinkleberry.so.$(IFN_VERSION)
+SHARED_ABI = libinkleberry.so.1
+SHARED_FLAGS = -shared -Wl,-soname,$(SHARED_ABI)
+PLAIN_SHARED_FLAGS = -shared
 endif
 .PHONY: all check clean sanitize thread-sanitize fuzz-smoke generated-check format lint install install-check cuda-abi-check cuda-check FORCE
 all: inkleberry libinkleberry.a $(SHARED)
@@ -34,7 +57,7 @@ all: inkleberry libinkleberry.a $(SHARED)
 	mkdir -p $@
 FORCE:
 .build/config: FORCE | .build
-	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS)' > $@.tmp
+	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS) $(IFN_VERSION) $(HARDEN) $(PROGRAM_COMPILE) $(PROGRAM_HARDEN)' > $@.tmp
 	@cmp -s $@.tmp $@ || mv $@.tmp $@
 	@rm -f $@.tmp
 .build/%.o: src/%.c include/ifn.h src/internal.h .build/config
@@ -43,15 +66,19 @@ FORCE:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -fvisibility=hidden -DIFN_SHARED -DIFN_BUILD_SHARED -MMD -MP -c $< -o $@
 libinkleberry.a: $(OBJ)
 	$(AR) rcs $@ $^
-$(SHARED): $(PIC)
+$(SHARED_REAL): $(PIC)
 	$(CC) $(SHARED_FLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
-inkleberry: cli/main.c libinkleberry.a .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
+$(SHARED): $(SHARED_REAL)
+	ln -sf $(SHARED_REAL) $(SHARED)
+	ln -sf $(SHARED_REAL) $(SHARED_ABI)
+inkleberry: cli/main.c $(PIC) .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE) $< $(PIC) $(LDFLAGS) $(PROGRAM_HARDEN) $(LDLIBS) -o $@
 .build/unit: test/unit.c libinkleberry.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
 .build/concurrency: test/concurrency.c libinkleberry.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 generated-check:
+	python3 tools/version.py --check
 	python3 tools/verify_upstream.py --production-only
 	python3 tools/generate_cuda_abi.py --check
 	python3 test/cuda_abi_schema.py
@@ -102,26 +129,38 @@ thread-sanitize:
 	.build/chat-test .build/chat-fixture.json
 fuzz-smoke: | .build
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) $(INFER) test/infer_mock.c fuzz/fuzz_infer.c -pthread -o .build/fuzz-infer
-	.build/fuzz-infer -runs=3000 -max_len=4096
+	.build/fuzz-infer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=4096
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_stream.c -o .build/fuzz-stream
-	.build/fuzz-stream -runs=3000 -max_len=32768
+	.build/fuzz-stream -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_safetensors.c -o .build/fuzz-safetensors
-	.build/fuzz-safetensors -runs=3000 -max_len=262144 .build/fuzz-corpus
+	.build/fuzz-safetensors -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=262144 .build/fuzz-corpus
 	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all $(HOST) fuzz/fuzz_tokenizer.c -o .build/fuzz-tokenizer
-	.build/fuzz-tokenizer -runs=3000 -max_len=32768 .build/tokenizer-corpus
+	.build/fuzz-tokenizer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768 .build/tokenizer-corpus
 format:
 	tools/format.sh
 lint: generated-check
 	tools/format.sh --check
 	python3 tools/lint.py
+	python3 test/lint_boundaries.py
 install: all infer
-	mkdir -p $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib/pkgconfig $(DESTDIR)$(PREFIX)/bin
-	cp include/ifn_infer.h include/ifn_infer_inkling.h include/ifn.h include/ifn_chat.h include/ifn_weights.h include/ifn_gpu.h include/ifn_engine.h $(DESTDIR)$(PREFIX)/include/
-	cp libinkleberry-infer.a libinkleberry.a $(SHARED) $(DESTDIR)$(PREFIX)/lib/
-	cp inkleberry $(DESTDIR)$(PREFIX)/bin/
-	sed 's|@PREFIX@|$(PREFIX)|g' inkleberry.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/inkleberry.pc
+	mkdir -p $(DESTDIR)$(INCLUDEDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(PKGCONFIGDIR) $(DESTDIR)$(BINDIR)
+	cp $(PUBLIC_HEADERS) $(DESTDIR)$(INCLUDEDIR)/
+	cp libinkleberry-infer.a libinkleberry.a $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/
+	ln -sf $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/$(SHARED)
+	ln -sf $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/$(SHARED_ABI)
+	cp inkleberry $(DESTDIR)$(BINDIR)/
+	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' inkleberry.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry.pc
+.PHONY: uninstall uninstall-infer-backend
+uninstall-infer-backend:
+	rm -f $(addprefix $(DESTDIR)$(LIBDIR)/,libinkleberry_backend.so libinkleberry_backend.so.1)
+	rm -f $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-infer.pc
+uninstall: uninstall-infer-backend
+	rm -f $(addprefix $(DESTDIR)$(INCLUDEDIR)/,$(notdir $(PUBLIC_HEADERS)))
+	rm -f $(addprefix $(DESTDIR)$(LIBDIR)/,libinkleberry.a libinkleberry-infer.a libinkleberry-gpu.a $(SHARED) $(SHARED_REAL) $(SHARED_ABI))
+	rm -f $(DESTDIR)$(BINDIR)/inkleberry $(DESTDIR)$(BINDIR)/inkleberry-generate $(DESTDIR)$(BINDIR)/inkleberry-weights
+	rm -f $(addprefix $(DESTDIR)$(PKGCONFIGDIR)/,inkleberry.pc inkleberry-infer.pc inkleberry-static-infer.pc)
 install-check: DESTDIR = $(CURDIR)/.build/stage
 install-check: PREFIX = /usr/local
 install-check: install
@@ -146,7 +185,7 @@ cuda-abi-check: generated-check .build/abi-probe
 cuda-check: cuda-abi-check .build/cuda-smoke
 	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/cuda-smoke
 clean:
-	rm -rf .build inkleberry libinkleberry.a libinkleberry.so libinkleberry.dylib libinkleberry-gpu.a libinkleberry-infer.a libinkleberry_backend.so.1 libinkleberry-cuda.a inkleberry-weights inkleberry-generate
+	rm -rf .build $(SHARED_REAL) $(SHARED_ABI) inkleberry libinkleberry.a libinkleberry.so libinkleberry.dylib libinkleberry-gpu.a libinkleberry-infer.a libinkleberry_backend.so.1 libinkleberry-cuda.a inkleberry-weights inkleberry-generate
 -include $(wildcard .build/*.d)
 
 # GPU backend is opt-in; the host library still builds without CUDA.
@@ -174,7 +213,8 @@ inkleberry-weights: .build/gpu-context.o .build/gpu-weight-main.o libinkleberry-
 gpu-packing-check: generated-check .build/packing
 	python3 tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' .build/packing
 install-gpu: install gpu
-	cp libinkleberry-gpu.a $(DESTDIR)$(PREFIX)/lib/
+	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' -e 's|@CUDA_ROOT@|$(CUDA_ROOT)|g' inkleberry-static-infer.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-static-infer.pc
+	cp libinkleberry-gpu.a $(DESTDIR)$(LIBDIR)/
 
 .PHONY: gpu-install-check
 gpu-install-check: DESTDIR = $(CURDIR)/.build/gpu-stage
@@ -187,9 +227,7 @@ gpu-install-check: install-gpu
 	$(CXX) .build/installed-gpu-cpp.o .build/gpu-stage/usr/local/lib/libinkleberry-gpu.a .build/gpu-stage/usr/local/lib/libinkleberry.a $(CUDA_LIBS) -o .build/installed-gpu-cpp
 	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/installed-gpu-cpp
 .build/generate.o: cli/generate.c include/ifn_engine.h .build/config
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
-inkleberry-generate: .build/generate.o libinkleberry-gpu.a libinkleberry.a
-	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE) -c $< -o $@
 .build/ar-compare.o: test/ar_compare.c include/ifn_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 
@@ -275,6 +313,9 @@ BACKEND_CUDA = $(addprefix .build/backend-,$(addsuffix .cuda.o,kernels_gemv kern
 	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
 .build/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
+# Reuse the existing PIC host/kernel objects; static SDK code generation is unchanged.
+inkleberry-generate: .build/generate.o $(GPU_HOST:src/%.c=.build/backend-%.o) $(BACKEND_CUDA) $(PIC)
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) $(PROGRAM_HARDEN) -o $@
 libinkleberry_backend.so.1: $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) src/infer.exports
 	$(CXX) -shared -Wl,-soname,libinkleberry_backend.so.1 -Wl,--version-script=src/infer.exports -Wl,-z,defs $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) $(CUDA_LIBS) $(LDFLAGS) -o $@
 infer-shared: generated-check libinkleberry_backend.so.1
@@ -289,7 +330,7 @@ infer-shared: generated-check libinkleberry_backend.so.1
 .build/infer-mock.pic.o: test/infer_mock.c .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -MMD -MP -c $< -o $@
 .build/infer-mock.so: $(INFER:src/%.c=.build/%.pic.o) $(PIC) .build/infer-mock.pic.o
-	$(CC) $(SHARED_FLAGS) $^ -pthread $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(PLAIN_SHARED_FLAGS) $^ -pthread $(LDFLAGS) $(LDLIBS) -o $@
 .PHONY: infer-consumer-check
 infer-consumer-check: .build/infer-consumer .build/infer-mock.so
 	.build/infer-consumer
@@ -302,9 +343,9 @@ install-check: infer-consumer-check
 	$(CC) $^ -Wl,-rpath,'$(CURDIR)' -pthread $(LDFLAGS) -o $@
 .PHONY: install-infer-backend
 install-infer-backend: install-gpu infer-shared
-	cp libinkleberry_backend.so.1 $(DESTDIR)$(PREFIX)/lib/
-	ln -sf libinkleberry_backend.so.1 $(DESTDIR)$(PREFIX)/lib/libinkleberry_backend.so
-	sed 's|@PREFIX@|$(PREFIX)|g' inkleberry-infer.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/inkleberry-infer.pc
+	cp libinkleberry_backend.so.1 $(DESTDIR)$(LIBDIR)/
+	ln -sf libinkleberry_backend.so.1 $(DESTDIR)$(LIBDIR)/libinkleberry_backend.so
+	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' inkleberry-infer.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-infer.pc
 .PHONY: infer-provider-check
 infer-provider-check: infer-shared
 	python3 test/infer_exports.py ./libinkleberry_backend.so.1
@@ -357,14 +398,14 @@ libinkleberry-cuda.a: .build/checked-prefill.cuda.o .build/checked-weights.cuda.
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 
 .PHONY: source-package embedding-package runtime-package runtime-gpu-package packages release-check
-VERSION ?= 0.1.0-dev
+VERSION ?= $(IFN_VERSION)
 source-package: generated-check amalgamation-check
 	python3 tools/release.py source --version '$(VERSION)'
 embedding-package: amalgamation-check
 	python3 tools/release.py embedding --version '$(VERSION)'
 runtime-package: all
 	python3 tools/release.py runtime --version '$(VERSION)'
-runtime-gpu-package: all inkleberry-generate infer-shared libinkleberry-cuda.a
+runtime-gpu-package: all inkleberry-generate infer-shared libinkleberry-cuda.a libinkleberry-gpu.a libinkleberry-infer.a
 	python3 tools/release.py runtime --gpu --version '$(VERSION)'
 packages: source-package embedding-package runtime-package
 release-check: all amalgamation-check
@@ -383,14 +424,66 @@ native-release-check: generated-check all amalgamation-check
 .PHONY: amalgamation-fuzz-smoke
 amalgamation-fuzz-smoke: | .build
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_stream.c -o .build/fuzz-amalgam-stream
-	.build/fuzz-amalgam-stream -runs=3000 -max_len=32768
+	.build/fuzz-amalgam-stream -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768
 	python3 test/safetensors_cases.py --corpus .build/fuzz-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_safetensors.c -o .build/fuzz-amalgam-safetensors
-	.build/fuzz-amalgam-safetensors -runs=3000 -max_len=262144 .build/fuzz-corpus
+	.build/fuzz-amalgam-safetensors -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=262144 .build/fuzz-corpus
 	python3 test/tokenizer_cases.py --corpus .build/tokenizer-corpus
 	$(SAN_CC) -O1 -g $(CPPFLAGS) -std=c11 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all dist/ifn.c fuzz/fuzz_tokenizer.c -o .build/fuzz-amalgam-tokenizer
-	.build/fuzz-amalgam-tokenizer -runs=3000 -max_len=32768 .build/tokenizer-corpus
+	.build/fuzz-amalgam-tokenizer -runs=$(FUZZ_RUNS) -max_total_time=$(FUZZ_SECONDS) -max_len=32768 .build/tokenizer-corpus
 
 .PHONY: native-namespace-check
 native-namespace-check: libinkleberry-cuda.a libinkleberry_backend.so.1
 	python3 test/native_symbols.py libinkleberry-cuda.a libinkleberry_backend.so.1
+
+.PHONY: host-error-check
+host-error-check: | .build
+	$(CXX) -O2 -std=c++20 -Wall -Wextra -Werror -Itest/cuda-stubs -Icuda test/host_cuda_errors.cpp -pthread -o .build/host-cuda-errors
+	.build/host-cuda-errors
+check: host-error-check
+
+.build/hash-test: test/hash.c libinkleberry.a .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libinkleberry.a $(LDFLAGS) $(LDLIBS) -o $@
+.PHONY: identity-check
+identity-check: .build/hash-test .build/infer-test .build/chat-fixture.json
+	python3 test/hashes.py .build/hash-test
+	python3 test/identity_admission.py .build/infer-test .build/chat-fixture.json
+check: identity-check
+.build/native-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.build/native-benchmark: .build/native-benchmark.o libinkleberry-gpu.a libinkleberry.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+.build/verify.o: examples/verify.c $(PUBLIC_HEADERS) .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
+.build/verify: .build/verify.o libinkleberry_backend.so.1 libinkleberry.a
+	$(CC) $^ -Wl,-rpath,'$(CURDIR)' -pthread $(LDFLAGS) -o $@
+
+.PHONY: public-example-check
+public-example-check:
+	$(CC) -std=c11 -Wall -Wextra -Werror -Iinclude -fsyntax-only examples/generate.c examples/verify.c
+	$(CC) -std=c11 -Wall -Wextra -Werror -Idist -fsyntax-only examples/generate.c examples/verify.c
+check: public-example-check
+
+.build/abi-contract: test/abi_contract.c $(PUBLIC_HEADERS) .build/config
+	$(CC) -std=c11 -Iinclude $< -o $@
+.PHONY: abi-contract-check install-contract-check harden-check performance-gate-check
+abi-contract-check: .build/abi-contract
+	.build/abi-contract > .build/abi-current.json
+	python3 -c 'import json; assert json.load(open(".build/abi-current.json")) == json.load(open("test/fixtures/abi-1.0.json")), "ABI 1.0 layout/value regression"'
+install-contract-check: all infer
+	python3 test/install_contract.py
+harden-check: all
+	python3 tools/check_hardening.py inkleberry libinkleberry.so
+performance-gate-check:
+	python3 test/performance_gate.py
+check: abi-contract-check performance-gate-check release-gate-check
+.build/facade-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) .build/config
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_BENCH_FACADE -c $< -o $@
+.build/facade-benchmark: .build/facade-benchmark.o libinkleberry-infer.a libinkleberry-gpu.a libinkleberry.a
+	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
+
+.PHONY: release-gate-check harden-regression-check
+release-gate-check:
+	python3 test/release_gate.py
+harden-regression-check:
+	python3 test/hardening.py --cc '$(CC)' --cxx '$(CXX)'

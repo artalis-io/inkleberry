@@ -8,7 +8,7 @@ from pathlib import Path
 from amalgamate import TOKEN
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE_NOTICE = '// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.\n'
+NATIVE_NOTICE = '// Inkleberry Finn: namespace and checked host error adaptation by Artalis; see config/native-namespace.json and config/native-host-adaptations.json.\n'
 
 
 def names(root=ROOT):
@@ -44,8 +44,17 @@ def translate(text, mapping):
 def original_bytes(text, root=ROOT):
     if not text.startswith(NATIVE_NOTICE):
         raise ValueError('Missing native modification notice')
+    text = text[len(NATIVE_NOTICE):]
+    patches = json.loads((root / 'config/native-host-adaptations.json').read_text())
+    # Patches are ordered edits; reverse in the opposite order. Exact strings
+    # preserve all unreviewed kernel bytes and arithmetic under original hashes.
+    for patch in reversed(patches):
+        if patch['after'] in text:
+            if text.count(patch['after']) != 1:
+                raise ValueError('Ambiguous host adaptation')
+            text = text.replace(patch['after'], patch['before'], 1)
     mapping = names(root)
-    return translate(text[len(NATIVE_NOTICE):], {v:k for k,v in mapping.items()}).encode()
+    return translate(text, {v:k for k,v in mapping.items()}).encode()
 
 
 def kernel_names(text):

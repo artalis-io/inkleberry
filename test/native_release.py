@@ -31,14 +31,31 @@ def main():
     with tempfile.TemporaryDirectory(prefix='infer-native-release-') as tmp:
         folder=Path(tmp)
         source=checks.extract(package('source',folder/'archives'),folder/'source')
-        subprocess.run(['make','-j8','CC='+a.cc,'CXX='+a.cxx,'CUDA_ROOT='+str(a.cuda_root),
-                        'generated-check','all','inkleberry-generate','libinkleberry-cuda.a','native-namespace-check','.build/infer-native-shared'],cwd=source,check=True)
-        runtime=checks.extract(package('runtime',folder/'archives',gpu=True,build_root=source),folder/'runtime')
+        # Exercise the documented operator target from clean extracted sources.
+        # Do not pre-build infer or other archives: that hid a missing prerequisite.
+        build=['make','-j8','CC='+a.cc,'CXX='+a.cxx,'CUDA_ROOT='+str(a.cuda_root)]
+        subprocess.run(build+['runtime-gpu-package'],cwd=source,check=True)
+        archives=list((source/'.build/releases').glob('inkleberry-runtime-*-cuda.tar.gz'))
+        if len(archives)!=1:raise SystemExit('Expected exactly one native runtime archive')
+        runtime=checks.extract(archives[0],folder/'runtime')
+        subprocess.run(build+['native-namespace-check','.build/infer-native-shared'],cwd=source,check=True)
+        subprocess.run([sys.executable,str(source/'tools/check_hardening.py'),
+                        str(runtime/'bin/inkleberry'),str(runtime/'bin/inkleberry-generate'),
+                        str(runtime/'lib/libinkleberry.so')],check=True)
         embed=checks.extract(package('embedding',folder/'archives'),folder/'embedding')
         env=dict(os.environ,INKLEBERRY_TEST_TIMEOUT_SECONDS='600')
         libraries=str(runtime/'lib')+':'+str(a.cuda_root/'lib64')
         guard=[sys.executable,str(ROOT/'tools/run_cuda_smoke.py'),libraries]
         subprocess.run(guard+[str(source/'.build/infer-native-shared'),str(a.model)],env=env,check=True)
+        # Consume the installed static SDK through pkg-config, with the shared
+        # host library present as in a real SDK. Explicit archives must prevent
+        # the linker choosing a hidden-symbol shared host implementation.
+        pkg_env=dict(os.environ,PKG_CONFIG_PATH=str(runtime/'lib/pkgconfig'))
+        flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','--static','inkleberry-static-infer'],env=pkg_env,text=True))
+        cc,cxx=shlex.split(a.cc),shlex.split(a.cxx)
+        subprocess.run(cc+['-std=c11','-I'+str(runtime/'include'),'-c',str(source/'test/infer_native.c'),'-o',str(folder/'static-consumer.o')],check=True)
+        subprocess.run(cxx+[str(folder/'static-consumer.o')]+flags+['-o',str(folder/'static-consumer')],check=True)
+        subprocess.run(guard+[str(folder/'static-consumer'),str(a.model)],env=env,check=True)
         # Adapt only the public include spelling to the combined header, then
         # exercise the same native acceptance through a standalone C host.
         text=(source/'test/infer_native.c').read_text().replace('#include "ifn_infer.h"','#include "ifn.h"').replace('#include "ifn_infer_inkling.h"','')
@@ -54,7 +71,7 @@ def main():
         if '4' not in result.stdout:raise SystemExit('Packaged generation did not produce the arithmetic answer')
         print(result.stdout)
     print(json.dumps({'extracted_source_native':True,'extracted_amalgamation_native':True,
-                      'packaged_cli':True,'reference_files_required':False}))
+                      'packaged_cli':True,'static_pkg_config_native':True,'reference_files_required':False}))
 
 
 if __name__=='__main__':main()

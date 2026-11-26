@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Small explicit invariants for the new library, not upstream kernel policy."""
-import re
+"""Check process/error/allocation boundaries across C, CUDA and included headers."""
+import argparse
 from pathlib import Path
-root = Path(__file__).resolve().parents[1]
-sources = sorted((root / 'src').glob('*.c'))
-if not sources:
-    raise SystemExit('No production C sources found; refusing an empty lint pass')
-for p in sources:
-    text = p.read_text()
-    if re.search(r'\b(exit|abort|assert|system|popen)\s*\(', text):
-        raise SystemExit(f'{p.name}: process termination/commands forbidden in library')
-    if p.name != 'foundation.c' and re.search(r'\b(malloc|calloc|realloc|free)\s*\(', text):
-        raise SystemExit(f'{p.name}: use injected allocator')
-print('C library source invariants passed')
+import re
+from amalgamate import TOKEN
+p = argparse.ArgumentParser(); p.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1]); a = p.parse_args()
+root = a.root
+sources = [f for directory in ['src', 'cuda', 'include', 'dist'] for f in (root / directory).rglob('*')
+           if f.suffix in ('.c', '.h', '.cpp', '.cu', '.cuh', '.hpp')]
+if not list((root / 'src').glob('*.c')): raise SystemExit('No production C sources found')
+for path in sorted(sources):
+    code = ''.join(t if not t.startswith(('/*', '//', '"', "'")) else ' ' for t in TOKEN.findall(path.read_text()))
+    if re.search(r'\b(exit|_Exit|quick_exit|abort|assert|system|popen)\s*\(', code):
+        raise SystemExit(f'{path.name}: process termination/commands forbidden in library')
+    if path.name not in ('foundation.c', 'ifn.c') and re.search(r'\b(malloc|calloc|realloc|free)\s*\(', code):
+        raise SystemExit(f'{path.name}: use injected allocator')
+print('C/CUDA library error and allocation boundaries passed')

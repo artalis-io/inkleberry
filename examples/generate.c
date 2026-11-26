@@ -36,10 +36,21 @@ int main(int argc, char **argv) {
     IFN_INFER_INIT(input);
     IFN_INFER_INIT(message);
     int failed = 1;
-    if (api->defaults(IFN_DEFAULT_MODEL, &mc, NULL) ||
-        api->defaults(IFN_DEFAULT_SESSION, &sc, NULL) ||
-        api->defaults(IFN_DEFAULT_REQUEST, &rc, NULL))
-        goto done;
+    ifn_infer_error_v1 error;
+    IFN_INFER_INIT(error);
+#define IFN_EXAMPLE_TRY(call)                                                                      \
+    do {                                                                                           \
+        ifn_status code = (call);                                                                  \
+        if (code) {                                                                                \
+            fprintf(stderr, "Inkleberry inference: %s (stage %u, provider %u, code %lld): %.*s\n", \
+                    ifn_status_string(code), error.stage, error.provider,                          \
+                    (long long)error.provider_code, (int)error.message_bytes, error.message);      \
+            goto done;                                                                             \
+        }                                                                                          \
+    } while (0)
+    IFN_EXAMPLE_TRY(api->defaults(IFN_DEFAULT_MODEL, &mc, &error));
+    IFN_EXAMPLE_TRY(api->defaults(IFN_DEFAULT_SESSION, &sc, &error));
+    IFN_EXAMPLE_TRY(api->defaults(IFN_DEFAULT_REQUEST, &rc, &error));
     source.directory = (ifn_infer_bytes){argv[1], strlen(argv[1])};
     source.format_id = (ifn_infer_bytes){"inkling-safetensors", sizeof("inkling-safetensors") - 1};
     message.role = IFN_ROLE_USER;
@@ -48,20 +59,26 @@ int main(int argc, char **argv) {
     input.kind = IFN_INPUT_CHAT;
     input.messages = (ifn_infer_array){&message, 1, sizeof message, 0};
     rc.max_output_tokens = 128;
-    if (api->model_create(&mc, &model, NULL) || api->model_load(model, &source, NULL) ||
-        api->session_create(model, &sc, &session, NULL) || api->session_prepare(session, NULL) ||
-        api->request_create(session, &input, &rc, &request, NULL) ||
-        api->request_run(request, ifn_generate_local_output, NULL, NULL))
-        goto done;
+    IFN_EXAMPLE_TRY(api->model_create(&mc, &model, &error));
+    IFN_EXAMPLE_TRY(api->model_load(model, &source, &error));
+    IFN_EXAMPLE_TRY(api->session_create(model, &sc, &session, &error));
+    IFN_EXAMPLE_TRY(api->session_prepare(session, &error));
+    IFN_EXAMPLE_TRY(api->request_create(session, &input, &rc, &request, &error));
+    IFN_EXAMPLE_TRY(api->request_run(request, ifn_generate_local_output, NULL, &error));
     failed = 0;
 done:
-    if (api->request_close(&request, NULL))
-        failed = 1;
-    if (api->session_close(&session, NULL))
-        failed = 1;
-    if (api->model_close(&model, NULL))
-        failed = 1;
-    if (failed)
-        fputs("Generation or cleanup failed\n", stderr);
+#define IFN_EXAMPLE_CLOSE(call)                                                                    \
+    do {                                                                                           \
+        ifn_status code = (call);                                                                  \
+        if (code) {                                                                                \
+            fprintf(stderr, "Cleanup: %s (stage %u, provider %u, code %lld): %.*s\n",              \
+                    ifn_status_string(code), error.stage, error.provider,                          \
+                    (long long)error.provider_code, (int)error.message_bytes, error.message);      \
+            failed = 1;                                                                            \
+        }                                                                                          \
+    } while (0)
+    IFN_EXAMPLE_CLOSE(api->request_close(&request, &error));
+    IFN_EXAMPLE_CLOSE(api->session_close(&session, &error));
+    IFN_EXAMPLE_CLOSE(api->model_close(&model, &error));
     return failed;
 }

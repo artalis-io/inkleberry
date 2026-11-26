@@ -418,6 +418,10 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
     r->started = ifn_infer_now();
     ifn_status rc = IFN_OK;
     bool native_called = false;
+    ifn_infer_error_v1 native_error;
+    IFN_INFER_INIT(native_error);
+    ifn_infer_error_v1 cleanup_error;
+    IFN_INFER_INIT(cleanup_error);
     ifn_decode_stats stats = {0};
     if (!ifn_infer_request_local_cancelled(r))
         rc = ifn_infer_request_local_scope_begin(r);
@@ -435,6 +439,8 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
                 r->result.prefix_reused_tokens = p.reused_tokens;
         }
     }
+    if (rc)
+        (void)ifn_infer_native_error(&native_error, rc, IFN_STAGE_DECODE);
     if (native_called)
         atomic_store_explicit(&r->processed, r->token_count, memory_order_relaxed);
     if (!rc && r->callback_status)
@@ -451,6 +457,8 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
     ifn_status cleanup = IFN_OK;
     if ((was_cancelled || rc) && s->state == IFN_HANDLE_READY) {
         cleanup = ifn_session_reset(s->native);
+        if (cleanup)
+            (void)ifn_infer_native_error(&cleanup_error, cleanup, IFN_STAGE_DRAIN);
         if (cleanup)
             s->state = IFN_HANDLE_POISONED;
         s->cache_scope_bytes = 0;
@@ -484,17 +492,29 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
         r->result.run_ns = now - r->started;
         r->result.timing_valid |= IFN_INFER_TIME_RUN;
     }
-    (void)ifn_infer_native_error(&r->terminal_error, rc, IFN_STAGE_DECODE);
+    if (native_error.status && native_error.status == rc)
+        r->terminal_error = native_error;
+    else if (cleanup && rc == cleanup)
+        r->terminal_error = cleanup_error;
+    else
+        (void)ifn_infer_error(&r->terminal_error, rc, IFN_STAGE_DECODE,
+                              rc ? ifn_status_string(rc) : "");
     if (s->state == IFN_HANDLE_POISONED)
         r->terminal_error.flags |= IFN_INFER_ERR_SESSION_POISONED;
     if (r->sequence)
         r->terminal_error.flags |= IFN_INFER_ERR_OUTPUT_STARTED;
     if (cleanup) {
         r->terminal_error.cleanup_status = cleanup;
+        r->terminal_error.cleanup_provider_code =
+            cleanup_error.provider == IFN_PROVIDER_CUBLAS ? 10000 + cleanup_error.provider_code
+            : cleanup_error.provider == IFN_PROVIDER_CUDA_DRIVER
+                ? 20000 + cleanup_error.provider_code
+                : cleanup_error.provider_code;
         r->terminal_error.flags |= IFN_INFER_ERR_CLEANUP_PENDING;
         if (primary && primary != IFN_CANCELLED)
             r->terminal_error.status = primary;
     }
+    ifn_infer_log_error(s->model, &r->terminal_error);
     r->emit = NULL;
     r->context = NULL;
     atomic_store_explicit(&r->phase,

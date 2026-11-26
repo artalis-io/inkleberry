@@ -1,0 +1,9 @@
+prefix=@PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
+Name: Inkleberry Finn static inference
+Description: Static C inference facade and native CUDA implementation
+Version: @VERSION@
+Libs: ${libdir}/libinkleberry-infer.a ${libdir}/libinkleberry-gpu.a ${libdir}/libinkleberry.a
+Libs.private: -L@CUDA_ROOT@/lib64 -L@CUDA_ROOT@/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread
+Cflags: -I${includedir}

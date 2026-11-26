@@ -7,6 +7,7 @@
 #include "internal.h"
 #include "json.h"
 #include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -244,7 +245,7 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
         return status;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
-        return ifn_error(IFN_IO, "cannot open tensor file");
+        return ifn_os_error(IFN_IO, errno, "cannot open tensor file");
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 10 ||
         (uintmax_t)st.st_size > SIZE_MAX) {
@@ -253,9 +254,10 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     }
     size_t size = (size_t)st.st_size;
     void *mapping = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    int mapping_errno = errno;
     (void)close(fd);
     if (mapping == MAP_FAILED)
-        return ifn_error(IFN_IO, "cannot map tensor file");
+        return ifn_os_error(IFN_IO, mapping_errno, "cannot map tensor file");
     ifn_safetensors *file = NULL;
     status = ifn_safetensors_local_create(&checked, &file);
     if (status != IFN_OK) {
@@ -332,4 +334,12 @@ ifn_status ifn_safetensors_named_data(const ifn_safetensors *file, const char *n
         return status;
     }
     return ifn_safetensors_data(file, (size_t)(info - file->tensors), out, bytes);
+}
+
+ifn_status ifn_safetensors_sha256(const ifn_safetensors *file, unsigned char out[32]) {
+    if (!file || !out)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing checkpoint hash arguments");
+    return ifn_sha256_hash(file->data, file->size, out)
+               ? IFN_OK
+               : ifn_error(IFN_LIMIT, "checkpoint hash length overflow");
 }

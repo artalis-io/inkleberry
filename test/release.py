@@ -25,7 +25,11 @@ def extract(archive, destination):
             release.safe(member.name)
             assert member.isfile() or member.issym()
             if member.issym():
-                assert member.name.endswith('/lib/libinkleberry_backend.so') and member.linkname == 'libinkleberry_backend.so.1'
+                basename = Path(member.name).name
+                allowed = basename in ('libinkleberry_backend.so', 'libinkleberry.so', 'libinkleberry.so.1', 'libinkleberry.dylib', 'libinkleberry.1.dylib')
+                assert allowed and '/lib/' in member.name
+                assert '/' not in member.linkname and member.linkname not in ('.', '..')
+                assert (member.linkname == 'libinkleberry_backend.so.1' if basename == 'libinkleberry_backend.so' else member.linkname.startswith(('libinkleberry.so.', 'libinkleberry.')))
         tar.extractall(destination)
     root = destination / roots.pop()
     manifest = json.loads((root / 'MANIFEST.json').read_text())

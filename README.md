@@ -4,6 +4,8 @@ Inkleberry Finn is a C11 inference library for Inkling-2-Mini, with checkpoint
 loading, tokenization and native Blackwell GPU execution.
 It provides explicit resource ownership, recoverable errors, streaming generation
 and a versioned C interface for embedding in applications and serving layers.
+See [library integration and qualification](docs/library-integration.md) for ABI,
+diagnostics, artifact verification and model-backed release checks.
 
 Current model support is Inkling-2-Mini. Native execution is qualified on Linux
 AMD64 with an RTX PRO 6000 Blackwell; host tooling is tested on Linux AMD64 and

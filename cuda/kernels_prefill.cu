@@ -1,4 +1,4 @@
-// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
+// Inkleberry Finn: namespace and checked host error adaptation by Artalis; see config/native-namespace.json and config/native-host-adaptations.json.
 // Fast Batched Prefill Kernels (B <= 256):
 // 1. Coalesced NVFP4/FP8/BF16 -> FP16 dequant + cuBLAS FP16 Tensor Core GEMM for dense, router & controllers.
 // 2. Blackwell mma.sync.aligned.m16n8k16 FP16 Tensor Core Multi-Token MoE (w13 softcapped SwiGLU + w2 zero-atomic).
@@ -26,12 +26,20 @@ static cublasHandle_t ifn_cuda_get_cublas(cudaStream_t stream) {
     if (!ifn_cuda_cublas_handle) {
         cublasStatus_t st = cublasCreate(&ifn_cuda_cublas_handle);
         if (st != CUBLAS_STATUS_SUCCESS) {
-            fprintf(stderr, "cublasCreate failed: %d\n", (int)st);
-            std::exit(1);
+            ifn_cuda_record_error(10000 + (int)st);
+            return nullptr;
         }
-        cublasSetMathMode(ifn_cuda_cublas_handle, CUBLAS_DEFAULT_MATH);
+        st = cublasSetMathMode(ifn_cuda_cublas_handle, CUBLAS_DEFAULT_MATH);
+        if (st != CUBLAS_STATUS_SUCCESS) {
+            ifn_cuda_record_error(10000 + (int)st);
+            return nullptr;
+        }
     }
-    cublasSetStream(ifn_cuda_cublas_handle, stream);
+    cublasStatus_t st = cublasSetStream(ifn_cuda_cublas_handle, stream);
+    if (st != CUBLAS_STATUS_SUCCESS) {
+        ifn_cuda_record_error(10000 + (int)st);
+        return nullptr;
+    }
     return ifn_cuda_cublas_handle;
 }
 
@@ -1252,6 +1260,7 @@ ifn_cuda_p_flash_attn_prefill_tc_kernel(
 
 void ifn_cuda_launch_prefill_warmup_cublas(cudaStream_t stream) {
     cublasHandle_t h = ifn_cuda_get_cublas(stream);
+    if (!h) return;
     void* d_tmp = nullptr;
     if (cudaMalloc(&d_tmp, 2048) == cudaSuccess && d_tmp) {
         cudaMemsetAsync(d_tmp, 0, 2048, stream);
@@ -1300,6 +1309,7 @@ void ifn_cuda_launch_prefill_gemm_h(
 
     float alpha = (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) ? w.global_scale : 1.0f, beta = 0.0f;
     cublasHandle_t h = ifn_cuda_get_cublas(stream);
+    if (!h) return;
     cublasStatus_t st = cublasGemmEx(
         h, CUBLAS_OP_T, CUBLAS_OP_N,
         w.rows, B, w.cols,
@@ -1310,8 +1320,7 @@ void ifn_cuda_launch_prefill_gemm_h(
         y, CUDA_R_32F, w.rows,
         CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
     if (st != CUBLAS_STATUS_SUCCESS) {
-        fprintf(stderr, "cublasGemmEx failed: %d (N=%d B=%d K=%d)\n", (int)st, w.rows, B, w.cols);
-        std::exit(1);
+        ifn_cuda_record_error(10000 + (int)st);
     }
 }
 

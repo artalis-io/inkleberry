@@ -10,7 +10,7 @@ from native_namespace import kernel_names
 
 root = Path(__file__).resolve().parents[1]
 headers = sorted((root / 'include').glob('*.h'))
-assert len(headers) == 7
+assert len(headers) == 9
 for header in headers + [root / 'dist/ifn.h']:
     assert header.name.startswith('ifn')
     text = header.read_text()

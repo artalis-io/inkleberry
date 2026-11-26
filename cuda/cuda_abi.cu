@@ -1,4 +1,4 @@
-// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
+// Inkleberry Finn: namespace and checked host error adaptation by Artalis; see config/native-namespace.json and config/native-host-adaptations.json.
 // Thin extern "C" ABI bridge exposing Blackwell sm_120a CUDA kernels & runtime to TigerStyle Zig.
 // Zero C++ heap allocations or host orchestration — all memory management, safetensors loading,
 // tokenization, graph orchestration, and HTTP/SSE serving live in pure TigerStyle Zig.

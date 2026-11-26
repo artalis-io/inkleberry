@@ -2,6 +2,7 @@
  * Control-flow/resource simulation only. Numerics require real GPU oracle. */
 #include "mock_gpu.h"
 #include "engine_internal.h"
+#include "ifn_infer.h"
 #include "checked_prefill.h"
 #include <math.h>
 static int ifn_engine_local_zero_fault, ifn_engine_local_graph_fault, ifn_engine_local_blas_fault,
@@ -409,6 +410,8 @@ int main(void) {
                                                              &pre_stats,
                                                              &pre_control) == IFN_GPU_ERROR &&
                              s->poisoned && !s->request_control);
+    IFN_MOCK_GPU_LOCAL_CHECK(ifn_native_diagnostic_get().provider == IFN_PROVIDER_CUDA &&
+                             ifn_native_diagnostic_get().code == 700);
     m.fail_op = -1;
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_destroy(&s) == IFN_OK);
     /* MTP-only acquisition and retained cleanup failures. */
@@ -420,6 +423,8 @@ int main(void) {
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_generate(s, tokens, 4, 8, out, 8, NULL, NULL, &stats) ==
                                  IFN_GPU_ERROR &&
                              s->poisoned);
+    IFN_MOCK_GPU_LOCAL_CHECK(ifn_native_diagnostic_get().provider == IFN_PROVIDER_CUDA &&
+                             ifn_native_diagnostic_get().code == 700);
     ifn_engine_local_launch_fault = 0;
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_reset(s) == IFN_GPU_ERROR);
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_destroy(&s) == IFN_OK);

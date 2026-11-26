@@ -1,4 +1,4 @@
-// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
+// Inkleberry Finn: namespace and checked host error adaptation by Artalis; see config/native-namespace.json and config/native-host-adaptations.json.
 #pragma once
 
 #include "config.hpp"

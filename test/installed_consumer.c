@@ -13,7 +13,7 @@ int main(void) {
         return 1;
     ifn_options options = IFN_OPTIONS_INIT;
     ifn_safetensors *file = NULL;
-    if (options.api_version != IFN_API_VERSION || !strlen(ifn_version()))
+    if (options.api_version != IFN_API_VERSION || strcmp(ifn_version(), IFN_VERSION_STRING))
         return 1;
     return ifn_safetensors_open_memory(NULL, 0, &options, &file) == IFN_INVALID_ARGUMENT && !file
                ? 0

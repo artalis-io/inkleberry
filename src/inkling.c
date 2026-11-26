@@ -334,3 +334,10 @@ ifn_status ifn_inkling_lookup(const ifn_inkling_checkpoint *c, uint32_t source, 
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid weight source");
     return ifn_safetensors_named_data(c->files[source], name, out, bytes);
 }
+
+ifn_status ifn_inkling_sha256(const ifn_inkling_checkpoint *checkpoint, uint32_t source,
+                              unsigned char out[32]) {
+    if (!checkpoint || source > 1 || !checkpoint->files[source])
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing checkpoint source");
+    return ifn_safetensors_sha256(checkpoint->files[source], out);
+}

@@ -42,7 +42,10 @@ def read_file(path, base=ROOT):
     return path.read_bytes()
 
 
-def package(kind, output, version='0.1.0-dev', gpu=False, build_root=ROOT):
+def package(kind, output, version=None, gpu=False, build_root=ROOT):
+    expected_version = (ROOT / 'VERSION').read_text().strip()
+    version = expected_version if version is None else version
+    if version != expected_version: raise ValueError('Package version must match VERSION and the compiled header')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', version):
         raise ValueError('Invalid package version')
     if gpu and (kind != 'runtime' or platform.system() != 'Linux'):
@@ -69,21 +72,36 @@ def package(kind, output, version='0.1.0-dev', gpu=False, build_root=ROOT):
             if name not in entries:
                 add(name, ROOT / name, name.endswith('.sh'))
     elif kind == 'embedding':
-        for name in ['dist/ifn.h', 'dist/ifn.c', 'examples/inspect.c', 'examples/generate.c']:
+        for name in ['dist/ifn.h', 'dist/ifn.c', 'examples/inspect.c', 'examples/generate.c', 'examples/verify.c']:
             add(name, ROOT / name)
         entries['README.md'] = read_file(ROOT / 'docs/embedding.md')
         modes['README.md'] = 0o644
     elif kind == 'runtime':
         add('bin/inkleberry', build_root / 'inkleberry', True, build_root)
         shared = 'libinkleberry.dylib' if platform.system() == 'Darwin' else 'libinkleberry.so'
-        add('lib/' + shared, build_root / shared, base=build_root)
+        real = 'libinkleberry.' + version + '.dylib' if platform.system() == 'Darwin' else 'libinkleberry.so.' + version
+        abi = 'libinkleberry.1.dylib' if platform.system() == 'Darwin' else 'libinkleberry.so.1'
+        add('lib/' + real, build_root / real, base=build_root)
+        add('lib/libinkleberry.a', build_root / 'libinkleberry.a', base=build_root)
+        links['lib/' + shared] = real
+        links['lib/' + abi] = real
         for name in policy['public_headers']:
             add('include/' + Path(name).name, ROOT / name)
         if gpu:
             add('bin/inkleberry-generate', build_root / 'inkleberry-generate', True, build_root)
             add('lib/libinkleberry_backend.so.1', build_root / 'libinkleberry_backend.so.1', base=build_root)
             add('lib/libinkleberry-cuda.a', build_root / 'libinkleberry-cuda.a', base=build_root)
+            add('lib/libinkleberry-gpu.a', build_root / 'libinkleberry-gpu.a', base=build_root)
+            add('lib/libinkleberry-infer.a', build_root / 'libinkleberry-infer.a', base=build_root)
             links['lib/libinkleberry_backend.so'] = 'libinkleberry_backend.so.1'
+        templates = ['inkleberry.pc.in'] + (['inkleberry-infer.pc.in', 'inkleberry-static-infer.pc.in'] if gpu else [])
+        for template in templates:
+            data = read_file(ROOT / template).decode()
+            replacements = {'@PREFIX@':'${pcfiledir}/../..', '@LIBDIR@':'${prefix}/lib',
+                            '@INCLUDEDIR@':'${prefix}/include', '@VERSION@':version, '@CUDA_ROOT@':'/usr/local/cuda'}
+            for old,new in replacements.items(): data=data.replace(old,new)
+            name='lib/pkgconfig/'+template.removesuffix('.in')
+            entries[name]=data.encode(); modes[name]=0o644
         dependencies = {
             'system': ['C runtime', 'libm'],
             'gpu': ['compatible NVIDIA driver (libcuda.so.1)', 'CUDA runtime (libcudart)',
@@ -139,7 +157,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('kind', choices=['source', 'embedding', 'runtime'])
     parser.add_argument('--out', type=Path, default=ROOT / '.build/releases')
-    parser.add_argument('--version', default='0.1.0-dev')
+    parser.add_argument('--version')
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--build-root', type=Path, default=ROOT)
     args = parser.parse_args()

@@ -25,7 +25,10 @@ jobs:
         run: make reference-free-check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
       - name: Verify extracted production distributions
         if: matrix.os == 'ubuntu-24.04' && matrix.cc == 'gcc'
-        run: make release-check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
+        run: make release-check install-contract-check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
+      - name: Verify ELF hardening
+        if: matrix.os == 'ubuntu-24.04'
+        run: make harden-check harden-regression-check CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
   sanitizers:
     runs-on: ubuntu-24.04
     steps:
@@ -33,7 +36,7 @@ jobs:
       - run: make sanitize CXX=clang++
         env:
           ASAN_OPTIONS: detect_leaks=1
-      - run: make fuzz-smoke amalgamation-fuzz-smoke
+      - run: make fuzz-smoke amalgamation-fuzz-smoke FUZZ_RUNS=-1 FUZZ_SECONDS=30
         env:
           ASAN_OPTIONS: detect_leaks=1
   lint:
@@ -44,3 +47,9 @@ jobs:
       - run: make lint
 # CPU CI is not an inference or GPU qualification gate. Real GPU checks must
 # run explicitly on a reserved device; never dispatch untrusted PRs to core-1.
+
+  thread-sanitizer:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - run: make thread-sanitize SAN_CC=clang SAN_CXX=clang++

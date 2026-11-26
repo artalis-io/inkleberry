@@ -7,6 +7,7 @@
 #include "json.h"
 #include "tokenizer_profile.h"
 #include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -395,7 +396,8 @@ invalid:
     return ifn_error(IFN_FORMAT, "invalid/duplicate tokenizer vocabulary or merge");
 }
 
-ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_tokenizer **out) {
+ifn_status ifn_tokenizer_open_verified(const char *path, const ifn_options *options,
+                                       const unsigned char *expected, ifn_tokenizer **out) {
     if (out)
         *out = NULL;
     if (!path || !path[0] || !out)
@@ -406,7 +408,7 @@ ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_
         return status;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
-        return ifn_error(IFN_IO, "cannot open tokenizer");
+        return ifn_os_error(IFN_IO, errno, "cannot open tokenizer");
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
         (uintmax_t)st.st_size > IFN_TOK_JSON) {
@@ -415,10 +417,19 @@ ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_
     }
     size_t n = (size_t)st.st_size;
     void *map = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
+    int map_errno = errno;
     (void)close(fd);
     if (map == MAP_FAILED)
-        return ifn_error(IFN_IO, "cannot map tokenizer");
-    status = ifn_tokenizer_open_memory(map, n, &checked, out);
+        return ifn_os_error(IFN_IO, map_errno, "cannot map tokenizer");
+    unsigned char digest[32];
+    if (expected && (!ifn_sha256_hash(map, n, digest) || memcmp(digest, expected, 32)))
+        status = ifn_error(IFN_FORMAT, "tokenizer checksum mismatch");
+    else
+        status = ifn_tokenizer_open_memory(map, n, &checked, out);
     (void)munmap(map, n);
     return status;
+}
+
+ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_tokenizer **out) {
+    return ifn_tokenizer_open_verified(path, options, NULL, out);
 }

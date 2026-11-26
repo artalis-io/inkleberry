@@ -1,10 +1,11 @@
-// Inkleberry Finn: identifier-only namespace adaptation by Artalis; see config/native-namespace.json.
+// Inkleberry Finn: namespace and checked host error adaptation by Artalis; see config/native-namespace.json and config/native-host-adaptations.json.
 #pragma once
 
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cuda_runtime.h>
+#include "ifn_error.hpp"
 
 namespace ifn_cuda {
 
@@ -135,14 +136,10 @@ inline void ifn_cuda_build_visit_schedule(ifn_cuda_visit_info out[IFN_CUDA_NUM_V
     }
 }
 
-#define IFN_CUDA_CUDA_CHECK(call)                                                                  \
-    do {                                                                                  \
-        cudaError_t err__ = (call);                                                       \
-        if (err__ != cudaSuccess) {                                                       \
-            fprintf(stderr, "CUDA error at %s:%d: %s\n", __FILE__, __LINE__,              \
-                    cudaGetErrorString(err__));                                           \
-            std::exit(1);                                                                 \
-        }                                                                                 \
+#define IFN_CUDA_CUDA_CHECK(call) \
+    do { \
+        int ifn_cuda_code__ = (int)(call); \
+        if (ifn_cuda_code__) ::ifn_cuda::ifn_cuda_record_error(ifn_cuda_code__); \
     } while (0)
 
 } // namespace ifn_cuda

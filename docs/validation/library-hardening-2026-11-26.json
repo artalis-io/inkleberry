@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "source_revision": "affd0d9afb15b485a8e8a1a93ce50be8d585a6af",
+  "dirty": null,
+  "version": "0.2.0-dev",
+  "model_files": {
+    "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+    "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+    "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+  },
+  "gpu": "GPU-e5f713d1-46ae-9f99-c16d-65de9e9df32a, NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition, 595.104.02, 12.0, 300.00 W",
+  "platform": "Linux-7.2.15-76070215-generic-x86_64-with-glibc2.39",
+  "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+  "cuda": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Mon_Oct_12_19:25:48_PDT_2026\nCuda compilation tools, release 13.5, V13.5.37\nBuild cuda_13.5.r13.5/compiler.39125733_0",
+  "started_utc": "2026-11-26T09:59:05Z",
+  "passed": true,
+  "checks": {
+    "artifact_verification": true,
+    "engine_quality_performance": true,
+    "facade_quality_performance": true,
+    "extracted_packages": true,
+    "static_pkg_config_native": true,
+    "host_asan_ubsan": true,
+    "host_tsan": true,
+    "elf_hardening": true,
+    "device_code_identical": {
+      "functions": 423,
+      "instruction_control_words": 592416
+    }
+  },
+  "build_flags": "cc g++ ar -Iinclude -Isrc -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=3 -O2 -fstack-protector-strong -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Werror -Wl,-z,relro,-z,now,-z,noexecstack\n/usr/local/cuda -O3 --use_fast_math -std=c++20 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -Icuda 0.2.0-dev 1\n",
+  "binaries": {
+    ".build/native-benchmark": "ff48aef68f0f531d5725503b71784f452043aae7fd8931dc048a3194b8df77f5",
+    ".build/facade-benchmark": "676863be54a02f898a1f2ab67d29abd2837b8624d9ff6104a11fd73a552aa837",
+    "libinkleberry_backend.so.1": "fcbfec05721e3adfbe3554a9cca63f6c4ceef42212091128fb1da357b49a8fe6"
+  },
+  "baseline_revision": "cb2b71773ab1a04dc574a644e01ad270fc6b6bd4",
+  "final_package_source_revision": "142980723bf7ae5903e24b8ad83a7f3eee231fe9",
+  "fuzz": {
+    "harnesses": 7,
+    "seconds_per_harness": 11,
+    "aggregate_executions": 5028552
+  },
+  "performance": {
+    "engine": {
+      "quality_equal": true,
+      "performance_passed": true,
+      "groups": 28,
+      "measured_repetitions_per_group": 5,
+      "metrics": {
+        "elapsed_ns": {
+          "median_ratio_min": 0.997992053824982,
+          "median_ratio_max": 1.0052104491070852,
+          "max_candidate_cv": 0.0016099728337297128,
+          "checked_groups": 28
+        },
+        "first_token_ns": {
+          "median_ratio_min": 0.9983331508617802,
+          "median_ratio_max": 1.0062366708877732,
+          "max_candidate_cv": 0.0019355494571220613,
+          "checked_groups": 28
+        },
+        "decode_tps": {
+          "median_ratio_min": 0.9992447806234006,
+          "median_ratio_max": 1.0020397853154663,
+          "max_candidate_cv": 0.0005265070299077181,
+          "checked_groups": 28
+        }
+      },
+      "comparison_receipt_sha256": "656b3176cf268b45e57506264c1a109aef208589b1b6376e8315ccd1becc3972"
+    },
+    "facade": {
+      "quality_equal": true,
+      "performance_passed": true,
+      "groups": 28,
+      "measured_repetitions_per_group": 5,
+      "metrics": {
+        "elapsed_ns": {
+          "median_ratio_min": 0.9968083645116596,
+          "median_ratio_max": 1.0291105842336332,
+          "max_candidate_cv": 0.0008777199092326616,
+          "checked_groups": 28
+        },
+        "first_token_ns": {
+          "median_ratio_min": 0.9964694148278389,
+          "median_ratio_max": 1.0333809418963211,
+          "max_candidate_cv": 0.0011823456355349558,
+          "checked_groups": 28
+        },
+        "decode_tps": {
+          "median_ratio_min": 0.9893835043125018,
+          "median_ratio_max": 1.0031506308945242,
+          "max_candidate_cv": 0.0007248098483163362,
+          "checked_groups": 28
+        }
+      },
+      "comparison_receipt_sha256": "f6dc28d944a16442c8852236375b58fd34c8bbb70774d27543f130f3b95168c6"
+    }
+  }
+}

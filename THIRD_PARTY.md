@@ -5,7 +5,7 @@ upstream terms and attribution. This inventory applies to the maintained library
 
 | Material | Source | Treatment |
 |---|---|---|
-| Retained CUDA kernels/bridge, Zig oracle and build | tensorfish/squid5090 `d10c0abb2c8990be81c08ba84c66a8333a691b33` | CUDA identifiers adapted to the project namespace; reversing `config/native-namespace.json` reproduces every original hash in `UPSTREAM.json`. Zig/build snapshots unchanged; Apache-2.0 and existing NOTICE chain |
+| Retained CUDA kernels/bridge, Zig oracle and build | tensorfish/squid5090 `d10c0abb2c8990be81c08ba84c66a8333a691b33` | CUDA identifiers adapted to the project namespace; reversing `config/native-namespace.json` and reviewed host-only error adapters in `config/native-host-adaptations.json` reproduces every original hash in `UPSTREAM.json`. Zig/build snapshots unchanged; Apache-2.0 and existing NOTICE chain |
 | `src/safetensors.c` | Translation/rework of pinned `src/safetensors.zig` | Apache-2.0; original author and changes identified in file header |
 | `src/cuda_abi.h`, `test/cuda_abi_c.c`, `test/cuda_abi_probe.cu` | Generated from `abi/cuda.json`; initial declarations derived from pinned `src/cuda.zig`, compared against actual CUDA bridge | Apache-2.0; generated attribution and exact-byte CI verification |
 | `.clang-format` | artalis-io/jev-bush `85fd51f8c99b1b8b7ea26d33e02413e681a9271d` | Copied formatting policy, 0BSD |

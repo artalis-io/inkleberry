@@ -16,12 +16,14 @@ void ifn_weight_backend_check(ifn_gpu_weights *w, int error, const char *operati
     if (!error || w->status != IFN_OK)
         return;
     w->backend_error = error;
-    w->status = error == 2 ? IFN_OUT_OF_MEMORY : error == 801 ? IFN_UNSUPPORTED : IFN_GPU_ERROR;
+    w->status = (error == 2 || error == 10003 || error == 20002) ? IFN_OUT_OF_MEMORY
+                : (error == 801 || error == 20801)               ? IFN_UNSUPPORTED
+                                                                 : IFN_GPU_ERROR;
     (void)snprintf(w->failure, sizeof w->failure, "%s: CUDA status %d", operation, error);
 }
 
 static ifn_status ifn_weights_runtime_local_result(ifn_gpu_weights *w) {
-    return ifn_error(w->status, w->status == IFN_OK ? "" : w->failure);
+    return ifn_native_error(w->status, w->backend_error, w->status == IFN_OK ? "" : w->failure);
 }
 
 static bool ifn_weights_runtime_local_acquire(ifn_gpu_weights *w) {

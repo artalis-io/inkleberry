@@ -4,6 +4,7 @@
 #include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
+extern atomic_uint ifn_infer_mock_uploads;
 extern atomic_int ifn_infer_mock_pause, ifn_infer_mock_arrived, ifn_infer_mock_resume;
 extern atomic_uint ifn_infer_mock_resets, ifn_infer_mock_calls, ifn_infer_mock_enables,
     ifn_infer_mock_fail, ifn_infer_mock_close_fail, ifn_infer_mock_upload_fail;
@@ -86,6 +87,106 @@ static ifn_status ifn_infer_local_ready_model(ifn_infer_model **m, const char *f
     if (!status)
         (*m)->state = IFN_HANDLE_READY;
     return status;
+}
+
+static void ifn_infer_local_log(void *context, uint32_t level, const ifn_infer_error_v1 *error) {
+    ifn_infer_error_v1 *copy = context;
+    if (level == IFN_LOG_ERROR)
+        *copy = *error;
+}
+
+static int ifn_infer_local_diagnostics(void) {
+    ifn_infer_error_v1 error, logged;
+    IFN_INFER_INIT(error);
+    IFN_INFER_INIT(logged);
+    ifn_native_error(IFN_GPU_ERROR, 10007, "cuBLAS test failure");
+    IFN_INFER_LOCAL_CHECK(ifn_infer_native_error(&error, IFN_GPU_ERROR, IFN_STAGE_DECODE) ==
+                          IFN_GPU_ERROR);
+    IFN_INFER_LOCAL_CHECK(error.provider == IFN_PROVIDER_CUBLAS && error.provider_code == 7 &&
+                          !strcmp(error.message, "cuBLAS test failure"));
+    ifn_error(IFN_OK, "");
+    IFN_INFER_LOCAL_CHECK(error.provider_code == 7);
+    ifn_native_error(IFN_GPU_ERROR, 20201, "driver test failure");
+    ifn_infer_native_error(&error, IFN_GPU_ERROR, IFN_STAGE_LOAD);
+    IFN_INFER_LOCAL_CHECK(error.provider == IFN_PROVIDER_CUDA_DRIVER && error.provider_code == 201);
+    ifn_infer_logger_v1 logger;
+    IFN_INFER_INIT(logger);
+    logger.callback = ifn_infer_local_log;
+    logger.context = &logged;
+    ifn_infer_extension_v1 ext;
+    IFN_INFER_INIT(ext);
+    ext.id = IFN_INFER_EXT_LOGGER;
+    ext.version = 1;
+    ext.payload = &logger;
+    ext.payload_bytes = sizeof logger;
+    ifn_infer_local_mc.extensions = (ifn_infer_array){&ext, 1, sizeof ext, 0};
+    ifn_infer_model *m = NULL;
+    logger.hdr.struct_size = IFN_INFER_RECORD_MAX_BYTES;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_create(&ifn_infer_local_mc, &m, NULL) ==
+                              IFN_INVALID_ARGUMENT &&
+                          !m);
+    logger.hdr.struct_size = sizeof logger;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_ready_model(&m, NULL) == IFN_OK);
+    ifn_infer_local_mc.extensions = (ifn_infer_array){0};
+    ifn_infer_session *s = NULL;
+    ifn_infer_request *r = NULL;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->session_create(m, &ifn_infer_local_sc, &s, NULL) ==
+                          IFN_OK);
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->session_prepare(s, NULL) == IFN_OK);
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_create(
+                              s, &ifn_infer_local_input, &ifn_infer_local_rc, &r, NULL) == IFN_OK);
+    atomic_store(&ifn_infer_mock_fail, 1);
+    size_t count = 0;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_run(r, ifn_infer_local_count_event, &count,
+                                                           NULL) == IFN_GPU_ERROR);
+    IFN_INFER_LOCAL_CHECK(logged.provider == IFN_PROVIDER_CUDA && logged.provider_code == 719 &&
+                          logged.stage == IFN_STAGE_DECODE &&
+                          !strcmp(logged.message, "mock native operation"));
+    atomic_store(&ifn_infer_mock_fail, 0);
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_close(&r, NULL) == IFN_OK);
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->session_close(&s, NULL) == IFN_OK);
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_close(&m, NULL) == IFN_OK);
+    return 0;
+}
+
+static int ifn_infer_local_reject_manifest(const char *directory, const char *tokenizer_hash) {
+    static const char ifn_zero_hash[] =
+        "0000000000000000000000000000000000000000000000000000000000000000";
+    ifn_infer_model_config_v1 c = ifn_infer_local_mc;
+    c.required_features |= IFN_INFER_CAP_ARTIFACT_VERIFY;
+    ifn_infer_model *model = NULL;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_create(&c, &model, NULL) == IFN_UNSUPPORTED &&
+                          !model);
+    ifn_infer_artifact_manifest_v1 manifest;
+    IFN_INFER_INIT(manifest);
+    manifest.tokenizer_sha256 = (ifn_infer_bytes){ifn_zero_hash, 64};
+    manifest.weights_sha256 = (ifn_infer_bytes){ifn_zero_hash, 64};
+    ifn_infer_extension_v1 ext;
+    IFN_INFER_INIT(ext);
+    ext.id = IFN_INFER_EXT_ARTIFACT_MANIFEST;
+    ext.version = 1;
+    ext.payload = &manifest;
+    ext.payload_bytes = sizeof manifest;
+    c.extensions = (ifn_infer_array){&ext, 1, sizeof ext, 0};
+    ifn_infer_source_v1 source;
+    IFN_INFER_INIT(source);
+    source.directory = (ifn_infer_bytes){directory, strlen(directory)};
+    source.format_id = (ifn_infer_bytes){"inkling-safetensors", sizeof("inkling-safetensors") - 1};
+    ifn_infer_error_v1 error;
+    IFN_INFER_INIT(error);
+    for (unsigned pass = 0; pass < 2; pass++) {
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_create(&c, &model, NULL) == IFN_OK);
+        ifn_status rc = ifn_infer_local_api->model_load(model, &source, &error);
+        IFN_INFER_LOCAL_CHECK(rc == (pass ? IFN_IO : IFN_FORMAT));
+        IFN_INFER_LOCAL_CHECK(!atomic_load(&ifn_infer_mock_uploads));
+        if (pass)
+            IFN_INFER_LOCAL_CHECK(error.provider == IFN_PROVIDER_OS && error.provider_code > 0);
+        else
+            IFN_INFER_LOCAL_CHECK(strstr(error.message, "checksum mismatch"));
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_close(&model, NULL) == IFN_OK);
+        manifest.tokenizer_sha256 = (ifn_infer_bytes){tokenizer_hash, 64};
+    }
+    return 0;
 }
 
 static int ifn_infer_local_lifecycle(const char *fixture) {
@@ -395,6 +496,8 @@ static int ifn_infer_local_text_and_recovery(const char *fixture) {
                                                            &error) == IFN_GPU_ERROR);
     IFN_INFER_LOCAL_CHECK(error.flags & IFN_INFER_ERR_SESSION_POISONED);
     IFN_INFER_LOCAL_CHECK(error.cleanup_status == IFN_GPU_ERROR);
+    IFN_INFER_LOCAL_CHECK(error.provider == IFN_PROVIDER_CUDA && error.provider_code == 700 &&
+                          error.cleanup_provider_code == 700);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_close(&r, NULL) == IFN_OK);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_create(s, &ifn_infer_local_input,
                                                               &ifn_infer_local_rc, &r,
@@ -480,7 +583,8 @@ static int ifn_infer_local_load_fixture(const char *directory) {
 int main(int argc, char **argv) {
     const void *table = (void *)1;
     IFN_INFER_LOCAL_CHECK(ifn_infer_get_api(999, 0, &table) == IFN_INFER_ABI_MISMATCH && !table);
-    IFN_INFER_LOCAL_CHECK(ifn_infer_get_api(1, 1, &table) == IFN_INFER_ABI_MISMATCH && !table);
+    IFN_INFER_LOCAL_CHECK(
+        ifn_infer_get_api(1, IFN_INFER_ABI_MINOR + 1, &table) == IFN_INFER_ABI_MISMATCH && !table);
     IFN_INFER_LOCAL_CHECK(ifn_infer_get_api(1, 0, &table) == IFN_OK && table);
     ifn_infer_local_api = table;
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->struct_size == sizeof *ifn_infer_local_api &&
@@ -497,6 +601,8 @@ int main(int argc, char **argv) {
         ifn_infer_local_api->defaults(IFN_DEFAULT_REQUEST, &ifn_infer_local_rc, NULL) == IFN_OK);
     ifn_infer_local_mc.allocator =
         (ifn_infer_allocator){NULL, ifn_infer_local_allocate, ifn_infer_local_release};
+    if (argc == 4 && !strcmp(argv[1], "--reject-manifest"))
+        return ifn_infer_local_reject_manifest(argv[2], argv[3]);
     if (argc == 3 && !strcmp(argv[1], "--load-fixture"))
         return ifn_infer_local_load_fixture(argv[2]);
     ifn_infer_local_rc.max_output_tokens = 8;
@@ -504,6 +610,7 @@ int main(int argc, char **argv) {
     ifn_infer_local_input.kind = IFN_INPUT_TOKENS;
     ifn_infer_local_input.tokens = ifn_infer_local_prompt;
     ifn_infer_local_input.token_count = 2;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_diagnostics() == 0);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_invalid_inputs() == 0);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_lifecycle(argc > 1 ? argv[1] : NULL) == 0);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_fault_injection() == 0);

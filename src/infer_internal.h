@@ -11,7 +11,8 @@
 #define IFN_INFER_FEATURES                                                                         \
     (IFN_INFER_CAP_TEXT_CHAT | IFN_INFER_CAP_RAW_TEXT | IFN_INFER_CAP_RAW_TOKEN_IO |               \
      IFN_INFER_CAP_REASONING_OUTPUT | IFN_INFER_CAP_REASONING_HISTORY |                            \
-     IFN_INFER_CAP_PREFIX_CACHE | IFN_INFER_CAP_SPECULATION | IFN_INFER_CAP_MEMORY_PLAN)
+     IFN_INFER_CAP_PREFIX_CACHE | IFN_INFER_CAP_SPECULATION | IFN_INFER_CAP_MEMORY_PLAN |          \
+     IFN_INFER_CAP_ARTIFACT_VERIFY)
 #define IFN_INFER_CANCEL 1u
 #define IFN_INFER_SEALED 2u
 #define IFN_INFER_MAX_INPUT (32u * 1024u * 1024u)
@@ -26,6 +27,11 @@ typedef struct {
 struct ifn_infer_model {
     ifn_options allocator;
     ifn_infer_budget budget;
+    ifn_infer_log_fn log;
+    void *log_context;
+    bool verify_artifacts;
+    unsigned char expected_sha256[3][32];
+    char artifact_fingerprint[65];
     atomic_flag busy;
     uint32_t state, children;
     ifn_weight_config weights_config;
@@ -76,6 +82,9 @@ struct ifn_infer_request {
 ifn_status ifn_infer_input(const void *, size_t);
 ifn_status ifn_infer_output(void *, const void *, size_t);
 ifn_status ifn_infer_error(ifn_infer_error_v1 *, ifn_status, uint32_t, const char *);
+void ifn_infer_log_error(const ifn_infer_model *, const ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_native_error(ifn_infer_model *, ifn_infer_error_v1 *, ifn_status,
+                                        uint32_t);
 ifn_status ifn_infer_native_error(ifn_infer_error_v1 *, ifn_status, uint32_t);
 bool ifn_infer_span(ifn_infer_bytes, size_t);
 bool ifn_infer_equal(ifn_infer_bytes, const char *);

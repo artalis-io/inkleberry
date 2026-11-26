@@ -285,7 +285,46 @@ ifn_status ifn_session_owned_plan(ifn_gpu_weights *, const ifn_session_config *,
 #define IFN_INTERNAL_H
 
 #include <stdbool.h>
+
+/* src/sha256.h */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
+#ifndef IFN_SHA256_H
+#define IFN_SHA256_H
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+typedef struct {
+    uint32_t state[8];
+    uint64_t bytes;
+    size_t used;
+    unsigned char block[64];
+} ifn_sha256;
+
+void ifn_sha256_init(ifn_sha256 *);
+bool ifn_sha256_update(ifn_sha256 *, const void *, size_t);
+void ifn_sha256_final(ifn_sha256 *, unsigned char[32]);
+bool ifn_sha256_hash(const void *, size_t, unsigned char[32]);
+void ifn_sha256_hex(const unsigned char[32], char[65]);
+bool ifn_sha256_unhex(const char *, size_t, unsigned char[32]);
+#endif
+
+
+ifn_status ifn_safetensors_sha256(const ifn_safetensors *, unsigned char[32]);
+ifn_status ifn_inkling_sha256(const ifn_inkling_checkpoint *, uint32_t, unsigned char[32]);
+ifn_status ifn_tokenizer_open_verified(const char *, const ifn_options *, const unsigned char *,
+                                       ifn_tokenizer **);
 ifn_status ifn_error(ifn_status status, const char *message);
+
+typedef struct {
+    ifn_status status;
+    uint32_t provider;
+    int64_t code;
+} ifn_native_diagnostic;
+
+ifn_status ifn_os_error(ifn_status, int, const char *);
+ifn_status ifn_native_error(ifn_status, int, const char *);
+ifn_native_diagnostic ifn_native_diagnostic_get(void);
 bool ifn_size_add(size_t a, size_t b, size_t *out);
 bool ifn_size_mul(size_t a, size_t b, size_t *out);
 bool ifn_size_align(size_t value, size_t alignment, size_t *out);
@@ -524,6 +563,7 @@ struct ifn_session {
     void *p_ctrl_d_h;
     float *p_ctrl_f, *p_ctrl_g;
     ifn_status status;
+    int backend_error;
     char failure[192];
 };
 
@@ -566,7 +606,8 @@ void ifn_ar_check(ifn_session *, int, const char *);
 #define IFN_INFER_FEATURES                                                                         \
     (IFN_INFER_CAP_TEXT_CHAT | IFN_INFER_CAP_RAW_TEXT | IFN_INFER_CAP_RAW_TOKEN_IO |               \
      IFN_INFER_CAP_REASONING_OUTPUT | IFN_INFER_CAP_REASONING_HISTORY |                            \
-     IFN_INFER_CAP_PREFIX_CACHE | IFN_INFER_CAP_SPECULATION | IFN_INFER_CAP_MEMORY_PLAN)
+     IFN_INFER_CAP_PREFIX_CACHE | IFN_INFER_CAP_SPECULATION | IFN_INFER_CAP_MEMORY_PLAN |          \
+     IFN_INFER_CAP_ARTIFACT_VERIFY)
 #define IFN_INFER_CANCEL 1u
 #define IFN_INFER_SEALED 2u
 #define IFN_INFER_MAX_INPUT (32u * 1024u * 1024u)
@@ -581,6 +622,11 @@ typedef struct {
 struct ifn_infer_model {
     ifn_options allocator;
     ifn_infer_budget budget;
+    ifn_infer_log_fn log;
+    void *log_context;
+    bool verify_artifacts;
+    unsigned char expected_sha256[3][32];
+    char artifact_fingerprint[65];
     atomic_flag busy;
     uint32_t state, children;
     ifn_weight_config weights_config;
@@ -631,6 +677,9 @@ struct ifn_infer_request {
 ifn_status ifn_infer_input(const void *, size_t);
 ifn_status ifn_infer_output(void *, const void *, size_t);
 ifn_status ifn_infer_error(ifn_infer_error_v1 *, ifn_status, uint32_t, const char *);
+void ifn_infer_log_error(const ifn_infer_model *, const ifn_infer_error_v1 *);
+ifn_status ifn_infer_model_native_error(ifn_infer_model *, ifn_infer_error_v1 *, ifn_status,
+                                        uint32_t);
 ifn_status ifn_infer_native_error(ifn_infer_error_v1 *, ifn_status, uint32_t);
 bool ifn_infer_span(ifn_infer_bytes, size_t);
 bool ifn_infer_equal(ifn_infer_bytes, const char *);
@@ -797,9 +846,10 @@ bool ifn_utf8_next(const unsigned char *text, size_t bytes, size_t *pos, uint32_
 #include <stdio.h>
 #include <stdlib.h>
 static _Thread_local char ifn_am_foundation_ifn_error_message[256];
+static _Thread_local ifn_native_diagnostic ifn_am_foundation_ifn_foundation_diagnostic;
 
 const char *ifn_version(void) {
-    return "0.1.0-dev";
+    return IFN_VERSION_STRING;
 }
 
 const char *ifn_status_string(ifn_status status) {
@@ -815,7 +865,32 @@ const char *ifn_last_error(void) {
 }
 
 ifn_status ifn_error(ifn_status status, const char *message) {
+    ifn_am_foundation_ifn_foundation_diagnostic = (ifn_native_diagnostic){status, 0, 0};
     (void)snprintf(ifn_am_foundation_ifn_error_message, sizeof ifn_am_foundation_ifn_error_message, "%s", message);
+    return status;
+}
+
+ifn_native_diagnostic ifn_native_diagnostic_get(void) {
+    return ifn_am_foundation_ifn_foundation_diagnostic;
+}
+
+ifn_status ifn_os_error(ifn_status status, int code, const char *message) {
+    ifn_error(status, message);
+    if (status && code) {
+        ifn_am_foundation_ifn_foundation_diagnostic.provider = 1;
+        ifn_am_foundation_ifn_foundation_diagnostic.code = code;
+    }
+    return status;
+}
+
+ifn_status ifn_native_error(ifn_status status, int code, const char *message) {
+    ifn_error(status, message);
+    if (status && code > 0) {
+        ifn_am_foundation_ifn_foundation_diagnostic.provider = code >= 20000 ? 4u : code >= 10000 ? 3u : 2u;
+        ifn_am_foundation_ifn_foundation_diagnostic.code = code >= 20000   ? code - 20000
+                                         : code >= 10000 ? code - 10000
+                                                         : code;
+    }
     return status;
 }
 
@@ -866,6 +941,147 @@ ifn_status ifn_options_resolve(const ifn_options *input, ifn_options *out) {
         out->release = ifn_am_foundation_ifn_foundation_local_default_release;
     }
     return IFN_OK;
+}
+
+
+/* Module: src/sha256.c */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
+
+#include <string.h>
+static const uint32_t ifn_am_sha256_ifn_sha256_k[64] = {
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+
+static uint32_t ifn_am_sha256_ifn_sha256_rotate(uint32_t x, unsigned n) {
+    return (x >> n) | (x << (32 - n));
+}
+
+static void ifn_am_sha256_ifn_sha256_block(ifn_sha256 *s) {
+    uint32_t w[64];
+    for (unsigned i = 0; i < 16; i++) {
+        const unsigned char *p = s->block + 4 * i;
+        w[i] = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+    }
+    for (unsigned i = 16; i < 64; i++) {
+        uint32_t x = w[i - 15], y = w[i - 2];
+        w[i] = w[i - 16] + (ifn_am_sha256_ifn_sha256_rotate(x, 7) ^ ifn_am_sha256_ifn_sha256_rotate(x, 18) ^ (x >> 3)) +
+               w[i - 7] + (ifn_am_sha256_ifn_sha256_rotate(y, 17) ^ ifn_am_sha256_ifn_sha256_rotate(y, 19) ^ (y >> 10));
+    }
+    uint32_t a = s->state[0], b = s->state[1], c = s->state[2], d = s->state[3], e = s->state[4],
+             f = s->state[5], g = s->state[6], h = s->state[7];
+    for (unsigned i = 0; i < 64; i++) {
+        uint32_t t =
+            h + (ifn_am_sha256_ifn_sha256_rotate(e, 6) ^ ifn_am_sha256_ifn_sha256_rotate(e, 11) ^ ifn_am_sha256_ifn_sha256_rotate(e, 25)) +
+            ((e & f) ^ (~e & g)) + ifn_am_sha256_ifn_sha256_k[i] + w[i];
+        uint32_t u =
+            (ifn_am_sha256_ifn_sha256_rotate(a, 2) ^ ifn_am_sha256_ifn_sha256_rotate(a, 13) ^ ifn_am_sha256_ifn_sha256_rotate(a, 22)) +
+            ((a & b) ^ (a & c) ^ (b & c));
+        h = g;
+        g = f;
+        f = e;
+        e = d + t;
+        d = c;
+        c = b;
+        b = a;
+        a = t + u;
+    }
+    s->state[0] += a;
+    s->state[1] += b;
+    s->state[2] += c;
+    s->state[3] += d;
+    s->state[4] += e;
+    s->state[5] += f;
+    s->state[6] += g;
+    s->state[7] += h;
+}
+
+void ifn_sha256_init(ifn_sha256 *s) {
+    *s = (ifn_sha256){{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
+                       0x1f83d9ab, 0x5be0cd19},
+                      0,
+                      0,
+                      {0}};
+}
+
+bool ifn_sha256_update(ifn_sha256 *s, const void *data, size_t n) {
+    if ((!data && n) || s->bytes > UINT64_MAX / 8 || n > UINT64_MAX / 8 - s->bytes)
+        return false;
+    const unsigned char *p = data;
+    s->bytes += n;
+    while (n) {
+        size_t take = 64 - s->used;
+        if (take > n)
+            take = n;
+        memcpy(s->block + s->used, p, take);
+        s->used += take;
+        p += take;
+        n -= take;
+        if (s->used == 64) {
+            ifn_am_sha256_ifn_sha256_block(s);
+            s->used = 0;
+        }
+    }
+    return true;
+}
+
+void ifn_sha256_final(ifn_sha256 *s, unsigned char out[32]) {
+    uint64_t bits = s->bytes * 8;
+    s->block[s->used++] = 0x80;
+    if (s->used > 56) {
+        memset(s->block + s->used, 0, 64 - s->used);
+        ifn_am_sha256_ifn_sha256_block(s);
+        s->used = 0;
+    }
+    memset(s->block + s->used, 0, 56 - s->used);
+    for (unsigned i = 0; i < 8; i++)
+        s->block[63 - i] = (unsigned char)(bits >> (8 * i));
+    ifn_am_sha256_ifn_sha256_block(s);
+    for (unsigned i = 0; i < 32; i++)
+        out[i] = (unsigned char)(s->state[i / 4] >> (24 - 8 * (i % 4)));
+}
+
+bool ifn_sha256_hash(const void *data, size_t n, unsigned char out[32]) {
+    ifn_sha256 s;
+    ifn_sha256_init(&s);
+    if (!ifn_sha256_update(&s, data, n))
+        return false;
+    ifn_sha256_final(&s, out);
+    return true;
+}
+
+void ifn_sha256_hex(const unsigned char in[32], char out[65]) {
+    static const char ifn_sha256_digits[] = "0123456789abcdef";
+    for (unsigned i = 0; i < 32; i++) {
+        out[2 * i] = ifn_sha256_digits[in[i] >> 4];
+        out[2 * i + 1] = ifn_sha256_digits[in[i] & 15];
+    }
+    out[64] = 0;
+}
+
+bool ifn_sha256_unhex(const char *in, size_t n, unsigned char out[32]) {
+    if (n != 64 || !in)
+        return false;
+    for (unsigned i = 0; i < 32; i++) {
+        unsigned x = 0;
+        for (unsigned j = 0; j < 2; j++) {
+            unsigned char c = (unsigned char)in[2 * i + j];
+            unsigned v = c >= '0' && c <= '9'   ? c - '0'
+                         : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                         : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                                                : 99;
+            if (v > 15)
+                return false;
+            x = (x << 4) | v;
+        }
+        out[i] = (unsigned char)x;
+    }
+    return true;
 }
 
 
@@ -1226,6 +1442,7 @@ bool ifn_json_equal(ifn_json a, ifn_json b, unsigned depth) {
 
 
 #include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -1463,7 +1680,7 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
         return status;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
-        return ifn_error(IFN_IO, "cannot open tensor file");
+        return ifn_os_error(IFN_IO, errno, "cannot open tensor file");
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 10 ||
         (uintmax_t)st.st_size > SIZE_MAX) {
@@ -1472,9 +1689,10 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     }
     size_t size = (size_t)st.st_size;
     void *mapping = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    int mapping_errno = errno;
     (void)close(fd);
     if (mapping == MAP_FAILED)
-        return ifn_error(IFN_IO, "cannot map tensor file");
+        return ifn_os_error(IFN_IO, mapping_errno, "cannot map tensor file");
     ifn_safetensors *file = NULL;
     status = ifn_am_safetensors_ifn_safetensors_local_create(&checked, &file);
     if (status != IFN_OK) {
@@ -1553,6 +1771,14 @@ ifn_status ifn_safetensors_named_data(const ifn_safetensors *file, const char *n
     return ifn_safetensors_data(file, (size_t)(info - file->tensors), out, bytes);
 }
 
+ifn_status ifn_safetensors_sha256(const ifn_safetensors *file, unsigned char out[32]) {
+    if (!file || !out)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing checkpoint hash arguments");
+    return ifn_sha256_hash(file->data, file->size, out)
+               ? IFN_OK
+               : ifn_error(IFN_LIMIT, "checkpoint hash length overflow");
+}
+
 
 /* Module: src/tokenizer_load.c */
 /* SPDX-License-Identifier: Apache-2.0
@@ -1564,6 +1790,7 @@ ifn_status ifn_safetensors_named_data(const ifn_safetensors *file, const char *n
 
 
 #include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -1952,7 +2179,8 @@ invalid:
     return ifn_error(IFN_FORMAT, "invalid/duplicate tokenizer vocabulary or merge");
 }
 
-ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_tokenizer **out) {
+ifn_status ifn_tokenizer_open_verified(const char *path, const ifn_options *options,
+                                       const unsigned char *expected, ifn_tokenizer **out) {
     if (out)
         *out = NULL;
     if (!path || !path[0] || !out)
@@ -1963,7 +2191,7 @@ ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_
         return status;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
-        return ifn_error(IFN_IO, "cannot open tokenizer");
+        return ifn_os_error(IFN_IO, errno, "cannot open tokenizer");
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
         (uintmax_t)st.st_size > IFN_TOK_JSON) {
@@ -1972,12 +2200,21 @@ ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_
     }
     size_t n = (size_t)st.st_size;
     void *map = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
+    int map_errno = errno;
     (void)close(fd);
     if (map == MAP_FAILED)
-        return ifn_error(IFN_IO, "cannot map tokenizer");
-    status = ifn_tokenizer_open_memory(map, n, &checked, out);
+        return ifn_os_error(IFN_IO, map_errno, "cannot map tokenizer");
+    unsigned char digest[32];
+    if (expected && (!ifn_sha256_hash(map, n, digest) || memcmp(digest, expected, 32)))
+        status = ifn_error(IFN_FORMAT, "tokenizer checksum mismatch");
+    else
+        status = ifn_tokenizer_open_memory(map, n, &checked, out);
     (void)munmap(map, n);
     return status;
+}
+
+ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_tokenizer **out) {
+    return ifn_tokenizer_open_verified(path, options, NULL, out);
 }
 
 
@@ -2788,6 +3025,13 @@ ifn_status ifn_inkling_lookup(const ifn_inkling_checkpoint *c, uint32_t source, 
     return ifn_safetensors_named_data(c->files[source], name, out, bytes);
 }
 
+ifn_status ifn_inkling_sha256(const ifn_inkling_checkpoint *checkpoint, uint32_t source,
+                              unsigned char out[32]) {
+    if (!checkpoint || source > 1 || !checkpoint->files[source])
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing checkpoint source");
+    return ifn_safetensors_sha256(checkpoint->files[source], out);
+}
+
 #undef IFN_INKLING_LOCAL_S
 
 /* Module: src/weights_runtime.c */
@@ -2809,12 +3053,14 @@ void ifn_weight_backend_check(ifn_gpu_weights *w, int error, const char *operati
     if (!error || w->status != IFN_OK)
         return;
     w->backend_error = error;
-    w->status = error == 2 ? IFN_OUT_OF_MEMORY : error == 801 ? IFN_UNSUPPORTED : IFN_GPU_ERROR;
+    w->status = (error == 2 || error == 10003 || error == 20002) ? IFN_OUT_OF_MEMORY
+                : (error == 801 || error == 20801)               ? IFN_UNSUPPORTED
+                                                                 : IFN_GPU_ERROR;
     (void)snprintf(w->failure, sizeof w->failure, "%s: CUDA status %d", operation, error);
 }
 
 static ifn_status ifn_am_weights_runtime_ifn_weights_runtime_local_result(ifn_gpu_weights *w) {
-    return ifn_error(w->status, w->status == IFN_OK ? "" : w->failure);
+    return ifn_native_error(w->status, w->backend_error, w->status == IFN_OK ? "" : w->failure);
 }
 
 static bool ifn_am_weights_runtime_ifn_weights_runtime_local_acquire(ifn_gpu_weights *w) {
@@ -5686,15 +5932,16 @@ static atomic_flag ifn_am_engine_runtime_ifn_engine_runtime_local_live_session =
 
 void ifn_ar_check(ifn_session *s, int rc, const char *op) {
     if (rc && s->status == IFN_OK) {
-        s->status = (rc == 2 || rc == 10003) ? IFN_OUT_OF_MEMORY
-                    : rc == 801              ? IFN_UNSUPPORTED
-                                             : IFN_GPU_ERROR;
+        s->backend_error = rc > 0 ? rc : 0;
+        s->status = (rc == 2 || rc == 10003 || rc == 20002) ? IFN_OUT_OF_MEMORY
+                    : (rc == 801 || rc == 20801)            ? IFN_UNSUPPORTED
+                                                            : IFN_GPU_ERROR;
         (void)snprintf(s->failure, sizeof s->failure, "%s: CUDA status %d", op, rc);
     }
 }
 
 static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_result(ifn_session *s) {
-    return ifn_error(s->status, s->status == IFN_OK ? "" : s->failure);
+    return ifn_native_error(s->status, s->backend_error, s->status == IFN_OK ? "" : s->failure);
 }
 
 static bool ifn_am_engine_runtime_ifn_engine_runtime_local_lock(ifn_session *s) {
@@ -5723,6 +5970,7 @@ static void ifn_am_engine_runtime_ifn_engine_runtime_local_copy(ifn_session *s, 
 static ifn_device_scope ifn_am_engine_runtime_ifn_engine_runtime_local_enter(ifn_session *s) {
     ifn_device_scope scope = {-1, NULL};
     s->status = IFN_OK;
+    s->backend_error = 0;
     s->failure[0] = 0;
     ifn_ar_check(
         s,
@@ -5735,8 +5983,10 @@ static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_leave(ifn_sessi
     if (scope->device >= 0) {
         int restore = s->weights->backend.leave(s->weights->backend.context, scope);
         /* A normal cancellation must not hide context-restoration failure. */
-        if (restore && s->status == IFN_CANCELLED)
+        if (restore && s->status == IFN_CANCELLED) {
             s->status = IFN_OK;
+            s->backend_error = 0;
+        }
         ifn_ar_check(s, restore, "restore caller context");
     }
     if (s->status != IFN_OK && s->status != IFN_CANCELLED) {
@@ -6019,7 +6269,7 @@ static bool ifn_am_engine_runtime_ifn_engine_runtime_local_emit(ifn_session *s, 
                                           ifn_token_callback callback, void *context,
                                           ifn_generate_stats *stats) {
     if (token < 0 || token >= 200058) {
-        ifn_ar_check(s, 1, "invalid generated token");
+        ifn_ar_check(s, -1, "invalid generated token");
         return false;
     }
     if (out)
@@ -6180,7 +6430,7 @@ static ifn_status ifn_am_engine_runtime_ifn_engine_runtime_local_generate_impl(
                 break;
             if ((options.adaptive && width != 2 && width != 4 && width != 8) || count < 1 ||
                 count > width) {
-                ifn_ar_check(s, 1, "invalid accepted token count");
+                ifn_ar_check(s, -1, "invalid accepted token count");
                 break;
             }
             detail->speculative_steps++;
@@ -6318,6 +6568,7 @@ ifn_status ifn_session_prefix_cache(ifn_session *s, uint32_t enabled) {
         ifn_prefix_free(s);
     else {
         s->status = IFN_OK;
+        s->backend_error = 0;
         s->failure[0] = 0;
         rc = ifn_prefix_allocate(s);
     }
@@ -6369,6 +6620,7 @@ ifn_status ifn_session_destroy(ifn_session **handle) {
     }
     const ifn_weight_backend *b = &s->weights->backend;
     s->status = IFN_OK;
+    s->backend_error = 0;
     s->failure[0] = 0;
     if (s->arena || s->stream || ifn_am_engine_runtime_ifn_engine_runtime_local_has_graphs(s) || s->blas ||
         s->adaptive_state || s->pinned || s->done_event) {
@@ -6662,25 +6914,25 @@ void ifn_infer_unlock(atomic_flag *f) {
 
 ifn_status ifn_infer_input(const void *record, size_t known) {
     if (!record)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing input record");
     ifn_infer_in h;
     memcpy(&h, record, sizeof h);
     if (h.struct_size < known || h.struct_size > IFN_INFER_RECORD_MAX_BYTES || h.flags)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid input record extent or flags");
     const unsigned char *p = record;
     for (size_t i = known; i < h.struct_size; i++)
         if (p[i])
-            return IFN_UNSUPPORTED;
+            return ifn_error(IFN_UNSUPPORTED, "nonzero unsupported input tail");
     return IFN_OK;
 }
 
 ifn_status ifn_infer_output(void *out, const void *value, size_t known) {
     if (!out)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing output record");
     ifn_infer_out *h = out;
     uint32_t capacity = h->struct_size;
     if (capacity < known || capacity > IFN_INFER_RECORD_MAX_BYTES)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid output record capacity");
     memcpy(out, value, known);
     h->struct_size = capacity;
     h->written_size = (uint32_t)known;
@@ -6704,11 +6956,39 @@ ifn_status ifn_infer_error(ifn_infer_error_v1 *out, ifn_status status, uint32_t 
 
 ifn_status ifn_infer_native_error(ifn_infer_error_v1 *e, ifn_status rc, uint32_t stage) {
     /* Backend diagnostics contain operation names/codes, never input contents. */
-    ifn_status status = ifn_infer_error(e, rc, stage, rc ? ifn_status_string(rc) : "");
+    ifn_native_diagnostic native = ifn_native_diagnostic_get();
+    bool same = rc && native.status == rc;
+    bool available = same && native.provider;
+    ifn_status status = ifn_infer_error(e, rc, stage,
+                                        same ? ifn_last_error()
+                                        : rc ? ifn_status_string(rc)
+                                             : "");
+    if (available && e && e->hdr.struct_size >= sizeof *e &&
+        e->hdr.struct_size <= IFN_INFER_RECORD_MAX_BYTES) {
+        e->provider = native.provider;
+        e->provider_code = native.code;
+    }
     if (e && e->hdr.struct_size >= sizeof *e && e->hdr.struct_size <= IFN_INFER_RECORD_MAX_BYTES &&
         rc && stage == IFN_STAGE_CLOSE)
         e->flags |= IFN_INFER_ERR_CLEANUP_PENDING;
     return status;
+}
+
+void ifn_infer_log_error(const ifn_infer_model *m, const ifn_infer_error_v1 *e) {
+    if (m->log && e->status && e->status != IFN_CANCELLED)
+        m->log(m->log_context, IFN_LOG_ERROR, e);
+}
+
+ifn_status ifn_infer_model_native_error(ifn_infer_model *m, ifn_infer_error_v1 *e, ifn_status rc,
+                                        uint32_t stage) {
+    ifn_infer_error_v1 local;
+    IFN_INFER_INIT(local);
+    ifn_infer_native_error(&local, rc, stage);
+    if (e)
+        (void)ifn_infer_output(e, &local, sizeof local);
+    if (rc)
+        ifn_infer_log_error(m, &local);
+    return rc;
 }
 
 bool ifn_infer_span(ifn_infer_bytes s, size_t max) {
@@ -6725,10 +7005,11 @@ ifn_infer_bytes ifn_infer_text(const char *s) {
 }
 
 ifn_status ifn_infer_no_extensions(ifn_infer_array a) {
-    return a.reserved             ? IFN_INVALID_ARGUMENT
-           : a.count              ? IFN_UNSUPPORTED
-           : (a.data || a.stride) ? IFN_INVALID_ARGUMENT
-                                  : IFN_OK;
+    ifn_status rc = a.reserved             ? IFN_INVALID_ARGUMENT
+                    : a.count              ? IFN_UNSUPPORTED
+                    : (a.data || a.stride) ? IFN_INVALID_ARGUMENT
+                                           : IFN_OK;
+    return rc ? ifn_error(rc, "unsupported or invalid extensions") : IFN_OK;
 }
 
 uint64_t ifn_infer_now(void) {
@@ -6773,8 +7054,7 @@ ifn_status ifn_infer_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {
 ifn_status ifn_infer_backend_info(ifn_infer_backend_info_v1 *out, ifn_infer_error_v1 *e) {
     ifn_infer_backend_info_v1 v = {0};
     v.backend_id = ifn_infer_text("artalis.inkleberry");
-    v.engine_revision =
-        ifn_infer_text("upstream:d10c0abb2c8990be81c08ba84c66a8333a691b33;infer:1.0-experimental");
+    v.engine_revision = ifn_infer_text("Inkleberry Finn " IFN_VERSION_STRING);
     v.compiled_features = IFN_INFER_FEATURES;
     v.pointer_bits = sizeof(void *) * 8;
     v.limit_scope = IFN_LIMIT_PROVIDER_PROCESS;
@@ -6809,7 +7089,7 @@ static const ifn_infer_api_v1 ifn_am_infer_ifn_infer_local_api = {
 
 ifn_status ifn_infer_get_api(uint32_t major, uint32_t minor, const void **out) {
     if (!out)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing output record");
     *out = NULL;
     if (sizeof(void *) != 8 || major != IFN_INFER_ABI_MAJOR || minor > IFN_INFER_ABI_MINOR)
         return IFN_INFER_ABI_MISMATCH;
@@ -6823,9 +7103,62 @@ ifn_status ifn_infer_get_api(uint32_t major, uint32_t minor, const void **out) {
 
 #include <stdio.h>
 
+static ifn_status ifn_am_infer_model_ifn_infer_model_local_extensions(ifn_infer_array array,
+                                                   ifn_infer_logger_v1 *logger,
+                                                   ifn_infer_artifact_manifest_v1 *manifest,
+                                                   bool *verify) {
+    if (!array.count)
+        return ifn_infer_no_extensions(array);
+    if (array.count > 2 || !array.data || array.reserved ||
+        array.stride < sizeof(ifn_infer_extension_v1) || array.stride > IFN_INFER_RECORD_MAX_BYTES)
+        return IFN_INVALID_ARGUMENT;
+    bool logged = false;
+    for (size_t i = 0; i < array.count; i++) {
+        const unsigned char *row = (const unsigned char *)array.data + i * array.stride;
+        ifn_infer_extension_v1 ext;
+        memcpy(&ext, row, sizeof ext);
+        if (ext.hdr.struct_size > array.stride)
+            return IFN_INVALID_ARGUMENT;
+        ifn_status rc = ifn_infer_input(row, sizeof ext);
+        if (rc)
+            return rc;
+        size_t known = ext.id == IFN_INFER_EXT_LOGGER              ? sizeof *logger
+                       : ext.id == IFN_INFER_EXT_ARTIFACT_MANIFEST ? sizeof *manifest
+                                                                   : 0;
+        if (!known)
+            return IFN_UNSUPPORTED;
+        if (ext.version != 1 || !ext.payload || ext.payload_bytes < known ||
+            ext.payload_bytes > IFN_INFER_RECORD_MAX_BYTES)
+            return IFN_INVALID_ARGUMENT;
+        ifn_infer_in hdr;
+        memcpy(&hdr, ext.payload, sizeof hdr);
+        if (hdr.struct_size > ext.payload_bytes)
+            return IFN_INVALID_ARGUMENT;
+        rc = ifn_infer_input(ext.payload, known);
+        if (rc)
+            return rc;
+        if (ext.id == IFN_INFER_EXT_LOGGER) {
+            if (logged)
+                return IFN_INVALID_ARGUMENT;
+            memcpy(logger, ext.payload, sizeof *logger);
+            if (!logger->callback)
+                return IFN_INVALID_ARGUMENT;
+            logged = true;
+        } else {
+            if (*verify)
+                return IFN_INVALID_ARGUMENT;
+            memcpy(manifest, ext.payload, sizeof *manifest);
+            *verify = true;
+        }
+    }
+    return IFN_OK;
+}
+
 static uint64_t ifn_am_infer_model_ifn_infer_model_local_features(const ifn_infer_model *m) {
-    return m->weights_config.with_mtp ? IFN_INFER_FEATURES
-                                      : IFN_INFER_FEATURES & ~IFN_INFER_CAP_SPECULATION;
+    uint64_t features = m->weights_config.with_mtp
+                            ? IFN_INFER_FEATURES
+                            : IFN_INFER_FEATURES & ~IFN_INFER_CAP_SPECULATION;
+    return m->verify_artifacts ? features : features & ~IFN_INFER_CAP_ARTIFACT_VERIFY;
 }
 
 static ifn_status ifn_am_infer_model_ifn_infer_model_local_source_paths(const ifn_infer_source_v1 *s,
@@ -6855,7 +7188,10 @@ ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_
     if (rc || !out)
         return ifn_infer_error(e, rc ? rc : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
                                "invalid model configuration");
-    rc = ifn_infer_no_extensions(c->extensions);
+    ifn_infer_logger_v1 logger = {0};
+    ifn_infer_artifact_manifest_v1 manifest = {0};
+    bool verify = false;
+    rc = ifn_am_infer_model_ifn_infer_model_local_extensions(c->extensions, &logger, &manifest, &verify);
     if (rc || (c->required_features & ~IFN_INFER_FEATURES))
         return ifn_infer_error(e, rc ? rc : IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
                                "unsupported model features");
@@ -6896,6 +7232,21 @@ ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_
     if (!wc.with_mtp && (c->required_features & IFN_INFER_CAP_SPECULATION))
         return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
                                "speculation requires an MTP profile");
+    if ((c->required_features & IFN_INFER_CAP_ARTIFACT_VERIFY) && !verify)
+        return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,
+                               "artifact verification requires expected hashes");
+    unsigned char hashes[3][32] = {{0}};
+    if (verify) {
+        ifn_infer_bytes values[] = {manifest.tokenizer_sha256, manifest.weights_sha256,
+                                    manifest.mtp_sha256};
+        for (unsigned i = 0; i < (wc.with_mtp ? 3u : 2u); i++)
+            if (values[i].bytes != 64 || !ifn_sha256_unhex(values[i].data, 64, hashes[i]))
+                return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                                       "expected SHA-256 must be 64 hexadecimal bytes");
+        if (!wc.with_mtp && (values[2].bytes || values[2].data))
+            return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
+                                   "unexpected MTP hash for AR model");
+    }
     ifn_infer_model *m = ifn_infer_alloc(&a, sizeof *m);
     if (!m)
         return ifn_infer_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate model");
@@ -6903,6 +7254,10 @@ ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_
     ifn_infer_budget_init(&m->budget, &a, c->max_owned_host_bytes - sizeof *m, &m->allocator);
     atomic_flag_clear(&m->busy);
     (void)snprintf(m->device_id, sizeof m->device_id, "%u", device);
+    m->verify_artifacts = verify;
+    memcpy(m->expected_sha256, hashes, sizeof hashes);
+    m->log = logger.callback;
+    m->log_context = logger.context;
     m->weights_config = wc;
     m->profile = profile;
     m->required = c->required_features;
@@ -6932,7 +7287,7 @@ ifn_status ifn_infer_model_plan(ifn_infer_model *m, const ifn_infer_source_v1 *s
         rc = ifn_infer_output(out, &v, sizeof v);
     }
     ifn_infer_unlock(&m->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(m, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s,
@@ -6952,13 +7307,32 @@ ifn_status ifn_infer_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s
         rc = IFN_LIMIT;
     if (rc) {
         ifn_infer_unlock(&m->busy);
-        return ifn_infer_native_error(e, rc, IFN_STAGE_LOAD);
+        return ifn_infer_model_native_error(m, e, rc, IFN_STAGE_LOAD);
     }
     m->state = IFN_HANDLE_PREPARING;
-    rc = ifn_tokenizer_open(paths[0], &m->allocator, &m->tokenizer);
+    rc = ifn_tokenizer_open_verified(
+        paths[0], &m->allocator, m->verify_artifacts ? m->expected_sha256[0] : NULL, &m->tokenizer);
     if (!rc)
         rc = ifn_inkling_checkpoint_open(paths[1], m->weights_config.with_mtp ? paths[2] : NULL,
                                          &m->allocator, &m->checkpoint);
+    if (!rc && m->verify_artifacts) {
+        unsigned char digest[32];
+        for (unsigned source = 0; !rc && source < (m->weights_config.with_mtp ? 2u : 1u);
+             source++) {
+            rc = ifn_inkling_sha256(m->checkpoint, source, digest);
+            if (!rc && memcmp(digest, m->expected_sha256[source + 1], 32))
+                rc = ifn_error(IFN_FORMAT, "checkpoint checksum mismatch");
+        }
+        if (!rc) {
+            ifn_sha256 identity;
+            ifn_sha256_init(&identity);
+            (void)ifn_sha256_update(&identity, "ifn-artifacts-v1", 16);
+            for (unsigned i = 0; i < (m->weights_config.with_mtp ? 3u : 2u); i++)
+                (void)ifn_sha256_update(&identity, m->expected_sha256[i], 32);
+            ifn_sha256_final(&identity, digest);
+            ifn_sha256_hex(digest, m->artifact_fingerprint);
+        }
+    }
     if (!rc)
         rc = ifn_gpu_weights_create(&m->weights_config, &m->allocator, &m->weights);
     if (!rc)
@@ -6971,7 +7345,7 @@ ifn_status ifn_infer_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s
      * a failed stream synchronization must not shorten borrowed DMA lifetime. */
     m->state = rc ? IFN_HANDLE_FAILED : IFN_HANDLE_READY;
     ifn_infer_unlock(&m->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_LOAD);
+    return ifn_infer_model_native_error(m, e, rc, IFN_STAGE_LOAD);
 }
 
 ifn_status ifn_infer_model_info(ifn_infer_model *m, ifn_infer_model_info_v1 *out,
@@ -6998,10 +7372,12 @@ ifn_status ifn_infer_model_info(ifn_infer_model *m, ifn_infer_model_info_v1 *out
     v.resolved_device_id = ifn_infer_text(m->device_id);
     v.tokenizer_id = ifn_infer_text("inkling-bpe");
     v.template_id = ifn_infer_text("inkling-text-v1");
-    /* No invented artifact hash: fingerprint_verified remains false. */
+    v.fingerprint_verified = m->state == IFN_HANDLE_READY && m->artifact_fingerprint[0];
+    if (v.fingerprint_verified)
+        v.artifact_fingerprint = (ifn_infer_bytes){m->artifact_fingerprint, 64};
     ifn_status rc = ifn_infer_output(out, &v, sizeof v);
     ifn_infer_unlock(&m->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(m, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_model_close(ifn_infer_model **ptr, ifn_infer_error_v1 *e) {
@@ -7020,7 +7396,7 @@ ifn_status ifn_infer_model_close(ifn_infer_model **ptr, ifn_infer_error_v1 *e) {
     ifn_status rc = ifn_gpu_weights_destroy(&m->weights);
     if (rc) {
         ifn_infer_unlock(&m->busy);
-        return ifn_infer_native_error(e, rc, IFN_STAGE_CLOSE);
+        return ifn_infer_model_native_error(m, e, rc, IFN_STAGE_CLOSE);
     }
     ifn_inkling_checkpoint_close(m->checkpoint);
     ifn_tokenizer_close(m->tokenizer);
@@ -7111,7 +7487,7 @@ ifn_status ifn_infer_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1
     if (!rc)
         rc = ifn_infer_output(out, &v, sizeof v);
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e) {
@@ -7132,7 +7508,7 @@ ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e
                       : IFN_HANDLE_READY;
     }
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_PREPARE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_PREPARE);
 }
 
 ifn_status ifn_infer_session_info(ifn_infer_session *s, ifn_infer_session_info_v1 *out,
@@ -7151,10 +7527,12 @@ ifn_status ifn_infer_session_info(ifn_infer_session *s, ifn_infer_session_info_v
         v.enabled_features &= ~IFN_INFER_CAP_SPECULATION;
     if (s->cache_scope_bytes)
         v.enabled_features |= IFN_INFER_CAP_PREFIX_CACHE;
+    if (!s->model->verify_artifacts)
+        v.enabled_features &= ~IFN_INFER_CAP_ARTIFACT_VERIFY;
     v.resolved_execution_profile = ifn_infer_text(s->profile);
     ifn_status rc = ifn_infer_output(out, &v, sizeof v);
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) {
@@ -7167,7 +7545,7 @@ ifn_status ifn_infer_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) 
     if (!rc)
         s->cache_scope_bytes = 0;
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *e) {
@@ -7192,7 +7570,7 @@ ifn_status ifn_infer_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *
     if (rc) {
         ifn_infer_unlock(&m->busy);
         ifn_infer_unlock(&s->busy);
-        return ifn_infer_native_error(e, rc, IFN_STAGE_CLOSE);
+        return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_CLOSE);
     }
     m->children--;
     ifn_infer_free(&m->allocator, s);
@@ -7623,6 +8001,10 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
     r->started = ifn_infer_now();
     ifn_status rc = IFN_OK;
     bool native_called = false;
+    ifn_infer_error_v1 native_error;
+    IFN_INFER_INIT(native_error);
+    ifn_infer_error_v1 cleanup_error;
+    IFN_INFER_INIT(cleanup_error);
     ifn_decode_stats stats = {0};
     if (!ifn_am_infer_request_ifn_infer_request_local_cancelled(r))
         rc = ifn_am_infer_request_ifn_infer_request_local_scope_begin(r);
@@ -7640,6 +8022,8 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
                 r->result.prefix_reused_tokens = p.reused_tokens;
         }
     }
+    if (rc)
+        (void)ifn_infer_native_error(&native_error, rc, IFN_STAGE_DECODE);
     if (native_called)
         atomic_store_explicit(&r->processed, r->token_count, memory_order_relaxed);
     if (!rc && r->callback_status)
@@ -7656,6 +8040,8 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
     ifn_status cleanup = IFN_OK;
     if ((was_cancelled || rc) && s->state == IFN_HANDLE_READY) {
         cleanup = ifn_session_reset(s->native);
+        if (cleanup)
+            (void)ifn_infer_native_error(&cleanup_error, cleanup, IFN_STAGE_DRAIN);
         if (cleanup)
             s->state = IFN_HANDLE_POISONED;
         s->cache_scope_bytes = 0;
@@ -7689,17 +8075,29 @@ ifn_status ifn_infer_request_run(ifn_infer_request *r, ifn_infer_emit_fn emit, v
         r->result.run_ns = now - r->started;
         r->result.timing_valid |= IFN_INFER_TIME_RUN;
     }
-    (void)ifn_infer_native_error(&r->terminal_error, rc, IFN_STAGE_DECODE);
+    if (native_error.status && native_error.status == rc)
+        r->terminal_error = native_error;
+    else if (cleanup && rc == cleanup)
+        r->terminal_error = cleanup_error;
+    else
+        (void)ifn_infer_error(&r->terminal_error, rc, IFN_STAGE_DECODE,
+                              rc ? ifn_status_string(rc) : "");
     if (s->state == IFN_HANDLE_POISONED)
         r->terminal_error.flags |= IFN_INFER_ERR_SESSION_POISONED;
     if (r->sequence)
         r->terminal_error.flags |= IFN_INFER_ERR_OUTPUT_STARTED;
     if (cleanup) {
         r->terminal_error.cleanup_status = cleanup;
+        r->terminal_error.cleanup_provider_code =
+            cleanup_error.provider == IFN_PROVIDER_CUBLAS ? 10000 + cleanup_error.provider_code
+            : cleanup_error.provider == IFN_PROVIDER_CUDA_DRIVER
+                ? 20000 + cleanup_error.provider_code
+                : cleanup_error.provider_code;
         r->terminal_error.flags |= IFN_INFER_ERR_CLEANUP_PENDING;
         if (primary && primary != IFN_CANCELLED)
             r->terminal_error.status = primary;
     }
+    ifn_infer_log_error(s->model, &r->terminal_error);
     r->emit = NULL;
     r->context = NULL;
     atomic_store_explicit(&r->phase,

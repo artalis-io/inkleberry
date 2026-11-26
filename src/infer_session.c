@@ -78,7 +78,7 @@ ifn_status ifn_infer_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1
     if (!rc)
         rc = ifn_infer_output(out, &v, sizeof v);
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e) {
@@ -99,7 +99,7 @@ ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e
                       : IFN_HANDLE_READY;
     }
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_PREPARE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_PREPARE);
 }
 
 ifn_status ifn_infer_session_info(ifn_infer_session *s, ifn_infer_session_info_v1 *out,
@@ -118,10 +118,12 @@ ifn_status ifn_infer_session_info(ifn_infer_session *s, ifn_infer_session_info_v
         v.enabled_features &= ~IFN_INFER_CAP_SPECULATION;
     if (s->cache_scope_bytes)
         v.enabled_features |= IFN_INFER_CAP_PREFIX_CACHE;
+    if (!s->model->verify_artifacts)
+        v.enabled_features &= ~IFN_INFER_CAP_ARTIFACT_VERIFY;
     v.resolved_execution_profile = ifn_infer_text(s->profile);
     ifn_status rc = ifn_infer_output(out, &v, sizeof v);
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) {
@@ -134,7 +136,7 @@ ifn_status ifn_infer_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) 
     if (!rc)
         s->cache_scope_bytes = 0;
     ifn_infer_unlock(&s->busy);
-    return ifn_infer_native_error(e, rc, IFN_STAGE_VALIDATE);
+    return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_VALIDATE);
 }
 
 ifn_status ifn_infer_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *e) {
@@ -159,7 +161,7 @@ ifn_status ifn_infer_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *
     if (rc) {
         ifn_infer_unlock(&m->busy);
         ifn_infer_unlock(&s->busy);
-        return ifn_infer_native_error(e, rc, IFN_STAGE_CLOSE);
+        return ifn_infer_model_native_error(s->model, e, rc, IFN_STAGE_CLOSE);
     }
     m->children--;
     ifn_infer_free(&m->allocator, s);

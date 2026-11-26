@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='ifn-reference-free-') as tmp:
         root = Path(tmp)
-        for name in ['Makefile', 'LICENSE', 'UPSTREAM.json', 'inkleberry.pc.in', 'inkleberry-infer.pc.in']:
+        for name in ['VERSION', 'Makefile', 'LICENSE', 'UPSTREAM.json', 'inkleberry.pc.in', 'inkleberry-infer.pc.in']:
             shutil.copy2(ROOT / name, root / name)
         for name in ['include', 'src', 'cuda', 'cli', 'test', 'tools', 'abi', 'config', 'dist', 'examples', 'fuzz']:
             shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns('__pycache__', '*.zig'))

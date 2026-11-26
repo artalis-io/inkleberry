@@ -73,25 +73,25 @@ void ifn_infer_unlock(atomic_flag *f) {
 
 ifn_status ifn_infer_input(const void *record, size_t known) {
     if (!record)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing input record");
     ifn_infer_in h;
     memcpy(&h, record, sizeof h);
     if (h.struct_size < known || h.struct_size > IFN_INFER_RECORD_MAX_BYTES || h.flags)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid input record extent or flags");
     const unsigned char *p = record;
     for (size_t i = known; i < h.struct_size; i++)
         if (p[i])
-            return IFN_UNSUPPORTED;
+            return ifn_error(IFN_UNSUPPORTED, "nonzero unsupported input tail");
     return IFN_OK;
 }
 
 ifn_status ifn_infer_output(void *out, const void *value, size_t known) {
     if (!out)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing output record");
     ifn_infer_out *h = out;
     uint32_t capacity = h->struct_size;
     if (capacity < known || capacity > IFN_INFER_RECORD_MAX_BYTES)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid output record capacity");
     memcpy(out, value, known);
     h->struct_size = capacity;
     h->written_size = (uint32_t)known;
@@ -115,11 +115,39 @@ ifn_status ifn_infer_error(ifn_infer_error_v1 *out, ifn_status status, uint32_t 
 
 ifn_status ifn_infer_native_error(ifn_infer_error_v1 *e, ifn_status rc, uint32_t stage) {
     /* Backend diagnostics contain operation names/codes, never input contents. */
-    ifn_status status = ifn_infer_error(e, rc, stage, rc ? ifn_status_string(rc) : "");
+    ifn_native_diagnostic native = ifn_native_diagnostic_get();
+    bool same = rc && native.status == rc;
+    bool available = same && native.provider;
+    ifn_status status = ifn_infer_error(e, rc, stage,
+                                        same ? ifn_last_error()
+                                        : rc ? ifn_status_string(rc)
+                                             : "");
+    if (available && e && e->hdr.struct_size >= sizeof *e &&
+        e->hdr.struct_size <= IFN_INFER_RECORD_MAX_BYTES) {
+        e->provider = native.provider;
+        e->provider_code = native.code;
+    }
     if (e && e->hdr.struct_size >= sizeof *e && e->hdr.struct_size <= IFN_INFER_RECORD_MAX_BYTES &&
         rc && stage == IFN_STAGE_CLOSE)
         e->flags |= IFN_INFER_ERR_CLEANUP_PENDING;
     return status;
+}
+
+void ifn_infer_log_error(const ifn_infer_model *m, const ifn_infer_error_v1 *e) {
+    if (m->log && e->status && e->status != IFN_CANCELLED)
+        m->log(m->log_context, IFN_LOG_ERROR, e);
+}
+
+ifn_status ifn_infer_model_native_error(ifn_infer_model *m, ifn_infer_error_v1 *e, ifn_status rc,
+                                        uint32_t stage) {
+    ifn_infer_error_v1 local;
+    IFN_INFER_INIT(local);
+    ifn_infer_native_error(&local, rc, stage);
+    if (e)
+        (void)ifn_infer_output(e, &local, sizeof local);
+    if (rc)
+        ifn_infer_log_error(m, &local);
+    return rc;
 }
 
 bool ifn_infer_span(ifn_infer_bytes s, size_t max) {
@@ -136,10 +164,11 @@ ifn_infer_bytes ifn_infer_text(const char *s) {
 }
 
 ifn_status ifn_infer_no_extensions(ifn_infer_array a) {
-    return a.reserved             ? IFN_INVALID_ARGUMENT
-           : a.count              ? IFN_UNSUPPORTED
-           : (a.data || a.stride) ? IFN_INVALID_ARGUMENT
-                                  : IFN_OK;
+    ifn_status rc = a.reserved             ? IFN_INVALID_ARGUMENT
+                    : a.count              ? IFN_UNSUPPORTED
+                    : (a.data || a.stride) ? IFN_INVALID_ARGUMENT
+                                           : IFN_OK;
+    return rc ? ifn_error(rc, "unsupported or invalid extensions") : IFN_OK;
 }
 
 uint64_t ifn_infer_now(void) {
@@ -184,8 +213,7 @@ ifn_status ifn_infer_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {
 ifn_status ifn_infer_backend_info(ifn_infer_backend_info_v1 *out, ifn_infer_error_v1 *e) {
     ifn_infer_backend_info_v1 v = {0};
     v.backend_id = ifn_infer_text("artalis.inkleberry");
-    v.engine_revision =
-        ifn_infer_text("upstream:d10c0abb2c8990be81c08ba84c66a8333a691b33;infer:1.0-experimental");
+    v.engine_revision = ifn_infer_text("Inkleberry Finn " IFN_VERSION_STRING);
     v.compiled_features = IFN_INFER_FEATURES;
     v.pointer_bits = sizeof(void *) * 8;
     v.limit_scope = IFN_LIMIT_PROVIDER_PROCESS;
@@ -220,7 +248,7 @@ static const ifn_infer_api_v1 ifn_infer_local_api = {
 
 ifn_status ifn_infer_get_api(uint32_t major, uint32_t minor, const void **out) {
     if (!out)
-        return IFN_INVALID_ARGUMENT;
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing output record");
     *out = NULL;
     if (sizeof(void *) != 8 || major != IFN_INFER_ABI_MAJOR || minor > IFN_INFER_ABI_MINOR)
         return IFN_INFER_ABI_MISMATCH;

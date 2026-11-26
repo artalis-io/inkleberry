@@ -3,7 +3,7 @@
  * Multiple independent requests/streams; execution limits are discovered at runtime. */
 #ifndef IFN_INFER_H
 #define IFN_INFER_H
-#include <ifn.h>
+#include <ifn_core.h>
 #include <string.h>
 #if defined(_WIN32)
 #define IFN_INFER_CALL __cdecl
@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 #define IFN_INFER_ABI_MAJOR 1u
-#define IFN_INFER_ABI_MINOR 0u
+#define IFN_INFER_ABI_MINOR 1u
 #define IFN_INFER_RECORD_MAX_BYTES 4096u
 
 /* Existing IFN_OK..IFN_CANCELLED retain their current values 0..11.
@@ -94,7 +94,13 @@ enum {
     IFN_STAGE_CLOSE = 7
 };
 
-enum { IFN_PROVIDER_NONE = 0, IFN_PROVIDER_OS = 1, IFN_PROVIDER_CUDA = 2 };
+enum {
+    IFN_PROVIDER_NONE = 0,
+    IFN_PROVIDER_OS = 1,
+    IFN_PROVIDER_CUDA = 2,
+    IFN_PROVIDER_CUBLAS = 3,
+    IFN_PROVIDER_CUDA_DRIVER = 4
+};
 
 /* Capabilities describe supported contracts, not marketing architecture labels. */
 #define IFN_INFER_CAP_TEXT_CHAT (UINT64_C(1) << 0)
@@ -105,6 +111,7 @@ enum { IFN_PROVIDER_NONE = 0, IFN_PROVIDER_OS = 1, IFN_PROVIDER_CUDA = 2 };
 #define IFN_INFER_CAP_PREFIX_CACHE (UINT64_C(1) << 5)
 #define IFN_INFER_CAP_SPECULATION (UINT64_C(1) << 6)
 #define IFN_INFER_CAP_MEMORY_PLAN (UINT64_C(1) << 7)
+#define IFN_INFER_CAP_ARTIFACT_VERIFY (UINT64_C(1) << 9)
 #define IFN_INFER_CAP_LOGITS_EXTENSION (UINT64_C(1) << 8)
 
 typedef struct {
@@ -129,6 +136,29 @@ typedef struct {
 
 /* id is qualified by the backend identifier; unknown/duplicate/version-mismatched
  * requested extensions fail. Payloads are typed records, not arbitrary JSON. */
+
+/* Optional per-model diagnostics. Callback spans are borrowed for this call.
+ * Log callbacks must be prompt, thread-safe, must not throw/longjmp, and may
+ * not call library APIs or close handles. No input text is logged. */
+#define IFN_INFER_EXT_LOGGER UINT64_C(2)
+#define IFN_LOG_ERROR 0u
+typedef void(IFN_INFER_CALL *ifn_infer_log_fn)(void *, uint32_t, const ifn_infer_error_v1 *);
+
+typedef struct {
+    ifn_infer_in hdr;
+    ifn_infer_log_fn callback;
+    void *context;
+} ifn_infer_logger_v1;
+
+/* Explicit opt-in: SHA-256 is checked against the exact bytes consumed at load.
+ * Expected hashes are copied from a trusted operator/release manifest. Full
+ * content verification adds load-time work, never per-token work. */
+#define IFN_INFER_EXT_ARTIFACT_MANIFEST UINT64_C(3)
+
+typedef struct {
+    ifn_infer_in hdr;
+    ifn_infer_bytes tokenizer_sha256, weights_sha256, mtp_sha256;
+} ifn_infer_artifact_manifest_v1;
 
 typedef struct {
     ifn_infer_in hdr;

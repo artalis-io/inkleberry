@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #ifndef IFN_CHAT_H
 #define IFN_CHAT_H
-#include "ifn.h"
+#include "ifn_core.h"
 #ifdef __cplusplus
 extern "C" {
 #endif

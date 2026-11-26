@@ -4,9 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 static _Thread_local char ifn_error_message[256];
+static _Thread_local ifn_native_diagnostic ifn_foundation_diagnostic;
 
 const char *ifn_version(void) {
-    return "0.1.0-dev";
+    return IFN_VERSION_STRING;
 }
 
 const char *ifn_status_string(ifn_status status) {
@@ -22,7 +23,32 @@ const char *ifn_last_error(void) {
 }
 
 ifn_status ifn_error(ifn_status status, const char *message) {
+    ifn_foundation_diagnostic = (ifn_native_diagnostic){status, 0, 0};
     (void)snprintf(ifn_error_message, sizeof ifn_error_message, "%s", message);
+    return status;
+}
+
+ifn_native_diagnostic ifn_native_diagnostic_get(void) {
+    return ifn_foundation_diagnostic;
+}
+
+ifn_status ifn_os_error(ifn_status status, int code, const char *message) {
+    ifn_error(status, message);
+    if (status && code) {
+        ifn_foundation_diagnostic.provider = 1;
+        ifn_foundation_diagnostic.code = code;
+    }
+    return status;
+}
+
+ifn_status ifn_native_error(ifn_status status, int code, const char *message) {
+    ifn_error(status, message);
+    if (status && code > 0) {
+        ifn_foundation_diagnostic.provider = code >= 20000 ? 4u : code >= 10000 ? 3u : 2u;
+        ifn_foundation_diagnostic.code = code >= 20000   ? code - 20000
+                                         : code >= 10000 ? code - 10000
+                                                         : code;
+    }
     return status;
 }
 

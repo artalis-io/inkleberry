@@ -1,9 +1,10 @@
 prefix=@PREFIX@
-libdir=${prefix}/lib
-includedir=${prefix}/include
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
 
 Name: Inkleberry Finn inference provider
 Description: Versioned C inference ABI (CUDA provider)
-Version: 0.1.0
-Libs: -L${libdir} -linkleberry_backend
+Version: @VERSION@
+Libs: -L${libdir} -linkleberry_backend -linkleberry
 Cflags: -I${includedir}
+Libs.private: -lm

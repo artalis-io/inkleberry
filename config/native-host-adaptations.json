@@ -1,0 +1,32 @@
+[
+  {
+    "path": "cuda/config.hpp",
+    "before": "#define IFN_CUDA_CUDA_CHECK(call)                                                                  \\\n    do {                                                                                  \\\n        cudaError_t err__ = (call);                                                       \\\n        if (err__ != cudaSuccess) {                                                       \\\n            fprintf(stderr, \"CUDA error at %s:%d: %s\\n\", __FILE__, __LINE__,              \\\n                    cudaGetErrorString(err__));                                           \\\n            std::exit(1);                                                                 \\\n        }                                                                                 \\\n    } while (0)",
+    "after": "#define IFN_CUDA_CUDA_CHECK(call) \\\n    do { \\\n        int ifn_cuda_code__ = (int)(call); \\\n        if (ifn_cuda_code__) ::ifn_cuda::ifn_cuda_record_error(ifn_cuda_code__); \\\n    } while (0)"
+  },
+  {
+    "path": "cuda/config.hpp",
+    "before": "#include <cuda_runtime.h>",
+    "after": "#include <cuda_runtime.h>\n#include \"ifn_error.hpp\""
+  },
+  {
+    "path": "cuda/kernels_prefill.cu",
+    "before": "static cublasHandle_t ifn_cuda_get_cublas(cudaStream_t stream) {\n    if (!ifn_cuda_cublas_handle) {\n        cublasStatus_t st = cublasCreate(&ifn_cuda_cublas_handle);\n        if (st != CUBLAS_STATUS_SUCCESS) {\n            fprintf(stderr, \"cublasCreate failed: %d\\n\", (int)st);\n            std::exit(1);\n        }\n        cublasSetMathMode(ifn_cuda_cublas_handle, CUBLAS_DEFAULT_MATH);\n    }\n    cublasSetStream(ifn_cuda_cublas_handle, stream);\n    return ifn_cuda_cublas_handle;\n}",
+    "after": "static cublasHandle_t ifn_cuda_get_cublas(cudaStream_t stream) {\n    if (!ifn_cuda_cublas_handle) {\n        cublasStatus_t st = cublasCreate(&ifn_cuda_cublas_handle);\n        if (st != CUBLAS_STATUS_SUCCESS) {\n            ifn_cuda_record_error(10000 + (int)st);\n            return nullptr;\n        }\n        st = cublasSetMathMode(ifn_cuda_cublas_handle, CUBLAS_DEFAULT_MATH);\n        if (st != CUBLAS_STATUS_SUCCESS) {\n            ifn_cuda_record_error(10000 + (int)st);\n            return nullptr;\n        }\n    }\n    cublasStatus_t st = cublasSetStream(ifn_cuda_cublas_handle, stream);\n    if (st != CUBLAS_STATUS_SUCCESS) {\n        ifn_cuda_record_error(10000 + (int)st);\n        return nullptr;\n    }\n    return ifn_cuda_cublas_handle;\n}"
+  },
+  {
+    "path": "cuda/kernels_prefill.cu",
+    "before": "void ifn_cuda_launch_prefill_warmup_cublas(cudaStream_t stream) {\n    cublasHandle_t h = ifn_cuda_get_cublas(stream);",
+    "after": "void ifn_cuda_launch_prefill_warmup_cublas(cudaStream_t stream) {\n    cublasHandle_t h = ifn_cuda_get_cublas(stream);\n    if (!h) return;"
+  },
+  {
+    "path": "cuda/kernels_prefill.cu",
+    "before": "    float alpha = (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) ? w.global_scale : 1.0f, beta = 0.0f;\n    cublasHandle_t h = ifn_cuda_get_cublas(stream);",
+    "after": "    float alpha = (w.kind == ifn_cuda_weight_kind::IFN_CUDA_NVFP4) ? w.global_scale : 1.0f, beta = 0.0f;\n    cublasHandle_t h = ifn_cuda_get_cublas(stream);\n    if (!h) return;"
+  },
+  {
+    "path": "cuda/kernels_prefill.cu",
+    "before": "        CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);\n    if (st != CUBLAS_STATUS_SUCCESS) {\n        fprintf(stderr, \"cublasGemmEx failed: %d (N=%d B=%d K=%d)\\n\", (int)st, w.rows, B, w.cols);\n        std::exit(1);\n    }",
+    "after": "        CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);\n    if (st != CUBLAS_STATUS_SUCCESS) {\n        ifn_cuda_record_error(10000 + (int)st);\n    }"
+  }
+]

@@ -1,7 +1,8 @@
 # Release contents
 
 Release creation is local and does not publish artifacts or start services.
-Existing command/library and public symbol names remain compatible.
+The inference ABI remains major version 1; minor 1 adds optional typed extensions.
+The baseline v1.0 layout is regression-tested without retaining pre-release symbol aliases.
 
 | Artifact | Contents | Excludes |
 | --- | --- | --- |
@@ -11,15 +12,14 @@ Existing command/library and public symbol names remain compatible.
 | GPU runtime/SDK | Host runtime plus native generation command, provider and CUDA implementation archive | Proprietary driver/SDK libraries and model files |
 
 ```sh
-make packages VERSION=0.1.0-dev
-make runtime-gpu-package VERSION=0.1.0-dev
+make packages
+make runtime-gpu-package
 make release-check
 ```
 
 Artifacts are written under `.build/releases/`. `config/package.json` is an explicit
 source/header allowlist; unrelated local files cannot enter an archive by directory
-scanning. Inputs must be regular files, not symlinks to external data. Only the
-known versioned provider link is created in GPU packages.
+scanning. Inputs must be regular files, not symlinks to external data. Only controlled, local versioned host/provider links are created.
 
 Every archive includes LICENSE, NOTICE, THIRD_PARTY.md and a checksum manifest.
 Ordering, ownership, modes and compression timestamps are deterministic. Set
@@ -39,3 +39,10 @@ compiles/runs C and C++ consumers from the two-file embedding distribution and
 executes the packaged host command. GPU qualification separately runs extracted
 GPU artifacts on a reserved device. Packaging alone does not establish numerical
 GPU correctness.
+
+
+`VERSION` is the version source for headers, binaries, package names and pkg-config.
+Host libraries carry ABI-major-1 SONAME/install names and versioned real files.
+The GPU SDK includes modular static archives and `inkleberry-static-infer.pc`;
+`pkg-config --static --libs inkleberry-static-infer` supplies native dependencies.
+See [library integration](library-integration.md) for contracts and native release gates.

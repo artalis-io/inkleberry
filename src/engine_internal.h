@@ -127,6 +127,7 @@ struct ifn_session {
     void *p_ctrl_d_h;
     float *p_ctrl_f, *p_ctrl_g;
     ifn_status status;
+    int backend_error;
     char failure[192];
 };
 

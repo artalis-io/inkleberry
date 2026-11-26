@@ -68,9 +68,9 @@ Generate the internal CUDA contract with `tools/generate_cuda_abi.py` from
 `make reference-check` additionally checks frozen reference bytes.
 Optional Zig comparisons adapt link names in disposable build-directory copies;
 never modify the checked-in Zig reference to match production names. Preserve
-upstream hashes and relocation entries in `UPSTREAM.json`. CUDA files carry an
-identifier-only modification notice; `tools/native_namespace.py` reverses
-`config/native-namespace.json` and must reproduce the original pinned bytes.
+upstream hashes and relocation entries in `UPSTREAM.json`. CUDA files carry a modification notice; `tools/native_namespace.py` reverses
+`config/native-namespace.json` and the exact reviewed host-only error adapters in
+`config/native-host-adaptations.json` to reproduce the original pinned bytes.
 Do not expand the map to hide algorithm changes. A dependency update requires
 an explicit reviewed change, never a silent hash refresh.
 Preserve Apache-2.0 LICENSE, NOTICE and translation attribution.
@@ -80,7 +80,7 @@ Preserve Apache-2.0 LICENSE, NOTICE and translation attribution.
 For host/API/build changes run:
 
 ```sh
-make -j4 check install-check
+make -j4 check install-check install-contract-check
 make lint                       # clang-format 18, configurable CLANG_FORMAT
 make reference-free-check
 make release-check
