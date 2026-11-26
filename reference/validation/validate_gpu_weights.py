@@ -16,9 +16,9 @@ def main():
     parser.add_argument('--cuda-lib', required=True)
     parser.add_argument('--oracle', default='.build/gpu-weight-oracle')
     args = parser.parse_args()
-    uuid = os.environ.get('SQ_TEST_GPU_UUID', '')
+    uuid = os.environ.get('INKLEBERRY_TEST_GPU_UUID', '')
     if not uuid.startswith('GPU-'):
-        parser.error('SQ_TEST_GPU_UUID is required')
+        parser.error('INKLEBERRY_TEST_GPU_UUID is required')
     results = []
     cases = [(mode, mtp, 0) for mode in range(3) for mtp in range(2)]
     cases += [(1, 1, 1), (2, 1, 1)]

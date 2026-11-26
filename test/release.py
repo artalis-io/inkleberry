@@ -25,7 +25,7 @@ def extract(archive, destination):
             release.safe(member.name)
             assert member.isfile() or member.issym()
             if member.issym():
-                assert member.name.endswith('/lib/libsq_backend.so') and member.linkname == 'libsq_backend.so.1'
+                assert member.name.endswith('/lib/libinkleberry_backend.so') and member.linkname == 'libinkleberry_backend.so.1'
         tar.extractall(destination)
     root = destination / roots.pop()
     manifest = json.loads((root / 'MANIFEST.json').read_text())
@@ -54,7 +54,7 @@ def main():
         root = extract(release.package('embedding', folder / 'archives'), folder / 'embedding')
         assert not list(root.rglob('*.py')) and not (root / 'src').exists()
         cc, cxx = shlex.split(args.cc), shlex.split(args.cxx)
-        subprocess.run(cc + ['-std=c11', '-O2', '-Idist', '-c', 'dist/sq.c', '-o', 'host.o'], cwd=root, check=True)
+        subprocess.run(cc + ['-std=c11', '-O2', '-Idist', '-c', 'dist/ifn.c', '-o', 'host.o'], cwd=root, check=True)
         subprocess.run(cc + ['-std=c11', '-Idist', 'examples/inspect.c', 'host.o', '-lm', '-o', 'inspect'], cwd=root, check=True)
         subprocess.run(cxx + ['-std=c++11', '-Idist', '-x', 'c++', '-c', 'examples/inspect.c', '-o', 'consumer.o'], cwd=root, check=True)
         subprocess.run(cxx + ['consumer.o', 'host.o', '-lm', '-o', 'inspect-cpp'], cwd=root, check=True)
@@ -66,14 +66,14 @@ def main():
             assert '1 tensors, 1 payload bytes' in result.stdout
         root = extract(release.package('runtime', folder / 'archives', gpu=args.gpu), folder / 'runtime')
         assert not list(root.rglob('*.py')) and not list(root.rglob('*.c'))
-        subprocess.run([str(root / 'bin/squid-c'), 'inspect', str(fixture)], check=True, capture_output=True)
+        subprocess.run([str(root / 'bin/inkleberry'), 'inspect', str(fixture)], check=True, capture_output=True)
         policy = json.loads((root / 'DEPENDENCIES.json').read_text())
         assert not policy['python_required_at_runtime'] and not policy['zig_required_at_runtime']
         if args.gpu:
             # Copying/linking is checked here. Actual GPU execution is an explicit
             # idle-device test, never an implicit side effect of packaging.
-            assert (root / 'lib/libsq_backend.so').resolve().is_file()
-            assert (root / 'bin/squid-c-generate').is_file()
+            assert (root / 'lib/libinkleberry_backend.so').resolve().is_file()
+            assert (root / 'bin/inkleberry-generate').is_file()
     print('Deterministic source, C/C++ embedding and runtime archives verified from extracted contents')
 
 

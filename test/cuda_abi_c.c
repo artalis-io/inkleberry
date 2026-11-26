@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis */
 #include "cuda_abi.h"
-const size_t *sq_test_c_layout(size_t *count) {
+const size_t *ifn_test_c_layout(size_t *count) {
     static const size_t values[] = {
         sizeof(CSampleConfig),
         _Alignof(CSampleConfig),

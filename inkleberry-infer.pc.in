@@ -2,8 +2,8 @@ prefix=@PREFIX@
 libdir=${prefix}/lib
 includedir=${prefix}/include
 
-Name: Squid inference provider
+Name: Inkleberry Finn inference provider
 Description: Versioned C inference ABI (CUDA provider)
 Version: 0.1.0
-Libs: -L${libdir} -lsq_backend
+Libs: -L${libdir} -linkleberry_backend
 Cflags: -I${includedir}

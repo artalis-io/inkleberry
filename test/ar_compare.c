@@ -1,46 +1,46 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * Native C public-API qualification, invoked by unchanged Zig engine oracle. */
 #define _POSIX_C_SOURCE 200809L
-#include "sq_engine.h"
+#include "ifn_engine.h"
 #include <pthread.h>
 #include <time.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-extern int sq_ar_test_context(sq_session *);
-static sq_gpu_weights *weights;
+extern int ifn_ar_test_context(ifn_session *);
+static ifn_gpu_weights *weights;
 static int test_mtp;
 static uint32_t test_context_extra = 64;
 static double cancel_seconds;
-static sq_session *session;
+static ifn_session *session;
 static int32_t *tokens;
 static size_t token_count, checked_logits;
 static float logits[200058];
 static int32_t c_output[64];
 static uint32_t generated;
 
-int sq_ar_test_start(const char *directory, uint32_t mode, uint32_t kv, uint32_t graphs,
-                     uint32_t count, const char *text) {
+int ifn_ar_test_start(const char *directory, uint32_t mode, uint32_t kv, uint32_t graphs,
+                      uint32_t count, const char *text) {
     char path[1200], rendered[8192];
     size_t bytes = 0, n = 0;
     int32_t encoded[4096];
-    sq_tokenizer *t = NULL;
-    sq_tokenizer_scratch *scratch = NULL;
+    ifn_tokenizer *t = NULL;
+    ifn_tokenizer_scratch *scratch = NULL;
     if (strlen(directory) > 1000 || strlen(text) > 4096 || !count || count > 131072)
         return 1;
     (void)snprintf(path, sizeof path, "%s/tokenizer.json", directory);
-    sq_status rc = sq_tokenizer_open(path, NULL, &t);
-    if (rc == SQ_OK)
-        rc = sq_tokenizer_scratch_create(NULL, &scratch);
-    if (rc == SQ_OK)
-        rc = sq_render_user_prompt(text, strlen(text), SQ_THINK_NONE, rendered, sizeof rendered,
-                                   &bytes);
-    if (rc == SQ_OK)
-        rc = sq_tokenizer_encode(t, rendered, bytes, 1, scratch, encoded, 4096, &n);
-    sq_tokenizer_scratch_destroy(scratch);
-    sq_tokenizer_close(t);
-    if (rc != SQ_OK || !n)
+    ifn_status rc = ifn_tokenizer_open(path, NULL, &t);
+    if (rc == IFN_OK)
+        rc = ifn_tokenizer_scratch_create(NULL, &scratch);
+    if (rc == IFN_OK)
+        rc = ifn_render_user_prompt(text, strlen(text), IFN_THINK_NONE, rendered, sizeof rendered,
+                                    &bytes);
+    if (rc == IFN_OK)
+        rc = ifn_tokenizer_encode(t, rendered, bytes, 1, scratch, encoded, 4096, &n);
+    ifn_tokenizer_scratch_destroy(scratch);
+    ifn_tokenizer_close(t);
+    if (rc != IFN_OK || !n)
         return 1;
     token_count = count;
     tokens = malloc(token_count * sizeof *tokens);
@@ -48,49 +48,49 @@ int sq_ar_test_start(const char *directory, uint32_t mode, uint32_t kv, uint32_t
         return 1;
     for (size_t i = 0; i < token_count; i++)
         tokens[i] = encoded[i % n];
-    sq_inkling_checkpoint *cp = NULL;
+    ifn_inkling_checkpoint *cp = NULL;
     (void)snprintf(path, sizeof path, "%s/model-00001-of-00001.safetensors", directory);
     char mtp_path[1200];
     (void)snprintf(mtp_path, sizeof mtp_path, "%s/mtp.safetensors", directory);
-    rc = sq_inkling_checkpoint_open(path, test_mtp ? mtp_path : NULL, NULL, &cp);
-    sq_weight_config wc = SQ_WEIGHT_CONFIG_INIT;
+    rc = ifn_inkling_checkpoint_open(path, test_mtp ? mtp_path : NULL, NULL, &cp);
+    ifn_weight_config wc = IFN_WEIGHT_CONFIG_INIT;
     wc.mode = mode;
     wc.with_mtp = (uint32_t)test_mtp;
-    if (rc == SQ_OK)
-        rc = sq_gpu_weights_create(&wc, NULL, &weights);
-    if (rc == SQ_OK)
-        rc = sq_gpu_weights_load(weights, cp);
-    sq_inkling_checkpoint_close(cp);
-    sq_session_config config = SQ_SESSION_CONFIG_INIT;
+    if (rc == IFN_OK)
+        rc = ifn_gpu_weights_create(&wc, NULL, &weights);
+    if (rc == IFN_OK)
+        rc = ifn_gpu_weights_load(weights, cp);
+    ifn_inkling_checkpoint_close(cp);
+    ifn_session_config config = IFN_SESSION_CONFIG_INIT;
     config.context_tokens = count + test_context_extra < 64 ? 64 : count + test_context_extra;
     config.kv_format = kv;
     config.use_graphs = graphs;
-    if (rc == SQ_OK)
-        rc = sq_session_create(weights, &config, NULL, &session);
-    if (rc != SQ_OK) {
-        fprintf(stderr, "C AR initialize: %s\n", sq_last_error());
+    if (rc == IFN_OK)
+        rc = ifn_session_create(weights, &config, NULL, &session);
+    if (rc != IFN_OK) {
+        fprintf(stderr, "C AR initialize: %s\n", ifn_last_error());
         return 1;
     }
-    if (sq_ar_test_context(session))
+    if (ifn_ar_test_context(session))
         return 1;
-    sq_gpu_weights *copy = weights;
-    if (sq_gpu_weights_destroy(&copy) != SQ_BUSY || copy != weights)
+    ifn_gpu_weights *copy = weights;
+    if (ifn_gpu_weights_destroy(&copy) != IFN_BUSY || copy != weights)
         return 1;
-    sq_session *second = NULL;
-    if (sq_session_create(weights, &config, NULL, &second) != SQ_BUSY || second)
+    ifn_session *second = NULL;
+    if (ifn_session_create(weights, &config, NULL, &second) != IFN_BUSY || second)
         return 1;
     return 0;
 }
 
-const int32_t *sq_ar_test_tokens(void) {
+const int32_t *ifn_ar_test_tokens(void) {
     return tokens;
 }
 
-int sq_ar_test_logits(size_t offset, const float *reference, size_t n) {
+int ifn_ar_test_logits(size_t offset, const float *reference, size_t n) {
     if (!n || n > 8 || offset + n > token_count)
         return 1;
-    if (sq_session_logits(session, tokens + offset, n, offset == 0, logits, 200058) != SQ_OK) {
-        fprintf(stderr, "C logits: %s\n", sq_last_error());
+    if (ifn_session_logits(session, tokens + offset, n, offset == 0, logits, 200058) != IFN_OK) {
+        fprintf(stderr, "C logits: %s\n", ifn_last_error());
         return 1;
     }
     reference += (n - 1) * 200058;
@@ -105,14 +105,14 @@ int sq_ar_test_logits(size_t offset, const float *reference, size_t n) {
     return 0;
 }
 
-int sq_ar_test_generate(const int32_t *expected, size_t n) {
-    sq_generate_stats stats;
-    sq_status rc =
-        sq_session_generate(session, tokens, token_count, 32, c_output, 64, NULL, NULL, &stats);
-    if (rc != SQ_OK || stats.generated_tokens != n ||
+int ifn_ar_test_generate(const int32_t *expected, size_t n) {
+    ifn_generate_stats stats;
+    ifn_status rc =
+        ifn_session_generate(session, tokens, token_count, 32, c_output, 64, NULL, NULL, &stats);
+    if (rc != IFN_OK || stats.generated_tokens != n ||
         memcmp(c_output, expected, n * sizeof *expected)) {
         fprintf(stderr, "C/Zig generation mismatch: status=%u C=%u Zig=%zu %s\n", rc,
-                stats.generated_tokens, n, sq_last_error());
+                stats.generated_tokens, n, ifn_last_error());
         return 1;
     }
     generated = stats.generated_tokens;
@@ -127,31 +127,31 @@ static int stop_after_one(void *ctx, int32_t token) {
 
 static int cancel_after_one(void *ctx, int32_t token) {
     (void)token;
-    return sq_session_cancel(ctx) == SQ_OK;
+    return ifn_session_cancel(ctx) == IFN_OK;
 }
 
-int sq_ar_test_reuse(void) {
-    sq_generate_stats stats;
+int ifn_ar_test_reuse(void) {
+    ifn_generate_stats stats;
     int32_t out[64];
     int32_t bad = -1;
-    if (sq_session_generate(session, &bad, 1, 2, out, 64, NULL, NULL, &stats) !=
-        SQ_INVALID_ARGUMENT)
+    if (ifn_session_generate(session, &bad, 1, 2, out, 64, NULL, NULL, &stats) !=
+        IFN_INVALID_ARGUMENT)
         return 1;
-    if (sq_session_generate(session, tokens, token_count, 2, out, 64, stop_after_one, NULL,
-                            &stats) != SQ_OK ||
-        stats.finish_reason != SQ_FINISH_CALLBACK || stats.generated_tokens != 1)
+    if (ifn_session_generate(session, tokens, token_count, 2, out, 64, stop_after_one, NULL,
+                             &stats) != IFN_OK ||
+        stats.finish_reason != IFN_FINISH_CALLBACK || stats.generated_tokens != 1)
         return 1;
-    if (sq_session_generate(session, tokens, token_count, 32, out, 64, cancel_after_one, session,
-                            &stats) != SQ_CANCELLED ||
-        stats.finish_reason != SQ_FINISH_CANCELLED || stats.generated_tokens != 1)
+    if (ifn_session_generate(session, tokens, token_count, 32, out, 64, cancel_after_one, session,
+                             &stats) != IFN_CANCELLED ||
+        stats.finish_reason != IFN_FINISH_CANCELLED || stats.generated_tokens != 1)
         return 1;
     const int32_t alternate[3] = {100, 200, 300};
-    if (sq_session_generate(session, alternate, 3, 16, out, 64, NULL, NULL, &stats) != SQ_OK)
+    if (ifn_session_generate(session, alternate, 3, 16, out, 64, NULL, NULL, &stats) != IFN_OK)
         return 1;
-    if (sq_session_reset(session) != SQ_OK)
+    if (ifn_session_reset(session) != IFN_OK)
         return 1;
-    if (sq_session_generate(session, tokens, token_count, 32, out, 64, NULL, NULL, &stats) !=
-            SQ_OK ||
+    if (ifn_session_generate(session, tokens, token_count, 32, out, 64, NULL, NULL, &stats) !=
+            IFN_OK ||
         stats.generated_tokens != generated || memcmp(out, c_output, generated * sizeof *out))
         return 1;
     return 0;
@@ -168,32 +168,32 @@ static void *cancel_thread(void *context) {
     struct timespec delay = {0, 50000000};
     (void)nanosleep(&delay, NULL);
     *requested = now();
-    (void)sq_session_cancel(session);
+    (void)ifn_session_cancel(session);
     return NULL;
 }
 
-int sq_ar_test_cancel_prefill(void) {
+int ifn_ar_test_cancel_prefill(void) {
     pthread_t thread;
     double requested = 0;
     if (pthread_create(&thread, NULL, cancel_thread, &requested))
         return 1;
     int32_t output[64];
-    sq_generate_stats stats;
-    sq_status rc =
-        sq_session_generate(session, tokens, token_count, 32, output, 64, NULL, NULL, &stats);
+    ifn_generate_stats stats;
+    ifn_status rc =
+        ifn_session_generate(session, tokens, token_count, 32, output, 64, NULL, NULL, &stats);
     double finished = now();
-    if (pthread_join(thread, NULL) || rc != SQ_CANCELLED ||
-        stats.finish_reason != SQ_FINISH_CANCELLED)
+    if (pthread_join(thread, NULL) || rc != IFN_CANCELLED ||
+        stats.finish_reason != IFN_FINISH_CANCELLED)
         return 1;
     cancel_seconds = finished - requested;
-    rc = sq_session_generate(session, tokens, token_count, 32, output, 64, NULL, NULL, &stats);
-    return rc != SQ_OK || stats.generated_tokens != generated ||
+    rc = ifn_session_generate(session, tokens, token_count, 32, output, 64, NULL, NULL, &stats);
+    return rc != IFN_OK || stats.generated_tokens != generated ||
            memcmp(output, c_output, generated * sizeof *output);
 }
 
-int sq_ar_test_finish(uint32_t success) {
-    int failed = sq_session_destroy(&session) != SQ_OK;
-    if (sq_gpu_weights_destroy(&weights) != SQ_OK)
+int ifn_ar_test_finish(uint32_t success) {
+    int failed = ifn_session_destroy(&session) != IFN_OK;
+    if (ifn_gpu_weights_destroy(&weights) != IFN_OK)
         failed = 1;
     free(tokens);
     tokens = NULL;

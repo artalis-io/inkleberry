@@ -4,13 +4,13 @@
  * target-forward geometry; prefix checkpoints are separately owned host memory. */
 #include "engine_internal.h"
 
-static void *take(sq_session *s, size_t count, size_t width) {
+static void *take(ifn_session *s, size_t count, size_t width) {
     size_t bytes, aligned, end;
-    if (s->status != SQ_OK)
+    if (s->status != IFN_OK)
         return NULL;
-    if (!sq_size_mul(count, width, &bytes) || !sq_size_align(bytes, 256, &aligned) ||
-        !sq_size_add(s->offset, aligned, &end) || (s->arena && end > s->capacity)) {
-        s->status = SQ_LIMIT;
+    if (!ifn_size_mul(count, width, &bytes) || !ifn_size_align(bytes, 256, &aligned) ||
+        !ifn_size_add(s->offset, aligned, &end) || (s->arena && end > s->capacity)) {
+        s->status = IFN_LIMIT;
         return NULL;
     }
     void *p = s->arena ? (unsigned char *)s->arena + s->offset : NULL;
@@ -19,9 +19,9 @@ static void *take(sq_session *s, size_t count, size_t width) {
     return p;
 }
 
-void sq_ar_layout(sq_session *s, size_t groups) {
+void ifn_ar_layout(ifn_session *s, size_t groups) {
     s->offset = s->allocations = 0;
-    sq_ar_schedule(s->schedule);
+    ifn_ar_schedule(s->schedule);
     for (unsigned i = 0; i < 48; i++) {
         bool global = s->schedule[i].global;
         size_t cap = global ? s->config.context_tokens : 1280;

@@ -1,7 +1,7 @@
 # Native CUDA ABI schema
 
 `cuda.json` is the authoritative declaration schema for the C host's native CUDA
-boundary. It is separate from the public serving ABI in `include/sq_infer.h`.
+boundary. It is separate from the public serving ABI in `include/ifn_infer.h`.
 The initial schema contains the existing 76 functions, seven records and 72
 layout checks. It was bootstrapped from the already-qualified C declarations;
 no Zig source or compiler is used by the generator.

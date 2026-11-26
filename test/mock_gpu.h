@@ -1,5 +1,5 @@
-#ifndef SQ_TEST_MOCK_GPU_H
-#define SQ_TEST_MOCK_GPU_H
+#ifndef IFN_TEST_MOCK_GPU_H
+#define IFN_TEST_MOCK_GPU_H
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * Private backend simulation checks control flow/ownership, NOT GPU numerics. */
 #define _DEFAULT_SOURCE
@@ -13,7 +13,7 @@
 #define CHECK(x)                                                                                   \
     do {                                                                                           \
         if (!(x)) {                                                                                \
-            fprintf(stderr, "weights:%d: %s (%s)\n", __LINE__, #x, sq_last_error());               \
+            fprintf(stderr, "weights:%d: %s (%s)\n", __LINE__, #x, ifn_last_error());              \
             return 1;                                                                              \
         }                                                                                          \
     } while (0)
@@ -63,7 +63,7 @@ static bool fail(mock *m, int op) {
            (op == FREE && m->free_also_fails);
 }
 
-static int enter(void *p, int device, sq_device_scope *old) {
+static int enter(void *p, int device, ifn_device_scope *old) {
     mock *m = p;
     old->device = m->device;
     old->context = m->context;
@@ -74,7 +74,7 @@ static int enter(void *p, int device, sq_device_scope *old) {
     return 0;
 }
 
-static int leave(void *p, const sq_device_scope *old) {
+static int leave(void *p, const ifn_device_scope *old) {
     mock *m = p;
     if (fail(m, LEAVE))
         return 700;
@@ -212,21 +212,21 @@ static int fold(void *p, const void *a, const void *b, const void *c, void *d, v
     return fail(p, FOLD) ? 700 : 0;
 }
 
-static sq_weight_backend backend(mock *m) {
-    return (sq_weight_backend){m,
-                               enter,
-                               leave,
-                               available,
-                               alloc_device,
-                               release_device,
-                               create_stream,
-                               destroy_stream,
-                               sync_stream,
-                               copy,
-                               pack,
-                               expert,
-                               rnn,
-                               fold};
+static ifn_weight_backend backend(mock *m) {
+    return (ifn_weight_backend){m,
+                                enter,
+                                leave,
+                                available,
+                                alloc_device,
+                                release_device,
+                                create_stream,
+                                destroy_stream,
+                                sync_stream,
+                                copy,
+                                pack,
+                                expert,
+                                rnn,
+                                fold};
 }
 
 #endif

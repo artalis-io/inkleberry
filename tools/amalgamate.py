@@ -42,7 +42,7 @@ def namespace(text, stem):
     names.update(re.findall(r'^static [^;{=()]*?\b(\w+)\s*(?:\[[^\]]*\])?\s*(?:=|;)', text, re.M))
     for enum in re.findall(r'^enum\s*\{([^}]+)\};', text, re.M):
         names.update(re.findall(r'(?:^|,)\s*(\w+)\s*=', enum))
-    mapping = {name: 'sq_am_' + stem + '_' + name for name in names}
+    mapping = {name: 'ifn_am_' + stem + '_' + name for name in names}
     output = []
     previous = ''
     for token in TOKEN.findall(text):
@@ -72,12 +72,12 @@ def generated(root=ROOT):
 
     header = BANNER + ''.join(expand(Path(p).name) for p in groups['PUBLIC_HEADERS'])
     # Public declarations are provided by the single adjacent header.
-    source = BANNER + '#ifndef _POSIX_C_SOURCE\n#define _POSIX_C_SOURCE 200809L\n#endif\n#include "sq.h"\n'
+    source = BANNER + '#ifndef _POSIX_C_SOURCE\n#define _POSIX_C_SOURCE 200809L\n#endif\n#include "ifn.h"\n'
     for name in private:
         source += expand(name)
     for group in ['HOST', 'GPU_HOST', 'INFER']:
         if group == 'GPU_HOST':
-            source += '\n#ifdef SQ_ENABLE_CUDA\n'
+            source += '\n#ifdef IFN_ENABLE_CUDA\n'
         for name in groups[group]:
             text = (root / name).read_text()
             text = LOCAL.sub(lambda m: '' if m[1] in known else m[0], text)
@@ -86,8 +86,8 @@ def generated(root=ROOT):
             macros = re.findall(r'^#define\s+(\w+)', text, re.M)
             source += ''.join('#undef ' + m + '\n' for m in macros if m != '_POSIX_C_SOURCE')
         if group == 'INFER':
-            source += '#endif /* SQ_ENABLE_CUDA */\n'
-    return {'dist/sq.h': header.rstrip() + '\n', 'dist/sq.c': source.rstrip() + '\n'}
+            source += '#endif /* IFN_ENABLE_CUDA */\n'
+    return {'dist/ifn.h': header.rstrip() + '\n', 'dist/ifn.c': source.rstrip() + '\n'}
 
 
 def main():

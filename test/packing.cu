@@ -60,7 +60,7 @@ int main() {
                     original = squid_pack_bf16_to_nvfp4(input.p, a.p, static_cast<uint8_t *>(sa.p),
                                                         static_cast<float *>(amax.p), rows, cols);
                 if (cudaDeviceSynchronize() != cudaSuccess ||
-                    sq_cuda_pack(input.p, b.p, sb.p, amax.p, rows, cols, kind, &checked, stream) ||
+                    ifn_cuda_pack(input.p, b.p, sb.p, amax.p, rows, cols, kind, &checked, stream) ||
                     cudaStreamSynchronize(stream) != cudaSuccess ||
                     std::memcmp(&original, &checked, sizeof original))
                     throw "BF16 packing failed";
@@ -82,7 +82,7 @@ int main() {
                 static_cast<uint8_t *>(a.p), static_cast<uint8_t *>(sa.p),
                 static_cast<float *>(ea.p), e, r, c);
             if (cudaDeviceSynchronize() != cudaSuccess ||
-                sq_cuda_expert(input.p, scales.p, b.p, sb.p, eb.p, e, r, c, stream) ||
+                ifn_cuda_expert(input.p, scales.p, b.p, sb.p, eb.p, e, r, c, stream) ||
                 cudaStreamSynchronize(stream) != cudaSuccess)
                 throw "expert packing failed";
             equal(a, b);
@@ -95,7 +95,7 @@ int main() {
             bf16(input);
             squid_split_dspark_rnn(input.p, a.p, ha.p, fa.p);
             if (cudaDeviceSynchronize() != cudaSuccess ||
-                sq_cuda_rnn(input.p, b.p, hb.p, fb.p, stream) ||
+                ifn_cuda_rnn(input.p, b.p, hb.p, fb.p, stream) ||
                 cudaStreamSynchronize(stream) != cudaSuccess)
                 throw "RNN split failed";
             equal(a, b);
@@ -111,7 +111,7 @@ int main() {
             squid_compute_dspark_fold(input.p, hidden.p, bias.p, static_cast<float *>(a.p), wa.p, 8,
                                       2304, 256);
             if (cudaDeviceSynchronize() != cudaSuccess ||
-                sq_cuda_fold(input.p, hidden.p, bias.p, b.p, wb.p, 8, stream) ||
+                ifn_cuda_fold(input.p, hidden.p, bias.p, b.p, wb.p, 8, stream) ||
                 cudaStreamSynchronize(stream) != cudaSuccess)
                 throw "MTP fold failed";
             equal(a, b);

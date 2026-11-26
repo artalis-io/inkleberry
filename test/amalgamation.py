@@ -9,8 +9,8 @@ def symbols(path):
         fields=line.split()
         if len(fields)<3 or fields[-2] in ['U','w','v']:continue
         name=fields[-1]
-        if name.startswith('_sq_'):name=name[1:]
-        if name.startswith('sq_'):result.add(name)
+        if name.startswith('_ifn_'):name=name[1:]
+        if name.startswith('ifn_'):result.add(name)
     return result
 
 left,right=map(symbols,sys.argv[1:])

@@ -1,27 +1,27 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
-#ifndef SQ_JSON_H
-#define SQ_JSON_H
+#ifndef IFN_JSON_H
+#define IFN_JSON_H
 #include "internal.h"
 
 typedef struct {
     const unsigned char *data;
     size_t size, pos;
-} sq_json;
+} ifn_json;
 
 typedef struct {
     const char *name;
-    sq_json value;
+    ifn_json value;
     bool present;
-} sq_json_field;
+} ifn_json_field;
 
-void sq_json_ws(sq_json *j);
-bool sq_json_take(sq_json *j, unsigned char c);
-bool sq_json_string(sq_json *j, char *out, size_t capacity);
-bool sq_json_u64(sq_json *j, uint64_t *out);
-bool sq_json_skip(sq_json *j, unsigned depth);
-bool sq_json_object(sq_json *j, sq_json_field *fields, size_t count);
-bool sq_json_literal(sq_json value, const char *text);
-bool sq_json_text(sq_json value, const char *text);
-bool sq_json_done(sq_json *j);
-bool sq_json_equal(sq_json a, sq_json b, unsigned depth);
+void ifn_json_ws(ifn_json *j);
+bool ifn_json_take(ifn_json *j, unsigned char c);
+bool ifn_json_string(ifn_json *j, char *out, size_t capacity);
+bool ifn_json_u64(ifn_json *j, uint64_t *out);
+bool ifn_json_skip(ifn_json *j, unsigned depth);
+bool ifn_json_object(ifn_json *j, ifn_json_field *fields, size_t count);
+bool ifn_json_literal(ifn_json value, const char *text);
+bool ifn_json_text(ifn_json value, const char *text);
+bool ifn_json_done(ifn_json *j);
+bool ifn_json_equal(ifn_json a, ifn_json b, unsigned depth);
 #endif

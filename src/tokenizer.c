@@ -66,7 +66,7 @@ static bool cp_is_cat_L(uint32_t cp) {
     return cp_is_lower(cp) || cp_is_other_letter_or_mark(cp);
 }
 
-bool sq_utf8_next(const unsigned char *s, size_t n, size_t *pos, uint32_t *out) {
+bool ifn_utf8_next(const unsigned char *s, size_t n, size_t *pos, uint32_t *out) {
     if (*pos >= n)
         return false;
     uint32_t cp = s[(*pos)++], minimum = 0;
@@ -104,7 +104,7 @@ static bool valid_utf8(const char *text, size_t bytes) {
     size_t p = 0;
     uint32_t cp;
     while (p < bytes)
-        if (!sq_utf8_next((const unsigned char *)text, bytes, &p, &cp))
+        if (!ifn_utf8_next((const unsigned char *)text, bytes, &p, &cp))
             return false;
     return true;
 }
@@ -160,10 +160,10 @@ static size_t branch2(const uint32_t *c, size_t n, size_t start) {
     return j + contraction(c, n, j);
 }
 
-void sq_tokenizer_scratch_destroy(sq_tokenizer_scratch *s) {
+void ifn_tokenizer_scratch_destroy(ifn_tokenizer_scratch *s) {
     if (!s)
         return;
-    sq_options a = s->allocator;
+    ifn_options a = s->allocator;
     if (s->bpe)
         a.release(a.context, s->bpe);
     if (s->offsets)
@@ -173,29 +173,29 @@ void sq_tokenizer_scratch_destroy(sq_tokenizer_scratch *s) {
     a.release(a.context, s);
 }
 
-sq_status sq_tokenizer_scratch_create(const sq_options *options, sq_tokenizer_scratch **out) {
+ifn_status ifn_tokenizer_scratch_create(const ifn_options *options, ifn_tokenizer_scratch **out) {
     if (out)
         *out = NULL;
     if (!out)
-        return sq_error(SQ_INVALID_ARGUMENT, "missing scratch output");
-    sq_options a;
-    sq_status status = sq_options_resolve(options, &a);
-    if (status != SQ_OK)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing scratch output");
+    ifn_options a;
+    ifn_status status = ifn_options_resolve(options, &a);
+    if (status != IFN_OK)
         return status;
-    sq_tokenizer_scratch *s = a.allocate(a.context, sizeof *s);
+    ifn_tokenizer_scratch *s = a.allocate(a.context, sizeof *s);
     if (!s)
-        return sq_error(SQ_OUT_OF_MEMORY, "allocate tokenizer scratch");
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate tokenizer scratch");
     memset(s, 0, sizeof *s);
     s->allocator = a;
-    s->codepoints = a.allocate(a.context, SQ_TOK_CHUNK * sizeof *s->codepoints);
-    s->offsets = a.allocate(a.context, (SQ_TOK_CHUNK + 1) * sizeof *s->offsets);
-    s->bpe = a.allocate(a.context, SQ_TOK_PIECE * sizeof *s->bpe);
+    s->codepoints = a.allocate(a.context, IFN_TOK_CHUNK * sizeof *s->codepoints);
+    s->offsets = a.allocate(a.context, (IFN_TOK_CHUNK + 1) * sizeof *s->offsets);
+    s->bpe = a.allocate(a.context, IFN_TOK_PIECE * sizeof *s->bpe);
     if (!s->codepoints || !s->offsets || !s->bpe) {
-        sq_tokenizer_scratch_destroy(s);
-        return sq_error(SQ_OUT_OF_MEMORY, "allocate tokenizer scratch arrays");
+        ifn_tokenizer_scratch_destroy(s);
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate tokenizer scratch arrays");
     }
     *out = s;
-    return sq_error(SQ_OK, "");
+    return ifn_error(IFN_OK, "");
 }
 
 typedef struct {
@@ -209,9 +209,9 @@ static void emit(sink *out, int32_t id) {
     out->count++;
 }
 
-static const sq_merge *merge(const sq_tokenizer *t, int32_t a, int32_t b) {
+static const ifn_merge *merge(const ifn_tokenizer *t, int32_t a, int32_t b) {
     uint64_t pair = ((uint64_t)(uint32_t)a << 32) | (uint32_t)b;
-    size_t slot = (size_t)sq_pair_hash(pair) & (t->merge_slots - 1);
+    size_t slot = (size_t)ifn_pair_hash(pair) & (t->merge_slots - 1);
     for (size_t i = 0; i < t->merge_slots; i++, slot = (slot + 1) & (t->merge_slots - 1)) {
         if (t->merges[slot].pair == UINT64_MAX)
             return NULL;
@@ -221,11 +221,11 @@ static const sq_merge *merge(const sq_tokenizer *t, int32_t a, int32_t b) {
     return NULL;
 }
 
-static void piece(const sq_tokenizer *t, const unsigned char *text, size_t n,
-                  sq_tokenizer_scratch *s, sink *out) {
+static void piece(const ifn_tokenizer *t, const unsigned char *text, size_t n,
+                  ifn_tokenizer_scratch *s, sink *out) {
     size_t offset = 0;
     while (offset < n) {
-        size_t end = n - offset > SQ_TOK_PIECE ? offset + SQ_TOK_PIECE : n;
+        size_t end = n - offset > IFN_TOK_PIECE ? offset + IFN_TOK_PIECE : n;
         if (end < n) {
             unsigned back = 0;
             while (back < 4 && end > offset + 1 && (text[end] & 0xc0) == 0x80) {
@@ -237,10 +237,10 @@ static void piece(const sq_tokenizer *t, const unsigned char *text, size_t n,
         for (size_t i = 0; i < count; i++)
             s->bpe[i] = t->byte_ids[text[offset + i]];
         while (count >= 2) {
-            const sq_merge *best = NULL;
+            const ifn_merge *best = NULL;
             size_t index = 0;
             for (size_t i = 0; i + 1 < count; i++) {
-                const sq_merge *candidate = merge(t, s->bpe[i], s->bpe[i + 1]);
+                const ifn_merge *candidate = merge(t, s->bpe[i], s->bpe[i + 1]);
                 if (candidate && (!best || candidate->rank < best->rank)) {
                     best = candidate;
                     index = i;
@@ -265,12 +265,12 @@ static void piece(const sq_tokenizer *t, const unsigned char *text, size_t n,
     }
 }
 
-static void chunk(const sq_tokenizer *t, const unsigned char *text, size_t bytes,
-                  sq_tokenizer_scratch *s, sink *out) {
+static void chunk(const ifn_tokenizer *t, const unsigned char *text, size_t bytes,
+                  ifn_tokenizer_scratch *s, sink *out) {
     size_t n = 0, p = 0;
     while (p < bytes) {
         s->offsets[n] = (uint32_t)p;
-        (void)sq_utf8_next(text, bytes, &p, &s->codepoints[n]);
+        (void)ifn_utf8_next(text, bytes, &p, &s->codepoints[n]);
         n++;
     }
     s->offsets[n] = (uint32_t)bytes;
@@ -321,11 +321,11 @@ static void chunk(const sq_tokenizer *t, const unsigned char *text, size_t bytes
     }
 }
 
-static void ordinary(const sq_tokenizer *t, const unsigned char *text, size_t bytes,
-                     sq_tokenizer_scratch *s, sink *out) {
+static void ordinary(const ifn_tokenizer *t, const unsigned char *text, size_t bytes,
+                     ifn_tokenizer_scratch *s, sink *out) {
     size_t off = 0;
     while (off < bytes) {
-        size_t end = bytes - off > SQ_TOK_CHUNK ? off + SQ_TOK_CHUNK : bytes;
+        size_t end = bytes - off > IFN_TOK_CHUNK ? off + IFN_TOK_CHUNK : bytes;
         if (end < bytes) {
             size_t floor = end > off + 65536 ? end - 65536 : off + 1, split = 0, scan = end;
             while (scan > floor) {
@@ -360,15 +360,15 @@ static void ordinary(const sq_tokenizer *t, const unsigned char *text, size_t by
     }
 }
 
-sq_status sq_tokenizer_encode(const sq_tokenizer *t, const char *text, size_t bytes,
-                              uint32_t parse_special, sq_tokenizer_scratch *s, int32_t *ids,
-                              size_t capacity, size_t *needed) {
+ifn_status ifn_tokenizer_encode(const ifn_tokenizer *t, const char *text, size_t bytes,
+                                uint32_t parse_special, ifn_tokenizer_scratch *s, int32_t *ids,
+                                size_t capacity, size_t *needed) {
     if (needed)
         *needed = 0;
     if (!t || !s || !needed || (!text && bytes) || (!ids && capacity) || parse_special > 1)
-        return sq_error(SQ_INVALID_ARGUMENT, "invalid encode arguments");
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid encode arguments");
     if (!valid_utf8(text, bytes))
-        return sq_error(SQ_FORMAT, "tokenizer input is not valid UTF-8");
+        return ifn_error(IFN_FORMAT, "tokenizer input is not valid UTF-8");
     sink out = {ids, capacity, 0};
     const unsigned char *input = (const unsigned char *)text;
     size_t segment = 0, p = 0;
@@ -380,7 +380,7 @@ sq_status sq_tokenizer_encode(const sq_tokenizer *t, const char *text, size_t by
             }
             size_t i = 0;
             while (i < t->special_count) {
-                const sq_token_entry *e = &t->entries[t->specials[i]];
+                const ifn_token_entry *e = &t->entries[t->specials[i]];
                 if (e->length <= bytes - p && !memcmp(input + p, t->arena + e->offset, e->length))
                     break;
                 i++;
@@ -396,45 +396,45 @@ sq_status sq_tokenizer_encode(const sq_tokenizer *t, const char *text, size_t by
     if (segment < bytes)
         ordinary(t, input + segment, bytes - segment, s, &out);
     *needed = out.count;
-    return sq_error(out.count > capacity ? SQ_BUFFER_TOO_SMALL : SQ_OK,
-                    out.count > capacity ? "token buffer too small" : "");
+    return ifn_error(out.count > capacity ? IFN_BUFFER_TOO_SMALL : IFN_OK,
+                     out.count > capacity ? "token buffer too small" : "");
 }
 
-sq_status sq_tokenizer_decode(const sq_tokenizer *t, int32_t id, uint32_t skip_special,
-                              const void **out, size_t *bytes) {
+ifn_status ifn_tokenizer_decode(const ifn_tokenizer *t, int32_t id, uint32_t skip_special,
+                                const void **out, size_t *bytes) {
     if (out)
         *out = NULL;
     if (bytes)
         *bytes = 0;
     if (!t || !out || !bytes || skip_special > 1)
-        return sq_error(SQ_INVALID_ARGUMENT, "invalid decode arguments");
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid decode arguments");
     if (id < 0 || (size_t)id >= t->id_count || !t->entries[id].present)
-        return sq_error(SQ_NOT_FOUND, "token ID not found");
-    const sq_token_entry *e = &t->entries[id];
+        return ifn_error(IFN_NOT_FOUND, "token ID not found");
+    const ifn_token_entry *e = &t->entries[id];
     *out = t->arena + e->offset;
     *bytes = skip_special && e->special ? 0 : e->length;
-    return sq_error(SQ_OK, "");
+    return ifn_error(IFN_OK, "");
 }
 
-sq_status sq_render_user_prompt(const char *text, size_t bytes, sq_thinking_effort effort,
-                                char *out, size_t capacity, size_t *needed) {
+ifn_status ifn_render_user_prompt(const char *text, size_t bytes, ifn_thinking_effort effort,
+                                  char *out, size_t capacity, size_t *needed) {
     if (needed)
         *needed = 0;
-    if (!needed || (!text && bytes) || (!out && capacity) || effort > SQ_THINK_MAX)
-        return sq_error(SQ_INVALID_ARGUMENT, "invalid prompt arguments");
+    if (!needed || (!text && bytes) || (!out && capacity) || effort > IFN_THINK_MAX)
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid prompt arguments");
     if (!valid_utf8(text, bytes))
-        return sq_error(SQ_FORMAT, "prompt is not valid UTF-8");
+        return ifn_error(IFN_FORMAT, "prompt is not valid UTF-8");
     const char *levels[] = {"0", "0.1", "0.2", "0.7", "0.9", "0.99"};
     const char *prefix = "<|message_system|><|content_text|>Thinking effort level: ";
     const char *middle = "<|end_message|><|message_user|><|content_text|>";
     const char *suffix = "<|end_message|>";
     size_t n = bytes;
-    if (!sq_size_add(n, strlen(prefix), &n) || !sq_size_add(n, strlen(levels[effort]), &n) ||
-        !sq_size_add(n, strlen(middle), &n) || !sq_size_add(n, strlen(suffix), &n))
-        return sq_error(SQ_LIMIT, "prompt size overflow");
+    if (!ifn_size_add(n, strlen(prefix), &n) || !ifn_size_add(n, strlen(levels[effort]), &n) ||
+        !ifn_size_add(n, strlen(middle), &n) || !ifn_size_add(n, strlen(suffix), &n))
+        return ifn_error(IFN_LIMIT, "prompt size overflow");
     *needed = n;
     if (capacity < n)
-        return sq_error(SQ_BUFFER_TOO_SMALL, "prompt buffer too small");
+        return ifn_error(IFN_BUFFER_TOO_SMALL, "prompt buffer too small");
     size_t at = 0;
 #define APPEND(p, k)                                                                               \
     do {                                                                                           \
@@ -449,5 +449,5 @@ sq_status sq_render_user_prompt(const char *text, size_t bytes, sq_thinking_effo
     APPEND(text, bytes);
     APPEND(suffix, strlen(suffix));
 #undef APPEND
-    return sq_error(SQ_OK, "");
+    return ifn_error(IFN_OK, "");
 }

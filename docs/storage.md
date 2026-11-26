@@ -4,7 +4,7 @@ The file-based safetensors reader already uses `mmap` with `PROT_READ` and
 `MAP_PRIVATE`. It maps a validated regular file and closes the descriptor after
 mapping. Tensor lookup returns borrowed spans into that mapping; it does not copy
 the complete checkpoint or individual payloads into an additional host buffer.
-The mapping stays alive until `sq_safetensors_close` or its owning checkpoint closes.
+The mapping stays alive until `ifn_safetensors_close` or its owning checkpoint closes.
 
 This avoids payload-sized host allocations and uses the operating system's page
 cache. It does not guarantee a particular cold-load time: storage, page faults,

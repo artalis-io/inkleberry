@@ -6,7 +6,7 @@ Existing command/library and public symbol names remain compatible.
 | Artifact | Contents | Excludes |
 | --- | --- | --- |
 | Source | Explicitly allowlisted maintained C/CUDA, headers, schema, tools, tests, docs and generated embedding files | Reference implementations, experiments, model files, build outputs and private state |
-| Embedding | `dist/sq.h`, `dist/sq.c`, C examples and notices | Python/Zig, source tree, generators and test fixtures |
+| Embedding | `dist/ifn.h`, `dist/ifn.c`, C examples and notices | Python/Zig, source tree, generators and test fixtures |
 | Host runtime/SDK | Host executable, shared library, public headers and dependency manifest | Development tools, sources, reference files and models |
 | GPU runtime/SDK | Host runtime plus native generation command, provider and CUDA implementation archive | Proprietary driver/SDK libraries and model files |
 

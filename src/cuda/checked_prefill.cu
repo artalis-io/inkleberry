@@ -30,7 +30,7 @@ static int blas_status(cublasStatus_t s) {
             return e;                                                                              \
     } while (0)
 
-extern "C" int sq_blas_create(void **out, void *stream) {
+extern "C" int ifn_blas_create(void **out, void *stream) {
     cublasHandle_t handle = nullptr;
     cublasStatus_t status = cublasCreate(&handle);
     *out = handle;
@@ -41,12 +41,12 @@ extern "C" int sq_blas_create(void **out, void *stream) {
     return 0;
 }
 
-extern "C" int sq_blas_destroy(void *handle) {
+extern "C" int ifn_blas_destroy(void *handle) {
     return blas_status(cublasDestroy(static_cast<cublasHandle_t>(handle)));
 }
 
-extern "C" int sq_prefill_gemm_h(void *handle, const CLinearWeight *w, const void *x, float *y,
-                                 void *scratch, int32_t batch, void *raw_stream) {
+extern "C" int ifn_prefill_gemm_h(void *handle, const CLinearWeight *w, const void *x, float *y,
+                                  void *scratch, int32_t batch, void *raw_stream) {
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     __half *dst = static_cast<__half *>(scratch);
     if (w->kind == 2) {
@@ -71,12 +71,12 @@ extern "C" int sq_prefill_gemm_h(void *handle, const CLinearWeight *w, const voi
     return 0;
 }
 
-extern "C" int sq_prefill_controller_one(void *handle, const float *x, const float *saved,
-                                         const float *prior, const float *query,
-                                         const CControllerWeights *cw, const void *norm, float *out,
-                                         void *out_h, float *msg, void *cat, float *d, void *dh,
-                                         float *f, float *g, void *scratch, int32_t batch,
-                                         void *raw_stream) {
+extern "C" int ifn_prefill_controller_one(void *handle, const float *x, const float *saved,
+                                          const float *prior, const float *query,
+                                          const CControllerWeights *cw, const void *norm,
+                                          float *out, void *out_h, float *msg, void *cat, float *d,
+                                          void *dh, float *f, float *g, void *scratch,
+                                          int32_t batch, void *raw_stream) {
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     p_ctrl_prep_h_kernel<<<batch, 256, 0, stream>>>(x, saved, prior, query, msg,
                                                     static_cast<__half *>(cat));
@@ -87,17 +87,17 @@ extern "C" int sq_prefill_controller_one(void *handle, const float *x, const flo
         forget = {0, 2304, 64, cw->forget_w, nullptr, nullptr, 1};
         gain = {0, 2304, 64, cw->gain_w, nullptr, nullptr, 1};
     }
-    CALL_TRY(sq_prefill_gemm_h(handle, &down, cat, d, scratch, batch, raw_stream));
+    CALL_TRY(ifn_prefill_gemm_h(handle, &down, cat, d, scratch, batch, raw_stream));
     launch_prefill_f32_to_f16(d, static_cast<__half *>(dh), batch * 64, stream);
     CUDA_TRY(cudaGetLastError());
-    CALL_TRY(sq_prefill_gemm_h(handle, &forget, dh, f, scratch, batch, raw_stream));
-    CALL_TRY(sq_prefill_gemm_h(handle, &gain, dh, g, scratch, batch, raw_stream));
+    CALL_TRY(ifn_prefill_gemm_h(handle, &forget, dh, f, scratch, batch, raw_stream));
+    CALL_TRY(ifn_prefill_gemm_h(handle, &gain, dh, g, scratch, batch, raw_stream));
     p_ctrl_finish_kernel<<<batch, 256, 0, stream>>>(
         x, msg, f, g, static_cast<const __nv_bfloat16 *>(norm), out, static_cast<__half *>(out_h));
     return (int)cudaGetLastError();
 }
 
-extern "C" int sq_prefill_global_sconv_prep_store(
+extern "C" int ifn_prefill_global_sconv_prep_store(
     void *handle, float *qrgs, float *kp, float *vp, const void *ik, const void *iv,
     const void *ksw, const void *vsw, const void *ksp, const void *vsp, float *kr, float *vr,
     const void *qcs, const void *rcs, void *kc, void *vc, void *k_scale, void *v_scale, uint8_t fmt,
@@ -105,9 +105,9 @@ extern "C" int sq_prefill_global_sconv_prep_store(
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     CLinearWeight kw = {0, 32, 2304, const_cast<void *>(ksp), nullptr, nullptr, 1}, vw = kw;
     vw.data = const_cast<void *>(vsp);
-    CALL_TRY(sq_prefill_gemm_h(handle, &kw, ik, taps, scratch, batch, raw_stream));
+    CALL_TRY(ifn_prefill_gemm_h(handle, &kw, ik, taps, scratch, batch, raw_stream));
     CALL_TRY(
-        sq_prefill_gemm_h(handle, &vw, iv, taps + (size_t)batch * 32, scratch, batch, raw_stream));
+        ifn_prefill_gemm_h(handle, &vw, iv, taps + (size_t)batch * 32, scratch, batch, raw_stream));
     p_dynamic_sconv_kv_inplace_kernel<<<dim3(KV_DIM / 256, 2), 256, 0, stream>>>(
         kp, vp, static_cast<const __nv_bfloat16 *>(ksw), static_cast<const __nv_bfloat16 *>(vsw),
         taps, taps + (size_t)batch * 32, kr, vr, batch, pos);

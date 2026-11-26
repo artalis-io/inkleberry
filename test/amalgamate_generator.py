@@ -15,9 +15,9 @@ int get(struct foreign *p) { return p->copy + p->result; }
 const char *literal = "copy(result)"; /* copy must remain in comments */
 '''
         value=amalgamate.namespace(text,'unit')
-        self.assertIn('static int sq_am_unit_copy(',value)
-        self.assertIn('= sq_am_unit_copy;',value)
-        self.assertIn('sq_am_unit_copy(3)',value)
+        self.assertIn('static int ifn_am_unit_copy(',value)
+        self.assertIn('= ifn_am_unit_copy;',value)
+        self.assertIn('ifn_am_unit_copy(3)',value)
         self.assertIn('p->copy + p->result',value)
         self.assertIn('"copy(result)"',value)
         self.assertIn('/* copy must remain in comments */',value)
@@ -29,14 +29,14 @@ float get(struct foreign x) { return 1E-4f + 0xEF + E + x.E + H + state; }
         value=amalgamate.namespace(text,'unit')
         self.assertIn('1E-4f + 0xEF',value)
         self.assertIn('x.E',value)
-        self.assertIn('sq_am_unit_E + x.E + sq_am_unit_H + sq_am_unit_state',value)
+        self.assertIn('ifn_am_unit_E + x.E + ifn_am_unit_H + ifn_am_unit_state',value)
     def test_outputs_are_hermetic(self):
         outputs=amalgamate.generated()
         for name,text in outputs.items():
             self.assertNotIn('#include "internal.h"',text)
-            self.assertNotIn('#include "sq_chat.h"',text)
+            self.assertNotIn('#include "ifn_chat.h"',text)
             self.assertNotIn(str(ROOT),text)
-        self.assertIn('#include "sq.h"',outputs['dist/sq.c'])
-        self.assertIn('#ifdef SQ_ENABLE_CUDA',outputs['dist/sq.c'])
+        self.assertIn('#include "ifn.h"',outputs['dist/ifn.c'])
+        self.assertIn('#ifdef IFN_ENABLE_CUDA',outputs['dist/ifn.c'])
 
 if __name__=='__main__':unittest.main()

@@ -15,9 +15,9 @@ def main():
     parser.add_argument('--cc', default='cc')
     parser.add_argument('--cxx', default='c++')
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix='sq-reference-free-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='ifn-reference-free-') as tmp:
         root = Path(tmp)
-        for name in ['Makefile', 'LICENSE', 'UPSTREAM.json', 'sq.pc.in', 'squid-infer.pc.in']:
+        for name in ['Makefile', 'LICENSE', 'UPSTREAM.json', 'inkleberry.pc.in', 'inkleberry-infer.pc.in']:
             shutil.copy2(ROOT / name, root / name)
         for name in ['include', 'src', 'cuda', 'cli', 'test', 'tools', 'abi', 'config', 'dist', 'examples', 'fuzz']:
             shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns('__pycache__', '*.zig'))

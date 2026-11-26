@@ -5,48 +5,48 @@
 #include "checked_prefill.h"
 #define CHECK(call)                                                                                \
     do {                                                                                           \
-        sq_ar_check(s, (call), "batched prefill");                                                 \
-        if (s->status != SQ_OK)                                                                    \
+        ifn_ar_check(s, (call), "batched prefill");                                                \
+        if (s->status != IFN_OK)                                                                   \
             return;                                                                                \
     } while (0)
 
-static void gemm(sq_session *s, const CLinearWeight *w, const void *x, float *y, int32_t n) {
-    if (s->status == SQ_OK)
-        sq_ar_check(s, sq_prefill_gemm_h(s->blas, w, x, y, s->p_w_f16, n, s->stream),
-                    "prefill GEMM");
+static void gemm(ifn_session *s, const CLinearWeight *w, const void *x, float *y, int32_t n) {
+    if (s->status == IFN_OK)
+        ifn_ar_check(s, ifn_prefill_gemm_h(s->blas, w, x, y, s->p_w_f16, n, s->stream),
+                     "prefill GEMM");
 }
 
-static void controller(sq_session *s, const float *x, const float *q, const CControllerWeights *cw,
+static void controller(ifn_session *s, const float *x, const float *q, const CControllerWeights *cw,
                        const void *norm, float *out, void *out_h, int32_t n) {
-    if (s->status == SQ_OK)
-        sq_ar_check(s,
-                    sq_prefill_controller_one(s->blas, x, s->p_saved, s->p_prior_last, q, cw, norm,
-                                              out, out_h, s->p_ctrl_msg, s->p_ctrl_cat_h,
-                                              s->p_ctrl_d, s->p_ctrl_d_h, s->p_ctrl_f, s->p_ctrl_g,
-                                              s->p_w_f16, n, s->stream),
-                    "prefill controller");
+    if (s->status == IFN_OK)
+        ifn_ar_check(s,
+                     ifn_prefill_controller_one(s->blas, x, s->p_saved, s->p_prior_last, q, cw,
+                                                norm, out, out_h, s->p_ctrl_msg, s->p_ctrl_cat_h,
+                                                s->p_ctrl_d, s->p_ctrl_d_h, s->p_ctrl_f,
+                                                s->p_ctrl_g, s->p_w_f16, n, s->stream),
+                     "prefill controller");
 }
 
-void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
-    if (s->status != SQ_OK)
+void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
+    if (s->status != IFN_OK)
         return;
     if (!s->blas)
-        CHECK(sq_blas_create(&s->blas, s->stream));
+        CHECK(ifn_blas_create(&s->blas, s->stream));
     int32_t pos[256];
     for (int32_t i = 0; i < n / 8; i++)
         pos[i] = s->position + i * 8;
-    const sq_weight_backend *backend = &s->weights->backend;
+    const ifn_weight_backend *backend = &s->weights->backend;
     CHECK(backend->copy(backend->context, s->p_pos_vec, pos, (size_t)(n / 8) * 4, 0, s->stream));
     CHECK(backend->copy(backend->context, s->p_tokens, tokens, (size_t)n * 4, 0, s->stream));
     void *stream = s->stream;
-    const sq_ar_model *w = &s->model;
+    const ifn_ar_model *w = &s->model;
     squid_launch_embed_norm(w->embed, w->embed_norm, s->p_tokens, s->p_hidden, n, stream);
     int32_t blocks = 0;
     bool prior = false, pending = false;
     for (unsigned vi = 0; vi < 48; vi++) {
-        sq_visit v = s->schedule[vi];
+        ifn_visit v = s->schedule[vi];
         unsigned l = v.layer;
-        const sq_layer *lw = &w->layers[l];
+        const ifn_layer *lw = &w->layers[l];
         bool prelude = false;
         if (v.loop && l == 6) {
             if (v.pass == 0)
@@ -63,7 +63,7 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
         }
         bool use_prior = v.loop && prior, distinct = v.global || use_prior, boundary = l % 6 == 0;
         if (pending) {
-            const sq_layer *prev = &w->layers[s->schedule[vi - 1].layer];
+            const ifn_layer *prev = &w->layers[s->schedule[vi - 1].layer];
             squid_launch_prefill_sconv_post_res(s->p_moe_slot_out, 1, prev->mlp_sconv_w,
                                                 s->mlp_ring[vi - 1], s->p_residual, s->p_hidden,
                                                 prelude ? s->p_prelude : NULL, NULL, NULL, 0, 0, n,
@@ -119,10 +119,10 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
         gemm(s, &lw->w_qrgs, s->p_attn_in_h[0], s->p_qrgs, n);
         gemm(s, &lw->w_k, ik, s->p_k_proj, n);
         gemm(s, &lw->w_v, iv, s->p_v_proj, n);
-        if (s->status != SQ_OK)
+        if (s->status != IFN_OK)
             return;
         if (v.global) {
-            CHECK(sq_prefill_global_sconv_prep_store(
+            CHECK(ifn_prefill_global_sconv_prep_store(
                 s->blas, s->p_qrgs, s->p_k_proj, s->p_v_proj, ik, iv, lw->k_sconv_w, lw->v_sconv_w,
                 lw->k_sconv_proj, lw->v_sconv_proj, s->k_ring[vi], s->v_ring[vi], lw->q_clip_scale,
                 lw->rel_clip_scale, s->k_cache[vi], s->v_cache[vi], s->k_scale[vi], s->v_scale[vi],
@@ -149,7 +149,7 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
                 off += sub;
             }
         gemm(s, &lw->w_o, s->p_attn_gated_h, s->p_o_proj, n);
-        if (s->status != SQ_OK)
+        if (s->status != IFN_OK)
             return;
         squid_launch_prefill_sconv_post_res(s->p_o_proj, 0, lw->attn_sconv_w, s->attn_ring[vi],
                                             s->p_hidden, s->p_residual, NULL, s->p_blocks,
@@ -169,7 +169,7 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
             router = (CLinearWeight){0, 128, 2304, lw->router_w, NULL, NULL, 1};
         }
         gemm(s, &router, s->p_mlp_normed_h, s->p_router_logits, n);
-        if (s->status != SQ_OK)
+        if (s->status != IFN_OK)
             return;
         squid_launch_prefill_route_and_sort(s->p_router_logits, lw->router_bias, s->p_route_ids,
                                             s->p_route_w, s->p_exp_offsets, s->p_sorted_tok,
@@ -186,7 +186,7 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
                 NULL, NULL, NULL, 0, 0, n, s->p_pos_vec, NULL, NULL, NULL, stream);
         else
             pending = true;
-        CHECK(sq_cuda_launch_status());
+        CHECK(ifn_cuda_launch_status());
     }
     squid_launch_prefill_sconv_post_res(s->p_moe_slot_out, 1,
                                         w->layers[s->schedule[47].layer].mlp_sconv_w,
@@ -198,9 +198,9 @@ void sq_ar_prefill(sq_session *s, const int32_t *tokens, int32_t n) {
     if (s->use_mtp) {
         squid_launch_prefill_copy_taps(s->p_mlp_normed, s->p_taps, 3, n, stream);
         for (int32_t i = 0; i < n / 8; i++)
-            sq_spec_commit(s, s->p_taps + (size_t)i * 4 * 8 * 2304, 8, s->p_pos_vec + i);
+            ifn_spec_commit(s, s->p_taps + (size_t)i * 4 * 8 * 2304, 8, s->p_pos_vec + i);
     }
-    CHECK(sq_cuda_launch_status());
+    CHECK(ifn_cuda_launch_status());
     CHECK(backend->sync(backend->context, stream));
     s->position += n;
 }

@@ -1,11 +1,11 @@
 /* Generated from abi/cuda.json by tools/generate_cuda_abi.py; do not edit.
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis */
-#ifndef SQ_CUDA_ABI_H
-#define SQ_CUDA_ABI_H
+#ifndef IFN_CUDA_ABI_H
+#define IFN_CUDA_ABI_H
 #include <stddef.h>
 #include <stdint.h>
-#ifndef SQ_CUDA_ABI_NO_TYPES
+#ifndef IFN_CUDA_ABI_NO_TYPES
 typedef struct CSampleConfig {
     float inv_temp;
     float top_p;

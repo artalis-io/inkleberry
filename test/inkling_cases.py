@@ -42,7 +42,7 @@ def run(args):
     if r.returncode or 'Sanitizer' in r.stderr or 'runtime error:' in r.stderr:
         raise SystemExit(r.stdout+r.stderr)
 
-with tempfile.TemporaryDirectory(prefix='sq-schema-') as folder:
+with tempfile.TemporaryDirectory(prefix='ifn-schema-') as folder:
     probe=Path(folder)/'sparse-probe'
     with probe.open('wb') as f:f.truncate(16*1024*1024)
     if probe.stat().st_blocks*512>4096:

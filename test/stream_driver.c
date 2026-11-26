@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
-#include "sq_chat.h"
+#include "ifn_chat.h"
 #include "tokenizer.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +11,7 @@ static int collect(void *p, uint32_t channel, const char *data, size_t n) {
     size_t at = 0;
     uint32_t cp;
     while (at < n)
-        if (!sq_utf8_next((const unsigned char *)data, n, &at, &cp))
+        if (!ifn_utf8_next((const unsigned char *)data, n, &at, &cp))
             abort();
 
     (void)p;
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     if (argc < 3 || argc > 11)
         return 2;
     unsigned char input[32768], stopdata[8][64];
-    sq_text_span stops[8];
+    ifn_text_span stops[8];
     if (strlen(argv[1]) > sizeof input * 2)
         return 2;
     size_t n = unhex(argv[1], input), chunk = (size_t)strtoul(argv[2], NULL, 10);
@@ -50,29 +50,29 @@ int main(int argc, char **argv) {
         size_t len = unhex(argv[i], stopdata[i - 3]);
         if (len == SIZE_MAX)
             return 2;
-        stops[i - 3] = (sq_text_span){(const char *)stopdata[i - 3], len};
+        stops[i - 3] = (ifn_text_span){(const char *)stopdata[i - 3], len};
     }
-    sq_stream_options o = SQ_STREAM_OPTIONS_INIT;
+    ifn_stream_options o = IFN_STREAM_OPTIONS_INIT;
     o.parse_chat = 0;
     o.stops = stops;
     o.stop_count = (size_t)(argc - 3);
-    sq_stream *s = NULL;
-    if (sq_stream_create(NULL, &o, NULL, collect, NULL, &s) != SQ_OK)
+    ifn_stream *s = NULL;
+    if (ifn_stream_create(NULL, &o, NULL, collect, NULL, &s) != IFN_OK)
         return 1;
     for (size_t at = 0; at < n; at += chunk) {
         size_t take = n - at;
         if (take > chunk)
             take = chunk;
-        if (sq_stream_push_bytes(s, input + at, take) != SQ_OK)
+        if (ifn_stream_push_bytes(s, input + at, take) != IFN_OK)
             return 1;
     }
-    if (sq_stream_finish(s, SQ_STREAM_LENGTH) != SQ_OK)
+    if (ifn_stream_finish(s, IFN_STREAM_LENGTH) != IFN_OK)
         return 1;
-    sq_stream_info info = SQ_STREAM_INFO_INIT;
-    if (sq_stream_get_info(s, &info) != SQ_OK)
+    ifn_stream_info info = IFN_STREAM_INFO_INIT;
+    if (ifn_stream_get_info(s, &info) != IFN_OK)
         return 1;
     for (size_t i = 0; i < used; i++)
         printf("%02x", result[i]);
     printf("\n%u %llu\n", info.finish_reason, (unsigned long long)info.utf8_replacements);
-    return sq_stream_destroy(&s) != SQ_OK;
+    return ifn_stream_destroy(&s) != IFN_OK;
 }

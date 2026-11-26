@@ -22,16 +22,16 @@ def main():
     p.add_argument('checkpoints', type=Path, nargs='+')
     args = p.parse_args()
     lib = c.CDLL(str(args.library.resolve()))
-    lib.sq_safetensors_open.argtypes = [c.c_char_p, c.c_void_p, c.POINTER(c.c_void_p)]
-    lib.sq_safetensors_open.restype = c.c_uint32
-    lib.sq_safetensors_count.argtypes = [c.c_void_p]
-    lib.sq_safetensors_count.restype = c.c_size_t
-    lib.sq_safetensors_at.argtypes = [c.c_void_p, c.c_size_t, c.POINTER(c.POINTER(Tensor))]
-    lib.sq_safetensors_at.restype = c.c_uint32
-    lib.sq_safetensors_find.argtypes = [c.c_void_p, c.c_char_p, c.c_size_t, c.POINTER(c.POINTER(Tensor))]
-    lib.sq_safetensors_find.restype = c.c_uint32
-    lib.sq_safetensors_close.argtypes = [c.c_void_p]
-    lib.sq_last_error.restype = c.c_char_p
+    lib.ifn_safetensors_open.argtypes = [c.c_char_p, c.c_void_p, c.POINTER(c.c_void_p)]
+    lib.ifn_safetensors_open.restype = c.c_uint32
+    lib.ifn_safetensors_count.argtypes = [c.c_void_p]
+    lib.ifn_safetensors_count.restype = c.c_size_t
+    lib.ifn_safetensors_at.argtypes = [c.c_void_p, c.c_size_t, c.POINTER(c.POINTER(Tensor))]
+    lib.ifn_safetensors_at.restype = c.c_uint32
+    lib.ifn_safetensors_find.argtypes = [c.c_void_p, c.c_char_p, c.c_size_t, c.POINTER(c.POINTER(Tensor))]
+    lib.ifn_safetensors_find.restype = c.c_uint32
+    lib.ifn_safetensors_close.argtypes = [c.c_void_p]
+    lib.ifn_last_error.restype = c.c_char_p
     dtype = {'U8': 0, 'BF16': 1, 'F32': 2, 'F8_E4M3': 3}
     results = []
     for path in args.checkpoints:
@@ -43,15 +43,15 @@ def main():
             header = json.loads(raw)
         expected = {k: v for k, v in header.items() if k != '__metadata__'}
         handle = c.c_void_p()
-        if lib.sq_safetensors_open(bytes(path), None, c.byref(handle)):
-            raise SystemExit(lib.sq_last_error().decode())
+        if lib.ifn_safetensors_open(bytes(path), None, c.byref(handle)):
+            raise SystemExit(lib.ifn_last_error().decode())
         try:
-            if lib.sq_safetensors_count(handle) != len(expected):
+            if lib.ifn_safetensors_count(handle) != len(expected):
                 raise SystemExit('Tensor count mismatch')
             seen = set()
             for i in range(len(expected)):
                 item = c.POINTER(Tensor)()
-                if lib.sq_safetensors_at(handle, i, c.byref(item)):
+                if lib.ifn_safetensors_at(handle, i, c.byref(item)):
                     raise SystemExit('Enumeration failed')
                 t = item.contents
                 name = t.name.decode('utf-8')
@@ -62,13 +62,13 @@ def main():
                     raise SystemExit('Descriptor mismatch: ' + name)
                 found = c.POINTER(Tensor)()
                 key = name.encode()
-                if lib.sq_safetensors_find(handle, key, len(key), c.byref(found)) or c.addressof(found.contents) != c.addressof(t):
+                if lib.ifn_safetensors_find(handle, key, len(key), c.byref(found)) or c.addressof(found.contents) != c.addressof(t):
                     raise SystemExit('Lookup mismatch: ' + name)
                 seen.add(name)
             if seen != set(expected):
                 raise SystemExit('Enumeration coverage mismatch')
         finally:
-            lib.sq_safetensors_close(handle)
+            lib.ifn_safetensors_close(handle)
         results.append({'file': path.name, 'file_bytes': path.stat().st_size,
                         'header_sha256': hashlib.sha256(raw).hexdigest(),
                         'tensor_descriptors_matched': len(expected)})

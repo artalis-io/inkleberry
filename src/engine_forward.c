@@ -4,16 +4,16 @@
  * DSpark commit/verification; ablation and LoopCD remain disabled. */
 #include "engine_internal.h"
 
-void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
-    const sq_ar_model *w = &s->model;
+void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
+    const ifn_ar_model *w = &s->model;
     void *stream = s->stream;
     int32_t blocks = 0;
     bool prior = false, pending = false;
     squid_launch_embed_norm(w->embed, w->embed_norm, s->d_tokens, s->hidden, batch, stream);
     for (unsigned vi = 0; vi < 48; vi++) {
-        sq_visit v = s->schedule[vi];
+        ifn_visit v = s->schedule[vi];
         unsigned l = v.layer;
-        const sq_layer *lw = &w->layers[l];
+        const ifn_layer *lw = &w->layers[l];
         float *pre_tap = NULL;
         if (v.loop && l == 6) {
             if (v.pass == 0)
@@ -22,10 +22,10 @@ void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
                 squid_launch_extract_block(s->blocks, 4, 2, s->saved, batch, stream);
                 squid_launch_rmsnorm(s->hidden, NULL, s->prior_last, batch, 2304, 2304, 1e-6f,
                                      stream);
-                sq_ar_check(s,
-                            squid_cuda_memcpy_d2d_async(s->hidden, s->prelude,
-                                                        (size_t)batch * 2304 * 4, stream),
-                            "restore prelude");
+                ifn_ar_check(s,
+                             squid_cuda_memcpy_d2d_async(s->hidden, s->prelude,
+                                                         (size_t)batch * 2304 * 4, stream),
+                             "restore prelude");
                 blocks = 1;
                 prior = true;
             }
@@ -61,7 +61,7 @@ void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
         } else
             o[0] = s->mlp_in;
         if (pending) {
-            const sq_layer *prev = &w->layers[s->schedule[vi - 1].layer];
+            const ifn_layer *prev = &w->layers[s->schedule[vi - 1].layer];
             squid_launch_mega_mlp_post_next_depth_norm(
                 s->moe_down, 0, prev->mlp_sconv_w, s->mlp_ring[vi - 1], s->residual, s->hidden,
                 pre_tap, NULL, partial, s->blocks, blocks, w->attn_queries[l - 1], n[0], n[1], n[2],
@@ -166,7 +166,7 @@ void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
             pending = false;
         } else
             pending = true;
-        if (s->status != SQ_OK)
+        if (s->status != IFN_OK)
             return;
     }
     squid_launch_mega_mlp_post_next_depth_norm(
@@ -174,7 +174,7 @@ void sq_ar_forward(sq_session *s, int32_t batch, bool lm) {
         s->hidden, NULL, s->use_mtp ? s->taps + 3 * (size_t)batch * 2304 : NULL, NULL, s->blocks,
         blocks, w->output_query, w->final_norm, NULL, NULL, s->mlp_normed, NULL, NULL, NULL, NULL,
         NULL, 1, batch, s->d_pos, NULL, NULL, NULL, NULL, NULL, NULL, stream);
-    sq_spec_commit(s, s->taps, batch, s->d_pos);
+    ifn_spec_commit(s, s->taps, batch, s->d_pos);
     if (lm)
         squid_launch_lm_head_argmax(
             &w->unembed, s->mlp_normed, s->d_next_tokens, s->lm_logits, s->lm_blk_val,

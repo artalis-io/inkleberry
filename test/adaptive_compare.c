@@ -5,15 +5,15 @@ static uint32_t adaptive_limit = 32;
 static int copy_fixture, requested_lookup;
 static int32_t adaptive_output[512];
 
-int sq_adaptive_start(const char *dir, uint32_t mode, uint32_t kv, uint32_t n, uint32_t extra) {
-    return sq_decode_start(dir, mode, kv, 1, n, 7, extra);
+int ifn_adaptive_start(const char *dir, uint32_t mode, uint32_t kv, uint32_t n, uint32_t extra) {
+    return ifn_decode_start(dir, mode, kv, 1, n, 7, extra);
 }
 
-uint32_t sq_adaptive_token_count(void) {
+uint32_t ifn_adaptive_token_count(void) {
     return (uint32_t)token_count;
 }
 
-int sq_adaptive_copy_fixture(const char *directory) {
+int ifn_adaptive_copy_fixture(const char *directory) {
     const char *text =
         "Copy the passage between START and END exactly, with no explanation.\nSTART\n"
         "On Tuesday morning, a blue delivery van crossed the wooden bridge near the old library. "
@@ -27,20 +27,20 @@ int sq_adaptive_copy_fixture(const char *directory) {
         "The notebook remained safely inside the front compartment until the journey ended.\nEND";
     char path[1200], rendered[8192];
     size_t bytes = 0, count = 0;
-    sq_tokenizer *t = NULL;
-    sq_tokenizer_scratch *scratch = NULL;
+    ifn_tokenizer *t = NULL;
+    ifn_tokenizer_scratch *scratch = NULL;
     (void)snprintf(path, sizeof path, "%s/tokenizer.json", directory);
-    sq_status rc = sq_tokenizer_open(path, NULL, &t);
-    if (rc == SQ_OK)
-        rc = sq_tokenizer_scratch_create(NULL, &scratch);
-    if (rc == SQ_OK)
-        rc = sq_render_user_prompt(text, strlen(text), SQ_THINK_NONE, rendered, sizeof rendered,
-                                   &bytes);
-    if (rc == SQ_OK)
-        rc = sq_tokenizer_encode(t, rendered, bytes, 1, scratch, tokens, token_count, &count);
-    sq_tokenizer_scratch_destroy(scratch);
-    sq_tokenizer_close(t);
-    if (rc != SQ_OK || !count)
+    ifn_status rc = ifn_tokenizer_open(path, NULL, &t);
+    if (rc == IFN_OK)
+        rc = ifn_tokenizer_scratch_create(NULL, &scratch);
+    if (rc == IFN_OK)
+        rc = ifn_render_user_prompt(text, strlen(text), IFN_THINK_NONE, rendered, sizeof rendered,
+                                    &bytes);
+    if (rc == IFN_OK)
+        rc = ifn_tokenizer_encode(t, rendered, bytes, 1, scratch, tokens, token_count, &count);
+    ifn_tokenizer_scratch_destroy(scratch);
+    ifn_tokenizer_close(t);
+    if (rc != IFN_OK || !count)
         return 1;
     token_count = count;
     adaptive_limit = 256;
@@ -48,10 +48,10 @@ int sq_adaptive_copy_fixture(const char *directory) {
     return 0;
 }
 
-int sq_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed, float threshold,
-                      uint32_t lookup, const int32_t *expected, uint32_t count, uint32_t steps,
-                      uint32_t total, uint32_t accepted, uint32_t lookups) {
-    sq_decode_options options = SQ_DECODE_OPTIONS_INIT;
+int ifn_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed, float threshold,
+                       uint32_t lookup, const int32_t *expected, uint32_t count, uint32_t steps,
+                       uint32_t total, uint32_t accepted, uint32_t lookups) {
+    ifn_decode_options options = IFN_DECODE_OPTIONS_INIT;
     options.temperature = temperature;
     options.top_p = top_p;
     options.top_k = k;
@@ -60,11 +60,11 @@ int sq_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed, 
     options.adaptive = 1;
     options.prompt_lookup = lookup;
     options.spec_threshold = threshold;
-    sq_decode_stats stats;
-    sq_decode_info info = SQ_DECODE_INFO_INIT;
-    sq_status rc = sq_session_generate_ex(session, tokens, token_count, adaptive_limit, &options,
-                                          adaptive_output, 512, NULL, NULL, &stats);
-    if (rc != SQ_OK || sq_session_decode_info(session, &info) != SQ_OK ||
+    ifn_decode_stats stats;
+    ifn_decode_info info = IFN_DECODE_INFO_INIT;
+    ifn_status rc = ifn_session_generate_ex(session, tokens, token_count, adaptive_limit, &options,
+                                            adaptive_output, 512, NULL, NULL, &stats);
+    if (rc != IFN_OK || ifn_session_decode_info(session, &info) != IFN_OK ||
         stats.generation.generated_tokens != count ||
         memcmp(adaptive_output, expected, (size_t)count * 4) || stats.speculative_steps != steps ||
         stats.total_drafts != total || stats.accepted_drafts != accepted ||
@@ -76,7 +76,7 @@ int sq_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed, 
                 "%s\n",
                 (double)temperature, (double)threshold, lookup, stats.generation.generated_tokens,
                 stats.speculative_steps, stats.total_drafts, info.lookup_steps, count, steps, total,
-                lookups, rc, sq_last_error());
+                lookups, rc, ifn_last_error());
         return 1;
     }
     requested_lookup = (int)lookup;
@@ -88,12 +88,12 @@ int sq_adaptive_check(float temperature, float top_p, int32_t k, uint64_t seed, 
     return 0;
 }
 
-int sq_adaptive_finish(uint32_t success) {
+int ifn_adaptive_finish(uint32_t success) {
     if (success && copy_fixture && requested_lookup && !lookup_hits) {
         fputs("copy fixture did not exercise lookup\n", stderr);
         success = 0;
     }
-    int rc = sq_decode_finish(0);
+    int rc = ifn_decode_finish(0);
     if (copy_fixture && requested_lookup && !lookup_hits)
         rc = 1;
     if (!rc && success)

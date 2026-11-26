@@ -1,33 +1,33 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "infer_internal.h"
 
-static sq_status plan_locked(sq_infer_session *s, sq_infer_memory_plan_v1 *v) {
+static ifn_status plan_locked(ifn_infer_session *s, ifn_infer_memory_plan_v1 *v) {
     uint64_t bytes = 0;
-    sq_status rc = sq_session_owned_plan(s->model->weights, &s->config, &s->allocator, &bytes);
+    ifn_status rc = ifn_session_owned_plan(s->model->weights, &s->config, &s->allocator, &bytes);
     if (rc)
         return rc;
     memset(v, 0, sizeof *v);
     v->owned_host_bytes = sizeof *s + atomic_load(&s->budget.live);
     v->owned_device_bytes = v->peak_owned_device_bytes = bytes;
     v->unknown_fields = UINT64_C(1) | SI_UNKNOWN_VENDOR;
-    return SQ_OK;
+    return IFN_OK;
 }
 
-sq_status si_session_create(sq_infer_model *m, const sq_infer_session_config_v1 *c,
-                            sq_infer_session **out, sq_infer_error_v1 *e) {
+ifn_status si_session_create(ifn_infer_model *m, const ifn_infer_session_config_v1 *c,
+                             ifn_infer_session **out, ifn_infer_error_v1 *e) {
     if (out)
         *out = NULL;
-    sq_status rc = si_input(c, sizeof *c);
+    ifn_status rc = si_input(c, sizeof *c);
     if (rc || !out || !m)
-        return si_error(e, rc ? rc : SQ_INVALID_ARGUMENT, SQ_STAGE_VALIDATE,
+        return si_error(e, rc ? rc : IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE,
                         "invalid session arguments");
     rc = si_no_extensions(c->extensions);
     if (rc)
-        return si_native_error(e, rc, SQ_STAGE_VALIDATE);
-    sq_session_config sc = SQ_SESSION_CONFIG_INIT;
+        return si_native_error(e, rc, IFN_STAGE_VALIDATE);
+    ifn_session_config sc = IFN_SESSION_CONFIG_INIT;
     if (c->context_tokens < 64 || c->context_tokens > 1048576 ||
-        c->max_owned_host_bytes < sizeof(sq_infer_session))
-        return si_error(e, SQ_LIMIT, SQ_STAGE_VALIDATE, "session context or host budget invalid");
+        c->max_owned_host_bytes < sizeof(ifn_infer_session))
+        return si_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE, "session context or host budget invalid");
     sc.context_tokens = (uint32_t)c->context_tokens;
     const char *profiles[] = {"bf16-eager", "fp8-eager", "q4-eager",
                               "bf16-graph", "fp8-graph", "q4-graph"};
@@ -39,17 +39,17 @@ sq_status si_session_create(sq_infer_model *m, const sq_infer_session_config_v1 
             profile = profiles[i];
         }
     if (!profile)
-        return si_error(e, SQ_UNSUPPORTED, SQ_STAGE_VALIDATE, "unknown execution profile");
+        return si_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE, "unknown execution profile");
     if (!si_lock(&m->busy))
-        return si_error(e, SQ_BUSY, SQ_STAGE_VALIDATE, "model busy");
-    if (m->state != SQ_HANDLE_READY || m->children == UINT32_MAX) {
+        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "model busy");
+    if (m->state != IFN_HANDLE_READY || m->children == UINT32_MAX) {
         si_unlock(&m->busy);
-        return si_error(e, SQ_INFER_NOT_READY, SQ_STAGE_VALIDATE, "model not ready");
+        return si_error(e, IFN_INFER_NOT_READY, IFN_STAGE_VALIDATE, "model not ready");
     }
-    sq_infer_session *s = si_alloc(&m->allocator, sizeof *s);
+    ifn_infer_session *s = si_alloc(&m->allocator, sizeof *s);
     if (!s) {
         si_unlock(&m->busy);
-        return si_error(e, SQ_OUT_OF_MEMORY, SQ_STAGE_VALIDATE, "allocate session");
+        return si_error(e, IFN_OUT_OF_MEMORY, IFN_STAGE_VALIDATE, "allocate session");
     }
     memset(s, 0, sizeof *s);
     s->model = m;
@@ -61,104 +61,106 @@ sq_status si_session_create(sq_infer_model *m, const sq_infer_session_config_v1 
     m->children++;
     si_unlock(&m->busy);
     *out = s;
-    return si_error(e, SQ_OK, 0, NULL);
+    return si_error(e, IFN_OK, 0, NULL);
 }
 
-sq_status si_session_plan(sq_infer_session *s, sq_infer_memory_plan_v1 *out, sq_infer_error_v1 *e) {
+ifn_status si_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1 *out,
+                           ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, SQ_INVALID_ARGUMENT, SQ_STAGE_VALIDATE, "missing session");
+        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
     if (!si_lock(&s->busy))
-        return si_error(e, SQ_BUSY, SQ_STAGE_VALIDATE, "session busy");
-    sq_infer_memory_plan_v1 v;
-    sq_status rc = plan_locked(s, &v);
+        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+    ifn_infer_memory_plan_v1 v;
+    ifn_status rc = plan_locked(s, &v);
     if (!rc)
         rc = si_output(out, &v, sizeof v);
     si_unlock(&s->busy);
-    return si_native_error(e, rc, SQ_STAGE_VALIDATE);
+    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-sq_status si_session_prepare(sq_infer_session *s, sq_infer_error_v1 *e) {
+ifn_status si_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, SQ_INVALID_ARGUMENT, SQ_STAGE_PREPARE, "missing session");
+        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_PREPARE, "missing session");
     if (!si_lock(&s->busy))
-        return si_error(e, SQ_BUSY, SQ_STAGE_PREPARE, "session busy");
-    sq_status rc = s->state == SQ_HANDLE_CREATED ? SQ_OK : SQ_INFER_INVALID_STATE;
-    sq_infer_memory_plan_v1 v;
+        return si_error(e, IFN_BUSY, IFN_STAGE_PREPARE, "session busy");
+    ifn_status rc = s->state == IFN_HANDLE_CREATED ? IFN_OK : IFN_INFER_INVALID_STATE;
+    ifn_infer_memory_plan_v1 v;
     if (!rc)
         rc = plan_locked(s, &v);
     if (!rc && v.peak_owned_device_bytes > s->device_budget)
-        rc = SQ_LIMIT;
+        rc = IFN_LIMIT;
     if (!rc) {
-        s->state = SQ_HANDLE_PREPARING;
-        rc = sq_session_create(s->model->weights, &s->config, &s->allocator, &s->native);
-        s->state = rc ? ((rc == SQ_BUSY && !s->native) ? SQ_HANDLE_CREATED : SQ_HANDLE_FAILED)
-                      : SQ_HANDLE_READY;
+        s->state = IFN_HANDLE_PREPARING;
+        rc = ifn_session_create(s->model->weights, &s->config, &s->allocator, &s->native);
+        s->state = rc ? ((rc == IFN_BUSY && !s->native) ? IFN_HANDLE_CREATED : IFN_HANDLE_FAILED)
+                      : IFN_HANDLE_READY;
     }
     si_unlock(&s->busy);
-    return si_native_error(e, rc, SQ_STAGE_PREPARE);
+    return si_native_error(e, rc, IFN_STAGE_PREPARE);
 }
 
-sq_status si_session_info(sq_infer_session *s, sq_infer_session_info_v1 *out,
-                          sq_infer_error_v1 *e) {
+ifn_status si_session_info(ifn_infer_session *s, ifn_infer_session_info_v1 *out,
+                           ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, SQ_INVALID_ARGUMENT, SQ_STAGE_VALIDATE, "missing session");
+        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
     if (!si_lock(&s->busy))
-        return si_error(e, SQ_BUSY, SQ_STAGE_VALIDATE, "session busy");
-    sq_infer_session_info_v1 v = {0};
+        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+    ifn_infer_session_info_v1 v = {0};
     v.state = s->state;
     v.max_active_runs = 1;
     v.context_tokens = s->config.context_tokens;
-    v.enabled_features = s->state == SQ_HANDLE_READY ? SI_FEATURES & ~SQ_INFER_CAP_PREFIX_CACHE : 0;
+    v.enabled_features =
+        s->state == IFN_HANDLE_READY ? SI_FEATURES & ~IFN_INFER_CAP_PREFIX_CACHE : 0;
     if (!s->model->weights_config.with_mtp)
-        v.enabled_features &= ~SQ_INFER_CAP_SPECULATION;
+        v.enabled_features &= ~IFN_INFER_CAP_SPECULATION;
     if (s->cache_scope_bytes)
-        v.enabled_features |= SQ_INFER_CAP_PREFIX_CACHE;
+        v.enabled_features |= IFN_INFER_CAP_PREFIX_CACHE;
     v.resolved_execution_profile = si_text(s->profile);
-    sq_status rc = si_output(out, &v, sizeof v);
+    ifn_status rc = si_output(out, &v, sizeof v);
     si_unlock(&s->busy);
-    return si_native_error(e, rc, SQ_STAGE_VALIDATE);
+    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-sq_status si_session_clear(sq_infer_session *s, sq_infer_error_v1 *e) {
+ifn_status si_session_clear(ifn_infer_session *s, ifn_infer_error_v1 *e) {
     if (!s)
-        return si_error(e, SQ_INVALID_ARGUMENT, SQ_STAGE_VALIDATE, "missing session");
+        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
     if (!si_lock(&s->busy))
-        return si_error(e, SQ_BUSY, SQ_STAGE_VALIDATE, "session busy");
-    sq_status rc =
-        s->state == SQ_HANDLE_READY ? sq_session_prefix_cache(s->native, 0) : SQ_INFER_NOT_READY;
+        return si_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
+    ifn_status rc =
+        s->state == IFN_HANDLE_READY ? ifn_session_prefix_cache(s->native, 0) : IFN_INFER_NOT_READY;
     if (!rc)
         s->cache_scope_bytes = 0;
     si_unlock(&s->busy);
-    return si_native_error(e, rc, SQ_STAGE_VALIDATE);
+    return si_native_error(e, rc, IFN_STAGE_VALIDATE);
 }
 
-sq_status si_session_close(sq_infer_session **ptr, sq_infer_error_v1 *e) {
+ifn_status si_session_close(ifn_infer_session **ptr, ifn_infer_error_v1 *e) {
     if (!ptr)
-        return si_error(e, SQ_INVALID_ARGUMENT, SQ_STAGE_CLOSE, "missing handle pointer");
-    sq_infer_session *s = *ptr;
+        return si_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_CLOSE, "missing handle pointer");
+    ifn_infer_session *s = *ptr;
     if (!s)
-        return si_error(e, SQ_OK, 0, NULL);
+        return si_error(e, IFN_OK, 0, NULL);
     if (!si_lock(&s->busy))
-        return si_error(e, SQ_BUSY, SQ_STAGE_CLOSE, "session busy");
+        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session busy");
     if (s->children) {
         si_unlock(&s->busy);
-        return si_error(e, SQ_BUSY, SQ_STAGE_CLOSE, "session has requests");
+        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "session has requests");
     }
-    sq_infer_model *m = s->model;
+    ifn_infer_model *m = s->model;
     if (!si_lock(&m->busy)) {
         si_unlock(&s->busy);
-        return si_error(e, SQ_BUSY, SQ_STAGE_CLOSE, "model busy");
+        return si_error(e, IFN_BUSY, IFN_STAGE_CLOSE, "model busy");
     }
-    s->state = SQ_HANDLE_CLOSING;
-    sq_status rc = sq_session_destroy(&s->native);
+    s->state = IFN_HANDLE_CLOSING;
+    ifn_status rc = ifn_session_destroy(&s->native);
     if (rc) {
         si_unlock(&m->busy);
         si_unlock(&s->busy);
-        return si_native_error(e, rc, SQ_STAGE_CLOSE);
+        return si_native_error(e, rc, IFN_STAGE_CLOSE);
     }
     m->children--;
     si_free(&m->allocator, s);
     *ptr = NULL;
     si_unlock(&m->busy);
-    return si_error(e, SQ_OK, 0, NULL);
+    return si_error(e, IFN_OK, 0, NULL);
 }

@@ -20,15 +20,40 @@ Validation recorded on 2026-11-26. The modular implementation remains canonical.
 - CUDA-enabled amalgamated native acceptance executable and CUDA runtime archive
   built on core using the existing native kernel toolchain.
 
-## Pending native qualification
+## Native qualification after the Inkleberry Finn rename
 
-No inference request was executed for the new amalgamated host or extracted GPU
-SDK. The idle-device guard refused the run: both GPUs were occupied by unrelated
-vLLM workloads using approximately 82 GiB each. Those workloads were left intact.
-Compilation alone does not establish numerical or generation equivalence.
+Executed on core on 2026-11-26 with CUDA 13.5 / sm_120a and the external
+`inkling-2-mini-c9d028302cd0` checkpoint. The selected idle device was GPU 1,
+`GPU-e5f713d1-46ae-9f99-c16d-65de9e9df32a`, an NVIDIA RTX PRO 6000 Blackwell
+Max-Q Workstation Edition. GPU 0's existing inference workload was untouched.
+The earlier busy-GPU blockage is resolved for this qualification.
 
-When a device is available, run the guarded native acceptance and
-`make native-release-check MODEL_DIR=/external/model SQ_TEST_GPU_UUID=GPU-...`
-with the documented CUDA toolchain. This checks extracted source, GPU runtime and
-embedding artifacts. Keep the distribution change in draft until that native
-qualification succeeds. Model inputs remain external to every package.
+```sh
+INKLEBERRY_TEST_GPU_UUID=GPU-e5f713d1-46ae-9f99-c16d-65de9e9df32a \
+  make native-release-check \
+  MODEL_DIR=/data/models/safetensors/inkling-2-mini-c9d028302cd0
+```
+
+The helper rebuilt the extracted source, produced/extracted the GPU runtime and
+embedding archives, then ran the real native acceptance suite through both the
+shared modular provider and the independently compiled amalgamated host linked
+to the packaged CUDA archive. Both passed: answer parity, adaptive/lookup modes,
+prefix reuse, independent streams, BUSY handling, stale/active cancellation,
+cache invalidation, scope isolation, stop filtering and replay. The packaged
+`inkleberry-generate` CLI also produced the expected arithmetic answer.
+
+Machine-readable result:
+
+```json
+{"extracted_source_native": true, "extracted_amalgamation_native": true, "packaged_cli": true, "reference_files_required": false}
+```
+
+The controller's run log is `/data/scratch/inkleberry-native-release-20261126.log`
+on core. The shared provider exports `ifn_infer_get_api@@IFN_INFER_1.0` with the
+remaining implementation hidden. All 77 canonical implementation/adapter/test
+C files were checked for unchanged logic tokens modulo the deliberate rename
+and formatting. CUDA pins, LICENSE and NOTICE are unchanged.
+
+This is functional qualification of the renamed distributions on the listed
+hardware/model, not a new performance campaign or a claim about other models.
+Model inputs remain external to every package.

@@ -12,7 +12,7 @@
             return (int)e;                                                                         \
     } while (0)
 
-extern "C" int sq_cuda_enter(int device, sq_device_scope *old) {
+extern "C" int ifn_cuda_enter(int device, ifn_device_scope *old) {
     CUcontext context = nullptr;
     CUresult before = cuCtxGetCurrent(&context);
     if (before != CUDA_SUCCESS && before != CUDA_ERROR_NOT_INITIALIZED)
@@ -26,19 +26,19 @@ extern "C" int sq_cuda_enter(int device, sq_device_scope *old) {
     return major == 12 && minor == 0 ? 0 : (int)cudaErrorNotSupported;
 }
 
-extern "C" int sq_cuda_leave(const sq_device_scope *old) {
+extern "C" int ifn_cuda_leave(const ifn_device_scope *old) {
     cudaError_t runtime = cudaSetDevice(old->device);
     CUresult driver = cuCtxSetCurrent(static_cast<CUcontext>(old->context));
     return runtime != cudaSuccess ? (int)runtime : (int)driver;
 }
 
-extern "C" int sq_cuda_available(size_t *bytes) {
+extern "C" int ifn_cuda_available(size_t *bytes) {
     size_t total;
     return (int)cudaMemGetInfo(bytes, &total);
 }
 
-extern "C" int sq_cuda_pack(const void *src, void *dst, void *scales, void *amax, int rows,
-                            int cols, int kind, float *scale, void *raw_stream) {
+extern "C" int ifn_cuda_pack(const void *src, void *dst, void *scales, void *amax, int rows,
+                             int cols, int kind, float *scale, void *raw_stream) {
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     if (kind == 1) {
         z_quant_bf16_to_fp8_kernel<<<rows, 256, 0, stream>>>(
@@ -63,8 +63,8 @@ extern "C" int sq_cuda_pack(const void *src, void *dst, void *scales, void *amax
     return (int)cudaGetLastError();
 }
 
-extern "C" int sq_cuda_expert(const void *a, const void *b, void *out, void *scales, void *outer,
-                              int e, int rows, int cols, void *raw_stream) {
+extern "C" int ifn_cuda_expert(const void *a, const void *b, void *out, void *scales, void *outer,
+                               int e, int rows, int cols, void *raw_stream) {
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
     z_mxfp8_expert_amax_kernel<<<e, 256, 0, stream>>>(static_cast<const uint8_t *>(a),
                                                       static_cast<const uint8_t *>(b),
@@ -78,15 +78,15 @@ extern "C" int sq_cuda_expert(const void *a, const void *b, void *out, void *sca
     return (int)cudaGetLastError();
 }
 
-extern "C" int sq_cuda_rnn(const void *src, void *a, void *b, void *c, void *raw_stream) {
+extern "C" int ifn_cuda_rnn(const void *src, void *a, void *b, void *c, void *raw_stream) {
     z_split_dspark_rnn_kernel<<<768, 256, 0, static_cast<cudaStream_t>(raw_stream)>>>(
         static_cast<const __nv_bfloat16 *>(src), static_cast<__nv_bfloat16 *>(a),
         static_cast<__nv_bfloat16 *>(b), static_cast<__nv_bfloat16 *>(c));
     return (int)cudaGetLastError();
 }
 
-extern "C" int sq_cuda_fold(const void *u, const void *h, const void *b, void *fb, void *fw,
-                            int vocab, void *raw_stream) {
+extern "C" int ifn_cuda_fold(const void *u, const void *h, const void *b, void *fb, void *fw,
+                             int vocab, void *raw_stream) {
     if (vocab < 1 || vocab > 200058)
         return (int)cudaErrorInvalidValue;
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
@@ -101,7 +101,7 @@ extern "C" int sq_cuda_fold(const void *u, const void *h, const void *b, void *f
     return (int)cudaGetLastError();
 }
 
-extern "C" int sq_cuda_launch_status(void) {
+extern "C" int ifn_cuda_launch_status(void) {
     return (int)cudaGetLastError();
 }
 
@@ -109,7 +109,7 @@ extern "C" int sq_cuda_launch_status(void) {
  * Reuse the original selector kernel; no C++ heap allocation or deletion. */
 #include <new>
 
-struct sq_adaptive_owner {
+struct ifn_adaptive_owner {
     cudaGraph_t root = nullptr, extra = nullptr, active_graph = nullptr;
     cudaGraphExec_t exec = nullptr;
     cudaGraphConditionalHandle condition{};
@@ -118,15 +118,15 @@ struct sq_adaptive_owner {
     bool capturing = false;
 };
 
-extern "C" size_t sq_adaptive_bytes(void) {
-    return sizeof(sq_adaptive_owner);
+extern "C" size_t ifn_adaptive_bytes(void) {
+    return sizeof(ifn_adaptive_owner);
 }
 
-extern "C" void sq_adaptive_init(void *p) {
-    new (p) sq_adaptive_owner();
+extern "C" void ifn_adaptive_init(void *p) {
+    new (p) ifn_adaptive_owner();
 }
 
-static int sq_end_adaptive_capture(sq_adaptive_owner *a, int original) {
+static int ifn_end_adaptive_capture(ifn_adaptive_owner *a, int original) {
     cudaGraph_t ended = nullptr;
     cudaError_t status = cudaStreamEndCapture(a->capture_stream, &ended);
     if (status == cudaSuccess)
@@ -142,12 +142,12 @@ static int sq_end_adaptive_capture(sq_adaptive_owner *a, int original) {
     return original ? original : (int)status;
 }
 
-extern "C" int sq_adaptive_prepare(void *state, const int32_t *anchor, const int32_t *drafts,
-                                   const float *confidence, float threshold, int32_t *tokens,
-                                   int32_t *width, const int32_t *accepted, int32_t *host_accepted,
-                                   const int32_t *count, int32_t *host_count, int32_t *host_width,
-                                   void *raw_stream) {
-    auto *a = static_cast<sq_adaptive_owner *>(state);
+extern "C" int ifn_adaptive_prepare(void *state, const int32_t *anchor, const int32_t *drafts,
+                                    const float *confidence, float threshold, int32_t *tokens,
+                                    int32_t *width, const int32_t *accepted, int32_t *host_accepted,
+                                    const int32_t *count, int32_t *host_count, int32_t *host_width,
+                                    void *raw_stream) {
+    auto *a = static_cast<ifn_adaptive_owner *>(state);
     if (a->root || a->exec || a->extra || a->capturing)
         return (int)cudaErrorInvalidResourceHandle;
     cudaStream_t stream = static_cast<cudaStream_t>(raw_stream);
@@ -162,7 +162,7 @@ extern "C" int sq_adaptive_prepare(void *state, const int32_t *anchor, const int
     do {                                                                                           \
         cudaError_t e = (call);                                                                    \
         if (e != cudaSuccess)                                                                      \
-            return sq_end_adaptive_capture(a, (int)e);                                             \
+            return ifn_end_adaptive_capture(a, (int)e);                                            \
     } while (0)
     z_adaptive_select_width_kernel<<<1, 1, 0, stream>>>(anchor, drafts, confidence, threshold,
                                                         tokens, width, a->condition);
@@ -191,11 +191,11 @@ extern "C" int sq_adaptive_prepare(void *state, const int32_t *anchor, const int
     CAPTURE_TRY(
         cudaMemcpyAsync(host_width, width, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
 #undef CAPTURE_TRY
-    return sq_end_adaptive_capture(a, 0);
+    return ifn_end_adaptive_capture(a, 0);
 }
 
-extern "C" int sq_adaptive_branch_begin(void *state, int branch, void *raw_stream) {
-    auto *a = static_cast<sq_adaptive_owner *>(state);
+extern "C" int ifn_adaptive_branch_begin(void *state, int branch, void *raw_stream) {
+    auto *a = static_cast<ifn_adaptive_owner *>(state);
     if (branch < 0 || branch > 2 || a->capturing || !a->root || !a->bodies[branch])
         return (int)cudaErrorInvalidValue;
     a->capture_stream = static_cast<cudaStream_t>(raw_stream);
@@ -206,30 +206,30 @@ extern "C" int sq_adaptive_branch_begin(void *state, int branch, void *raw_strea
     return 0;
 }
 
-extern "C" int sq_adaptive_branch_end(void *state) {
-    auto *a = static_cast<sq_adaptive_owner *>(state);
-    return a->capturing ? sq_end_adaptive_capture(a, 0) : (int)cudaErrorInvalidResourceHandle;
+extern "C" int ifn_adaptive_branch_end(void *state) {
+    auto *a = static_cast<ifn_adaptive_owner *>(state);
+    return a->capturing ? ifn_end_adaptive_capture(a, 0) : (int)cudaErrorInvalidResourceHandle;
 }
 
-extern "C" int sq_adaptive_instantiate(void *state) {
-    auto *a = static_cast<sq_adaptive_owner *>(state);
+extern "C" int ifn_adaptive_instantiate(void *state) {
+    auto *a = static_cast<ifn_adaptive_owner *>(state);
     if (a->capturing || a->exec || !a->root)
         return (int)cudaErrorInvalidResourceHandle;
     return (int)cudaGraphInstantiate(&a->exec, a->root, 0);
 }
 
-extern "C" int sq_adaptive_launch(void *state, void *stream) {
-    auto *a = static_cast<sq_adaptive_owner *>(state);
+extern "C" int ifn_adaptive_launch(void *state, void *stream) {
+    auto *a = static_cast<ifn_adaptive_owner *>(state);
     if (!a->exec)
         return (int)cudaErrorInvalidResourceHandle;
     return (int)cudaGraphLaunch(a->exec, static_cast<cudaStream_t>(stream));
 }
 
-extern "C" int sq_adaptive_cleanup(void *state) {
-    auto *a = static_cast<sq_adaptive_owner *>(state);
+extern "C" int ifn_adaptive_cleanup(void *state) {
+    auto *a = static_cast<ifn_adaptive_owner *>(state);
     int first = 0;
     if (a->capturing) {
-        first = sq_end_adaptive_capture(a, 0);
+        first = ifn_end_adaptive_capture(a, 0);
         if (a->capturing)
             return first ? first : (int)cudaErrorStreamCaptureInvalidated;
     }
@@ -252,7 +252,7 @@ extern "C" int sq_adaptive_cleanup(void *state) {
     return first;
 }
 
-extern "C" int sq_adaptive_live(const void *state) {
-    const auto *a = static_cast<const sq_adaptive_owner *>(state);
+extern "C" int ifn_adaptive_live(const void *state) {
+    const auto *a = static_cast<const ifn_adaptive_owner *>(state);
     return a->root || a->exec || a->extra || a->capturing;
 }

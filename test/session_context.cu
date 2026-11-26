@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
-#include "sq_engine.h"
+#include "ifn_engine.h"
 #include <cuda.h>
 
-extern "C" int sq_ar_test_context(sq_session *session) {
+extern "C" int ifn_ar_test_context(ifn_session *session) {
     CUcontext old = nullptr, owned = nullptr, current = nullptr;
     CUdevice device;
     CUdeviceptr sentinel = 0;
@@ -14,7 +14,7 @@ extern "C" int sq_ar_test_context(sq_session *session) {
     if (cuMemAlloc(&sentinel, sizeof bytes) != CUDA_SUCCESS ||
         cuMemsetD8(sentinel, 0xa5, sizeof bytes) != CUDA_SUCCESS)
         failed = 1;
-    if (!failed && sq_session_reset(session) != SQ_OK)
+    if (!failed && ifn_session_reset(session) != IFN_OK)
         failed = 1;
     if (cuCtxGetCurrent(&current) != CUDA_SUCCESS || current != owned ||
         cuMemcpyDtoH(bytes, sentinel, sizeof bytes) != CUDA_SUCCESS)

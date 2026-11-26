@@ -13,16 +13,16 @@ static uint64_t hash4(int32_t a, int32_t b, int32_t c, int32_t d) {
     return h ^ (h >> 31);
 }
 
-static int32_t at(const sq_lookup *s, uint32_t i) {
+static int32_t at(const ifn_lookup *s, uint32_t i) {
     return s->history[i & 8191];
 }
 
-static uint64_t suffix(const sq_lookup *s) {
+static uint64_t suffix(const ifn_lookup *s) {
     uint32_t n = s->count;
     return hash4(at(s, n - 4), at(s, n - 3), at(s, n - 2), at(s, n - 1));
 }
 
-void sq_lookup_reset(sq_lookup *s) {
+void ifn_lookup_reset(ifn_lookup *s) {
     s->count = 0;
     s->generation = (uint16_t)(s->generation + 1u);
     if (!s->generation) {
@@ -31,7 +31,7 @@ void sq_lookup_reset(sq_lookup *s) {
     }
 }
 
-void sq_lookup_push(sq_lookup *s, int32_t token) {
+void ifn_lookup_push(ifn_lookup *s, int32_t token) {
     uint32_t i = s->count;
     s->history[i & 8191] = token;
     s->count = i + 1;
@@ -50,7 +50,7 @@ void sq_lookup_push(sq_lookup *s, int32_t token) {
     }
 }
 
-bool sq_lookup_match(const sq_lookup *s, int32_t out[7]) {
+bool ifn_lookup_match(const ifn_lookup *s, int32_t out[7]) {
     uint32_t n = s->count;
     if (n < 24)
         return false;

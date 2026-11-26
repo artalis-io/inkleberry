@@ -28,25 +28,25 @@ def main():
     p.add_argument('--reference', action='store_true')
     args = p.parse_args()
     lib = c.CDLL(str(args.library.resolve()))
-    lib.sq_tokenizer_open.argtypes = [c.c_char_p, c.c_void_p, c.POINTER(c.c_void_p)]
-    lib.sq_tokenizer_open.restype = c.c_uint32
-    lib.sq_tokenizer_close.argtypes = [c.c_void_p]
-    lib.sq_tokenizer_scratch_create.argtypes = [c.c_void_p, c.POINTER(c.c_void_p)]
-    lib.sq_tokenizer_scratch_create.restype = c.c_uint32
-    lib.sq_tokenizer_scratch_destroy.argtypes = [c.c_void_p]
-    lib.sq_tokenizer_encode.argtypes = [c.c_void_p, c.c_char_p, c.c_size_t, c.c_uint32, c.c_void_p, c.POINTER(c.c_int32), c.c_size_t, c.POINTER(c.c_size_t)]
-    lib.sq_tokenizer_encode.restype = c.c_uint32
-    lib.sq_tokenizer_decode.argtypes = [c.c_void_p, c.c_int32, c.c_uint32, c.POINTER(c.c_void_p), c.POINTER(c.c_size_t)]
-    lib.sq_tokenizer_decode.restype = c.c_uint32
-    lib.sq_render_user_prompt.argtypes = [c.c_char_p, c.c_size_t, c.c_uint32, c.c_void_p, c.c_size_t, c.POINTER(c.c_size_t)]
-    lib.sq_render_user_prompt.restype = c.c_uint32
-    lib.sq_last_error.restype = c.c_char_p
+    lib.ifn_tokenizer_open.argtypes = [c.c_char_p, c.c_void_p, c.POINTER(c.c_void_p)]
+    lib.ifn_tokenizer_open.restype = c.c_uint32
+    lib.ifn_tokenizer_close.argtypes = [c.c_void_p]
+    lib.ifn_tokenizer_scratch_create.argtypes = [c.c_void_p, c.POINTER(c.c_void_p)]
+    lib.ifn_tokenizer_scratch_create.restype = c.c_uint32
+    lib.ifn_tokenizer_scratch_destroy.argtypes = [c.c_void_p]
+    lib.ifn_tokenizer_encode.argtypes = [c.c_void_p, c.c_char_p, c.c_size_t, c.c_uint32, c.c_void_p, c.POINTER(c.c_int32), c.c_size_t, c.POINTER(c.c_size_t)]
+    lib.ifn_tokenizer_encode.restype = c.c_uint32
+    lib.ifn_tokenizer_decode.argtypes = [c.c_void_p, c.c_int32, c.c_uint32, c.POINTER(c.c_void_p), c.POINTER(c.c_size_t)]
+    lib.ifn_tokenizer_decode.restype = c.c_uint32
+    lib.ifn_render_user_prompt.argtypes = [c.c_char_p, c.c_size_t, c.c_uint32, c.c_void_p, c.c_size_t, c.POINTER(c.c_size_t)]
+    lib.ifn_render_user_prompt.restype = c.c_uint32
+    lib.ifn_last_error.restype = c.c_char_p
     t, scratch = c.c_void_p(), c.c_void_p()
-    if lib.sq_tokenizer_open(bytes(args.model/'tokenizer.json'), None, c.byref(t)):
-        raise SystemExit(lib.sq_last_error().decode())
-    if lib.sq_tokenizer_scratch_create(None, c.byref(scratch)):
-        lib.sq_tokenizer_close(t)
-        raise SystemExit(lib.sq_last_error().decode())
+    if lib.ifn_tokenizer_open(bytes(args.model/'tokenizer.json'), None, c.byref(t)):
+        raise SystemExit(lib.ifn_last_error().decode())
+    if lib.ifn_tokenizer_scratch_create(None, c.byref(scratch)):
+        lib.ifn_tokenizer_close(t)
+        raise SystemExit(lib.ifn_last_error().decode())
     reference = None
     if args.reference:
         from tokenizers import Tokenizer
@@ -63,31 +63,31 @@ def main():
         entries += [(entry['id'],entry['content'].encode(),True) for entry in metadata['added_tokens']]
         for token,expected,special in entries:
             data,n=c.c_void_p(),c.c_size_t()
-            if lib.sq_tokenizer_decode(t,token,0,c.byref(data),c.byref(n)) or c.string_at(data,n.value)!=expected:
+            if lib.ifn_tokenizer_decode(t,token,0,c.byref(data),c.byref(n)) or c.string_at(data,n.value)!=expected:
                 raise SystemExit('Vocabulary byte mapping mismatch at ID '+str(token))
-            if special and (lib.sq_tokenizer_decode(t,token,1,c.byref(data),c.byref(n)) or n.value):
+            if special and (lib.ifn_tokenizer_decode(t,token,1,c.byref(data),c.byref(n)) or n.value):
                 raise SystemExit('Special-token skip mismatch')
             vocab_checked+=1
     except BaseException:
-        lib.sq_tokenizer_scratch_destroy(scratch)
-        lib.sq_tokenizer_close(t)
+        lib.ifn_tokenizer_scratch_destroy(scratch)
+        lib.ifn_tokenizer_close(t)
         raise
     rows = []
     template_zig = []
     try:
-        with tempfile.TemporaryDirectory(prefix='sq-tokenizer-') as folder:
+        with tempfile.TemporaryDirectory(prefix='ifn-tokenizer-') as folder:
             for i, text in enumerate(CASES):
                 raw = text.encode()
                 # Every output token consumes at least one input byte.
                 ids = (c.c_int32 * max(len(raw), 1))()
                 needed = c.c_size_t()
-                if lib.sq_tokenizer_encode(t, raw, len(raw), 1, scratch, ids, len(ids), c.byref(needed)):
-                    raise SystemExit(lib.sq_last_error().decode())
+                if lib.ifn_tokenizer_encode(t, raw, len(raw), 1, scratch, ids, len(ids), c.byref(needed)):
+                    raise SystemExit(lib.ifn_last_error().decode())
                 actual = list(ids[:needed.value])
                 restored = bytearray()
                 for token in actual:
                     data, n = c.c_void_p(), c.c_size_t()
-                    if lib.sq_tokenizer_decode(t, token, 0, c.byref(data), c.byref(n)):
+                    if lib.ifn_tokenizer_decode(t, token, 0, c.byref(data), c.byref(n)):
                         raise SystemExit('decode failed')
                     restored += c.string_at(data, n.value)
                 row = {'case': i, 'bytes': len(raw), 'tokens': len(actual),
@@ -108,12 +108,12 @@ def main():
                 expected = ('<|message_system|><|content_text|>Thinking effort level: '+level+'<|end_message|><|message_user|><|content_text|>').encode()+text+b'<|end_message|>'
                 needed = c.c_size_t()
                 out = c.create_string_buffer(len(expected))
-                if lib.sq_render_user_prompt(text,len(text),effort,out,len(out),c.byref(needed)) or out.raw != expected:
+                if lib.ifn_render_user_prompt(text,len(text),effort,out,len(out),c.byref(needed)) or out.raw != expected:
                     raise SystemExit('template mismatch')
                 if args.zig_oracle:
                     ids=(c.c_int32*len(expected))()
                     n=c.c_size_t()
-                    if lib.sq_tokenizer_encode(t,out.raw,len(out.raw),1,scratch,ids,len(ids),c.byref(n)):
+                    if lib.ifn_tokenizer_encode(t,out.raw,len(out.raw),1,scratch,ids,len(ids),c.byref(n)):
                         raise SystemExit('template encoding failed')
                     path=Path(folder)/'template.txt';path.write_bytes(text)
                     label=['none','minimal','low','medium','high','max'][effort]
@@ -123,8 +123,8 @@ def main():
                     template_zig.append(r.returncode==0 and list(ids[:n.value])==wanted)
 
     finally:
-        lib.sq_tokenizer_scratch_destroy(scratch)
-        lib.sq_tokenizer_close(t)
+        lib.ifn_tokenizer_scratch_destroy(scratch)
+        lib.ifn_tokenizer_close(t)
     print(json.dumps({'vocabulary_entries_matched': vocab_checked, 'tokenizer_cases': rows, 'template_efforts_matched': 6, 'template_zig': template_zig}, indent=2))
     if not all(template_zig):raise SystemExit('Zig template token mismatch')
     if not all(r['roundtrip'] and r.get('zig', True) and r.get('provider', True) for r in rows):

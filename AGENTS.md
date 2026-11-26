@@ -1,37 +1,111 @@
-# C inference library engineering contract
+# Inkleberry Finn — agent engineering guide
 
-Read `reference/design/c-port-design.md` and `UPSTREAM.json` first. This project is a C11 inference
-library retaining the pinned CUDA C++20 implementation. `artalis` is the project
-branch; `main` preserves the upstream snapshot. Do not silently update kernels
-during library maintenance.
+Inkleberry Finn is a correctness-first C11 library and native GPU inference host
+for Inkling-2-Mini. Follow the small-library engineering approach used in Jev Bush:
+explicit ownership, narrow typed interfaces, modular reviewable code, generated
+amalgamation, installed-consumer checks and evidence before performance claims.
+Do not import Jev Bush's model algorithms or imply its CPU inference applies here.
 
-- Preserve Apache-2.0 LICENSE/NOTICE and translation attribution.
-- Public C interfaces use the `sq_` prefix, opaque owned handles, explicit status
-  returns, documented lifetime/threading contracts and cleared error outputs.
-- No exits, aborts, assertions on external input, process-global device ownership,
-  or hidden allocation outside the injected allocator in new library code.
-- Check integer/shape/offset/allocation arithmetic before use. Bound parsers and
-  fuzz malformed input. Validate tensor roles/shapes before future device upload.
-- Keep the pinned Zig host as an optional oracle. `make generated-check` verifies
-  production pins and schema-generated artifacts; `make reference-check` also
-  verifies pinned reference bytes. Generate CUDA declarations from `abi/cuda.json`
-  through `tools/generate_cuda_abi.py`; never hand-edit generated declarations.
-- Follow Jev Bush's C engineering practices, not its model algorithms. Keep
-  modular sources canonical; generate the embedding distribution with `make amalgamation`.
-- Run `make check install-check lint`, ASan/UBSan and fuzz smoke for host changes.
-  clang-format 18 applies only to handwritten implementation files. CPU CI cannot prove
-  numerical inference correctness or CUDA resource safety.
-- GPU tests require an explicitly selected idle device via `SQ_TEST_GPU_UUID`.
-  Do not terminate other workloads, alter power/clock settings, install global
-  toolchains or modify existing inference services. Use isolated build paths.
-- Never check in checkpoints, keys or generated bulk evaluation outputs.
-- Do not claim C generation, speedups or quality parity until the actual C
-  inference path is implemented and model-backed gates have run.
+## Read first
 
-Production C sources are directly under `src/`, with checked adapters in
-`src/cuda/`. Pinned Zig sources/build script live under `reference/upstream/`;
-resolve original upstream names through `UPSTREAM.json`'s `relocated_files` map.
-Keep upstream file hashes and historical provenance unchanged when moving files.
+- `README.md`, `docs/build.md`, `docs/inference-abi.md` and `docs/embedding.md`.
+- `UPSTREAM.json` and `THIRD_PARTY.md` before touching retained dependencies.
+- `reference/design/c-port-design.md` for historical port decisions. Historical
+  names in `reference/` are intentional; current public contracts take precedence.
 
-Release artifacts use explicit allowlists in `config/package.json`. Keep reference
-material out of production packages and regenerate `dist/` after canonical changes.
+`artalis` is the development/release branch. `main` preserves the upstream
+snapshot. Use focused feature branches; never rewrite the preserved snapshot.
+
+## Architecture and naming
+
+| Path | Responsibility |
+| --- | --- |
+| `include/ifn*.h` | Public API, types and ownership contracts |
+| `src/` | Canonical C host, readers, tokenizer, inference and execution state |
+| `src/cuda/` | Checked adapters around the retained native implementation |
+| `cuda/` | Pinned CUDA C++20 kernels and bridge |
+| `abi/cuda.json` | Internal bridge schema; generated declarations/layout checks |
+| `config/sources.mk` | Canonical source groups for modular/amalgamated builds |
+| `dist/ifn.h`, `dist/ifn.c` | Generated embedding distribution |
+| `cli/`, `examples/` | Thin clients of the library |
+| `test/`, `fuzz/` | Public consumers, regression tests and malformed-input checks |
+| `tools/` | Maintained Python standard-library build/validation helpers |
+| `reference/` | Optional frozen Zig oracle, experiments and historical evidence |
+
+Public functions/types use `ifn_`, macros/constants `IFN_`, environment controls
+`INKLEBERRY_`. The CLI is `inkleberry`; library names begin with `libinkleberry`.
+The backend identity is `artalis.inkleberry`. There are no pre-release `sq_` API
+aliases. The pinned internal CUDA `squid_*` symbols and its own environment knobs
+are upstream implementation details, not the public library API.
+
+## Library contract
+
+- Use opaque owned handles, typed requests, explicit status returns and initialized
+  error outputs. Document borrowed spans, allocator lifetime and thread safety.
+- No process termination, assertions on external input, hidden process-global
+  device ownership, shell commands or hidden allocation in new library code.
+- Route owned allocations through the injected allocator. Check all size, offset,
+  shape, narrowing and allocation arithmetic before use; bound parser work.
+- Validate checkpoint tensor roles/shapes before device upload. Keep mapped files
+  immutable for the full mapping lifetime. mmap is not zero-copy GPU upload.
+- Keep cancellation request-owned, cleanup complete and terminal callbacks unique.
+  Callbacks borrow spans and must return promptly. Do not silently change sampling,
+  KV precision, graph semantics, speculative acceptance or prefix-cache isolation.
+- Multiple request streams do not imply parallel GPU execution. The current
+  provider permits one prepared GPU session and one active generation per process.
+- Keep CLI policy, scheduling and future HTTP transport out of model mathematics.
+  Do not add frameworks or dependencies for routine library changes.
+
+## Generated and pinned files
+
+Edit canonical modules and regenerate with `make amalgamation`. Do not hand-edit
+`dist/`. Update `config/sources.mk` when source membership changes.
+Generate the internal CUDA contract with `tools/generate_cuda_abi.py` from
+`abi/cuda.json`; never hand-edit generated declarations or layout assertions.
+`make generated-check` verifies production pins/schema output;
+`make reference-check` additionally checks frozen reference bytes. Preserve
+upstream hashes and relocation entries in `UPSTREAM.json`; a dependency update
+requires an explicit reviewed change, never a silent hash refresh.
+Preserve Apache-2.0 LICENSE, NOTICE and translation attribution.
+
+## Validation
+
+For host/API/build changes run:
+
+```sh
+make -j4 check install-check
+make lint                       # clang-format 18, configurable CLANG_FORMAT
+make reference-free-check
+make release-check
+make sanitize
+make fuzz-smoke amalgamation-fuzz-smoke
+```
+
+Tests must exercise behavior and failure boundaries: allocation faults, malformed
+inputs, ownership, concurrency, cancellation, mapping lifetime, symbol visibility
+and extracted C/C++ consumers. Keep existing regression coverage. Add focused
+regressions for meaningful bugs; avoid tests that merely mirror implementation.
+Changes to inference, kernels or GPU lifetime also require model-backed native
+qualification. CPU tests and compilation cannot establish numerical equivalence,
+GPU resource safety, output quality or speed. Report executed and pending checks
+separately, including toolchain/model/device/configuration used.
+
+GPU tests require `INKLEBERRY_TEST_GPU_UUID` identifying an explicitly approved
+idle GPU and `tools/run_cuda_smoke.py`'s guard. Never stop unrelated workloads,
+change clocks/power limits, install global toolchains or modify inference services.
+Use isolated workspaces and external model inputs. If no idle device is available,
+complete independent checks and report native verification pending.
+
+## Style and distribution
+
+Use C11, four-space indentation, snake_case and explicit bounds/error handling.
+Handwritten C follows clang-format 18; do not format pinned CUDA or generated files.
+Keep patches focused; no unrelated algorithm, precision or tuning changes.
+
+Releases use explicit allowlists in `config/package.json`, checksums and extracted
+artifact tests. Update the allowlist for maintained file additions/renames. Keep
+reference material out of production packages. Never commit model weights, keys,
+private data, local build outputs or bulk evaluation artifacts. Runtime packages
+need no Python/Zig; CUDA/driver dependencies remain explicit host prerequisites.
+Do not claim correctness, performance, context support or quality beyond measured
+qualification. Keep outstanding validation gaps visible in documentation and PRs.

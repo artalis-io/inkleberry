@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
-#ifndef SQ_ENGINE_CONTROL_H
-#define SQ_ENGINE_CONTROL_H
-#include "sq_engine.h"
+#ifndef IFN_ENGINE_CONTROL_H
+#define IFN_ENGINE_CONTROL_H
+#include "ifn_engine.h"
 #include <stdbool.h>
 
 /* Private borrowed request control. Installed only under the engine execution
@@ -9,11 +9,11 @@
 typedef struct {
     bool (*cancelled)(void *);
     void *context;
-} sq_run_control;
+} ifn_run_control;
 
-sq_status sq_session_generate_controlled(sq_session *, const int32_t *, size_t, size_t,
-                                         const sq_decode_options *, sq_token_callback, void *,
-                                         sq_decode_stats *, const sq_run_control *);
-sq_status sq_session_owned_plan(sq_gpu_weights *, const sq_session_config *, const sq_options *,
-                                uint64_t *);
+ifn_status ifn_session_generate_controlled(ifn_session *, const int32_t *, size_t, size_t,
+                                           const ifn_decode_options *, ifn_token_callback, void *,
+                                           ifn_decode_stats *, const ifn_run_control *);
+ifn_status ifn_session_owned_plan(ifn_gpu_weights *, const ifn_session_config *,
+                                  const ifn_options *, uint64_t *);
 #endif

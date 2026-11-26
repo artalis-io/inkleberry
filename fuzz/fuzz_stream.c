@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
-#include "sq_chat.h"
+#include "ifn_chat.h"
 #include "tokenizer.h"
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +13,7 @@ static int collect(void *p, uint32_t channel, const char *data, size_t n) {
     size_t at = 0;
     uint32_t cp;
     while (at < n)
-        if (!sq_utf8_next((const unsigned char *)data, n, &at, &cp))
+        if (!ifn_utf8_next((const unsigned char *)data, n, &at, &cp))
             abort();
 
     (void)channel;
@@ -28,30 +28,31 @@ static int collect(void *p, uint32_t channel, const char *data, size_t n) {
 int LLVMFuzzerTestOneInput(const unsigned char *data, size_t n) {
     if (n > 32768)
         return 0;
-    sq_text_span stops[] = {{"b", 1}, {"abc", 3}, {"STOP", 4}, {"🙂", 4}};
+    ifn_text_span stops[] = {{"b", 1}, {"abc", 3}, {"STOP", 4}, {"🙂", 4}};
     output a = {0}, b = {0};
-    sq_stream_options o = SQ_STREAM_OPTIONS_INIT;
+    ifn_stream_options o = IFN_STREAM_OPTIONS_INIT;
     o.parse_chat = 0;
     o.stops = stops;
     o.stop_count = 4;
-    sq_stream *s = NULL;
-    sq_stream_info first = SQ_STREAM_INFO_INIT, second = SQ_STREAM_INFO_INIT;
-    if (sq_stream_create(NULL, &o, NULL, collect, &a, &s) != SQ_OK)
+    ifn_stream *s = NULL;
+    ifn_stream_info first = IFN_STREAM_INFO_INIT, second = IFN_STREAM_INFO_INIT;
+    if (ifn_stream_create(NULL, &o, NULL, collect, &a, &s) != IFN_OK)
         abort();
-    if (sq_stream_push_bytes(s, data, n) != SQ_OK ||
-        sq_stream_finish(s, SQ_STREAM_LENGTH) != SQ_OK || sq_stream_get_info(s, &first) != SQ_OK)
+    if (ifn_stream_push_bytes(s, data, n) != IFN_OK ||
+        ifn_stream_finish(s, IFN_STREAM_LENGTH) != IFN_OK ||
+        ifn_stream_get_info(s, &first) != IFN_OK)
         abort();
-    if (sq_stream_reset(s, collect, &b) != SQ_OK)
+    if (ifn_stream_reset(s, collect, &b) != IFN_OK)
         abort();
     for (size_t i = 0; i < n; i++)
-        if (sq_stream_push_bytes(s, data + i, 1) != SQ_OK)
+        if (ifn_stream_push_bytes(s, data + i, 1) != IFN_OK)
             abort();
-    if (sq_stream_finish(s, SQ_STREAM_LENGTH) != SQ_OK || sq_stream_get_info(s, &second) != SQ_OK ||
-        a.n != b.n || memcmp(a.bytes, b.bytes, a.n) ||
+    if (ifn_stream_finish(s, IFN_STREAM_LENGTH) != IFN_OK ||
+        ifn_stream_get_info(s, &second) != IFN_OK || a.n != b.n || memcmp(a.bytes, b.bytes, a.n) ||
         first.finish_reason != second.finish_reason ||
         first.utf8_replacements != second.utf8_replacements)
         abort();
-    if (sq_stream_destroy(&s) != SQ_OK)
+    if (ifn_stream_destroy(&s) != IFN_OK)
         abort();
     return 0;
 }

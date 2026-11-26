@@ -1,4 +1,4 @@
-name: C host foundation
+name: Inkleberry Finn
 on:
   push:
     branches: [artalis, 'feat/**', 'fix/**']

@@ -14,10 +14,10 @@ __global__ void answer(int32_t *out, int32_t *count, int width) {
 }
 
 int main() {
-    void *state = std::malloc(sq_adaptive_bytes());
+    void *state = std::malloc(ifn_adaptive_bytes());
     if (!state)
         return 1;
-    sq_adaptive_init(state);
+    ifn_adaptive_init(state);
     int32_t *d = nullptr, *host = nullptr;
     float *confidence = nullptr;
     cudaStream_t stream = nullptr;
@@ -40,15 +40,15 @@ int main() {
         const float thresholds[3] = {0.8f, 1.0f, 0.2f};
         const int widths[3] = {2, 4, 8};
         for (float threshold : thresholds) {
-            REQUIRE(!sq_adaptive_prepare(state, d, d + 1, confidence, threshold, d + 8, d + 16,
-                                         d + 17, host, d + 25, host + 8, host + 9, stream));
+            REQUIRE(!ifn_adaptive_prepare(state, d, d + 1, confidence, threshold, d + 8, d + 16,
+                                          d + 17, host, d + 25, host + 8, host + 9, stream));
             for (int branch = 0; branch < 3; branch++) {
-                REQUIRE(!sq_adaptive_branch_begin(state, branch, stream));
+                REQUIRE(!ifn_adaptive_branch_begin(state, branch, stream));
                 answer<<<1, 8, 0, stream>>>(d + 17, d + 25, widths[branch]);
                 REQUIRE(cudaGetLastError() == cudaSuccess);
-                REQUIRE(!sq_adaptive_branch_end(state));
+                REQUIRE(!ifn_adaptive_branch_end(state));
             }
-            REQUIRE(!sq_adaptive_instantiate(state));
+            REQUIRE(!ifn_adaptive_instantiate(state));
             for (int branch = 0; branch < 3; branch++) {
                 float conf[7] = {};
                 int n = branch == 0 ? 0 : branch == 1 ? 2 : 7;
@@ -56,7 +56,7 @@ int main() {
                     conf[i] = 1;
                 REQUIRE(cudaMemcpy(confidence, conf, sizeof conf, cudaMemcpyHostToDevice) ==
                         cudaSuccess);
-                REQUIRE(!sq_adaptive_launch(state, stream));
+                REQUIRE(!ifn_adaptive_launch(state, stream));
                 REQUIRE(cudaStreamSynchronize(stream) == cudaSuccess);
                 REQUIRE(host[8] == widths[branch] && host[9] == widths[branch]);
                 for (int i = 0; i < 8; i++)
@@ -68,26 +68,26 @@ int main() {
                 for (int i = 1; i < widths[branch]; i++)
                     REQUIRE(assembled[i] == 400 + i);
             }
-            REQUIRE(sq_adaptive_live(state));
-            REQUIRE(!sq_adaptive_cleanup(state));
-            REQUIRE(!sq_adaptive_live(state));
+            REQUIRE(ifn_adaptive_live(state));
+            REQUIRE(!ifn_adaptive_cleanup(state));
+            REQUIRE(!ifn_adaptive_live(state));
         }
         /* Cleanup before instantiation, and while a body is still capturing. */
         for (int partial = 0; partial < 2; partial++) {
-            REQUIRE(!sq_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
-                                         host, d + 25, host + 8, host + 9, stream));
-            REQUIRE(sq_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
-                                        host, d + 25, host + 8, host + 9, stream) != 0);
-            REQUIRE(sq_adaptive_branch_begin(state, 3, stream) != 0);
+            REQUIRE(!ifn_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
+                                          host, d + 25, host + 8, host + 9, stream));
+            REQUIRE(ifn_adaptive_prepare(state, d, d + 1, confidence, 0.8f, d + 8, d + 16, d + 17,
+                                         host, d + 25, host + 8, host + 9, stream) != 0);
+            REQUIRE(ifn_adaptive_branch_begin(state, 3, stream) != 0);
             if (partial)
-                REQUIRE(!sq_adaptive_branch_begin(state, 0, stream));
-            REQUIRE(!sq_adaptive_cleanup(state));
-            REQUIRE(!sq_adaptive_live(state));
+                REQUIRE(!ifn_adaptive_branch_begin(state, 0, stream));
+            REQUIRE(!ifn_adaptive_cleanup(state));
+            REQUIRE(!ifn_adaptive_live(state));
             REQUIRE(cudaStreamSynchronize(stream) == cudaSuccess);
         }
     }
 done:
-    if (sq_adaptive_cleanup(state))
+    if (ifn_adaptive_cleanup(state))
         failed = 1;
     if (stream && cudaStreamDestroy(stream) != cudaSuccess)
         failed = 1;

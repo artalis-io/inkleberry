@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * Sparse synthetic input proves metadata-only heap use; never touches models. */
 #define _POSIX_C_SOURCE 200809L
-#include "sq.h"
+#include "ifn.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -65,7 +65,7 @@ int main(void) {
     int failed = 0;
     char path[] = "/tmp/infer-mmap-XXXXXX";
     int fd = mkstemp(path);
-    sq_safetensors *file = NULL;
+    ifn_safetensors *file = NULL;
     CHECK(fd >= 0);
     const size_t payload = 64u * 1024u * 1024u;
     char json[192];
@@ -83,13 +83,13 @@ int main(void) {
     CHECK(pwrite(fd, &start, 1, first) == 1 && pwrite(fd, &finish, 1, last) == 1);
     struct stat st;
     CHECK(!fstat(fd, &st) && st.st_blocks * 512 < 1024 * 1024);
-    sq_options options = SQ_OPTIONS_INIT;
+    ifn_options options = IFN_OPTIONS_INIT;
     options.allocate = small_allocate;
     options.release = small_release;
-    CHECK(sq_safetensors_open(path, &options, &file) == SQ_OK);
+    CHECK(ifn_safetensors_open(path, &options, &file) == IFN_OK);
     const void *data = NULL;
     size_t bytes = 0;
-    CHECK(sq_safetensors_data(file, 0, &data, &bytes) == SQ_OK && bytes == payload);
+    CHECK(ifn_safetensors_data(file, 0, &data, &bytes) == IFN_OK && bytes == payload);
     CHECK(((const unsigned char *)data)[0] == 42 &&
           ((const unsigned char *)data)[payload - 1] == 37);
 #ifdef __linux__
@@ -98,7 +98,7 @@ int main(void) {
     CHECK(unlink(path) == 0);
     CHECK(((const unsigned char *)data)[0] == 42 && peak < 2 * 1024 * 1024);
 done:
-    sq_safetensors_close(file);
+    ifn_safetensors_close(file);
     if (fd >= 0)
         close(fd);
     (void)unlink(path);

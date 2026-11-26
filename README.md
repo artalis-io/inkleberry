@@ -1,6 +1,7 @@
-# Native inference library
+# Inkleberry Finn
 
-A C11 library for checkpoint loading, tokenization and Blackwell GPU inference.
+Inkleberry Finn is a C11 inference library for Inkling-2-Mini, with checkpoint
+loading, tokenization and native Blackwell GPU execution.
 It provides explicit resource ownership, recoverable errors, streaming generation
 and a versioned C interface for embedding in applications and serving layers.
 
@@ -11,6 +12,8 @@ macOS ARM64. GPU kernels use CUDA C++20. The C runtime needs neither Python nor 
 ## Build
 
 ```sh
+git clone https://github.com/artalis-io/inkleberry.git
+cd inkleberry
 make -j8
 make check install-check
 make lint                         # clang-format 18
@@ -20,13 +23,13 @@ Development checks and generators use Python's standard library. CUDA builds
 require the NVIDIA toolkit; the tested configuration is CUDA 13.5, `sm_120a`.
 
 ```sh
-make -j8 squid-c-generate infer-shared
-./squid-c inspect /external/model.safetensors
-./squid-c-generate /external/model-directory 'What is 2 + 2?' 128 nvfp4 fp8 graph
+make -j8 inkleberry-generate infer-shared
+./inkleberry inspect /external/model.safetensors
+./inkleberry-generate /external/model-directory 'What is 2 + 2?' 128 nvfp4 fp8 graph
 ```
 
-Use a reserved GPU when running inference. Existing executable/library names and
-`sq_*` symbols are retained for compatibility. Build, installation and validation
+Use a reserved GPU when running inference. The public namespace is `ifn_*` / `IFN_*`, with `inkleberry` executables
+and `libinkleberry` libraries. This replaces the pre-release names; no compatibility aliases are provided. Build, installation and validation
 commands are in [the build guide](docs/build.md).
 
 ## Embed
@@ -34,11 +37,11 @@ commands are in [the build guide](docs/build.md).
 Use the modular headers under `include/`, or the generated two-file distribution:
 
 ```sh
-cc -O2 -std=c11 -Idist dist/sq.c examples/inspect.c -lm -o inspect
+cc -O2 -std=c11 -Idist dist/ifn.c examples/inspect.c -lm -o inspect
 ./inspect /external/model.safetensors
 ```
 
-`dist/sq.h` and `dist/sq.c` are generated from the canonical modules. Host input
+`dist/ifn.h` and `dist/ifn.c` are generated from the canonical modules. Host input
 APIs work with a C compiler alone; GPU inference additionally links the separately
 compiled CUDA implementation. See [embedding](docs/embedding.md) and the
 [versioned inference interface](docs/inference-abi.md).
@@ -71,6 +74,8 @@ See [release contents](docs/releases.md).
 
 ## Documentation
 
+- [Contributor and agent guide](AGENTS.md) · [Claude Code guide](CLAUDE.md)
+- [Naming and pre-release API transition](docs/naming.md)
 - [Build and testing](docs/build.md)
 - [Embedding and amalgamation](docs/embedding.md)
 - [Checkpoint storage and memory mapping](docs/storage.md)

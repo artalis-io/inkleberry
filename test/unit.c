@@ -8,7 +8,7 @@
 #define CHECK(x)                                                                                   \
     do {                                                                                           \
         if (!(x)) {                                                                                \
-            fprintf(stderr, "line %d: %s (%s)\n", __LINE__, #x, sq_last_error());                  \
+            fprintf(stderr, "line %d: %s (%s)\n", __LINE__, #x, ifn_last_error());                 \
             return 1;                                                                              \
         }                                                                                          \
     } while (0)
@@ -45,79 +45,79 @@ static size_t fixture(unsigned char *out, const char *header, size_t payload) {
 
 int main(void) {
     size_t n;
-    CHECK(sq_size_add(1, 2, &n) && n == 3);
-    CHECK(!sq_size_add(SIZE_MAX, 1, &n));
-    CHECK(!sq_size_mul(SIZE_MAX, 2, &n));
-    CHECK(sq_size_mul(SIZE_MAX, 0, &n) && n == 0);
-    CHECK(sq_size_align(257, 256, &n) && n == 512);
-    CHECK(!sq_size_align(SIZE_MAX, 256, &n));
-    CHECK(!sq_size_align(1, 3, &n));
-    CHECK(!sq_size_align(1, 0, &n));
-    CHECK(!sq_size_add(0, 0, NULL));
+    CHECK(ifn_size_add(1, 2, &n) && n == 3);
+    CHECK(!ifn_size_add(SIZE_MAX, 1, &n));
+    CHECK(!ifn_size_mul(SIZE_MAX, 2, &n));
+    CHECK(ifn_size_mul(SIZE_MAX, 0, &n) && n == 0);
+    CHECK(ifn_size_align(257, 256, &n) && n == 512);
+    CHECK(!ifn_size_align(SIZE_MAX, 256, &n));
+    CHECK(!ifn_size_align(1, 3, &n));
+    CHECK(!ifn_size_align(1, 0, &n));
+    CHECK(!ifn_size_add(0, 0, NULL));
     unsigned char bytes[2048];
     n = fixture(bytes, "{\"a\":{\"dtype\":\"BF16\",\"shape\":[2],\"data_offsets\":[0,4]}}", 4);
-    sq_safetensors *file = NULL;
-    CHECK(sq_safetensors_open_memory(bytes, n, NULL, &file) == SQ_OK);
-    CHECK(sq_safetensors_count(file) == 1 && sq_safetensors_data_bytes(file) == 4);
-    const sq_tensor_info *info = NULL;
-    CHECK(sq_safetensors_find(file, "a", 1, &info) == SQ_OK);
-    CHECK(info->dtype == SQ_BF16 && info->rank == 1 && info->shape[0] == 2);
+    ifn_safetensors *file = NULL;
+    CHECK(ifn_safetensors_open_memory(bytes, n, NULL, &file) == IFN_OK);
+    CHECK(ifn_safetensors_count(file) == 1 && ifn_safetensors_data_bytes(file) == 4);
+    const ifn_tensor_info *info = NULL;
+    CHECK(ifn_safetensors_find(file, "a", 1, &info) == IFN_OK);
+    CHECK(info->dtype == IFN_BF16 && info->rank == 1 && info->shape[0] == 2);
     const void *data = NULL;
     size_t size = 0;
-    CHECK(sq_safetensors_data(file, 0, &data, &size) == SQ_OK && size == 4);
+    CHECK(ifn_safetensors_data(file, 0, &data, &size) == IFN_OK && size == 4);
     CHECK(!memcmp(data, "BBBB", 4));
-    CHECK(sq_safetensors_find(file, "no", 2, &info) == SQ_NOT_FOUND && !info);
-    CHECK(sq_safetensors_at(file, 0, &info) == SQ_OK && !sq_last_error()[0]);
-    CHECK(sq_safetensors_find(file, "a\0b", 3, &info) == SQ_INVALID_ARGUMENT && !info);
-    CHECK(sq_safetensors_data(file, 99, &data, &size) == SQ_NOT_FOUND && !data && !size);
-    sq_safetensors_close(file);
-    sq_safetensors_close(NULL);
-    CHECK(sq_safetensors_count(NULL) == 0 && sq_safetensors_data_bytes(NULL) == 0);
-    sq_options options = SQ_OPTIONS_INIT;
+    CHECK(ifn_safetensors_find(file, "no", 2, &info) == IFN_NOT_FOUND && !info);
+    CHECK(ifn_safetensors_at(file, 0, &info) == IFN_OK && !ifn_last_error()[0]);
+    CHECK(ifn_safetensors_find(file, "a\0b", 3, &info) == IFN_INVALID_ARGUMENT && !info);
+    CHECK(ifn_safetensors_data(file, 99, &data, &size) == IFN_NOT_FOUND && !data && !size);
+    ifn_safetensors_close(file);
+    ifn_safetensors_close(NULL);
+    CHECK(ifn_safetensors_count(NULL) == 0 && ifn_safetensors_data_bytes(NULL) == 0);
+    ifn_options options = IFN_OPTIONS_INIT;
     options.api_version++;
-    file = (sq_safetensors *)(uintptr_t)1;
-    CHECK(sq_safetensors_open_memory(bytes, n, &options, &file) == SQ_INVALID_ARGUMENT && !file);
-    options = (sq_options)SQ_OPTIONS_INIT;
+    file = (ifn_safetensors *)(uintptr_t)1;
+    CHECK(ifn_safetensors_open_memory(bytes, n, &options, &file) == IFN_INVALID_ARGUMENT && !file);
+    options = (ifn_options)IFN_OPTIONS_INIT;
     options.struct_size = 0;
-    CHECK(sq_safetensors_open_memory(bytes, n, &options, &file) == SQ_INVALID_ARGUMENT && !file);
-    options = (sq_options)SQ_OPTIONS_INIT;
+    CHECK(ifn_safetensors_open_memory(bytes, n, &options, &file) == IFN_INVALID_ARGUMENT && !file);
+    options = (ifn_options)IFN_OPTIONS_INIT;
     options.allocate = allocate;
-    CHECK(sq_safetensors_open_memory(bytes, n, &options, &file) == SQ_INVALID_ARGUMENT && !file);
-    CHECK(sq_safetensors_open_memory(NULL, 0, NULL, &file) == SQ_INVALID_ARGUMENT && !file);
-    CHECK(sq_safetensors_open_memory(bytes, n, NULL, NULL) == SQ_INVALID_ARGUMENT);
+    CHECK(ifn_safetensors_open_memory(bytes, n, &options, &file) == IFN_INVALID_ARGUMENT && !file);
+    CHECK(ifn_safetensors_open_memory(NULL, 0, NULL, &file) == IFN_INVALID_ARGUMENT && !file);
+    CHECK(ifn_safetensors_open_memory(bytes, n, NULL, NULL) == IFN_INVALID_ARGUMENT);
     /* Every allocator site, both memory and mapped-file entrypoints. */
-    char path[] = "/tmp/sq-test-XXXXXX";
+    char path[] = "/tmp/ifn-test-XXXXXX";
     int fd = mkstemp(path);
     CHECK(fd >= 0 && write(fd, bytes, n) == (ssize_t)n && !close(fd));
     for (size_t fail = 0; fail < 3; fail++) {
         for (int mapped = 0; mapped < 2; mapped++) {
             faults f = {0, fail, 0};
-            options = (sq_options)SQ_OPTIONS_INIT;
+            options = (ifn_options)IFN_OPTIONS_INIT;
             options.allocate = allocate;
             options.release = release;
             options.context = &f;
-            sq_status status = mapped ? sq_safetensors_open(path, &options, &file)
-                                      : sq_safetensors_open_memory(bytes, n, &options, &file);
-            CHECK(status == (fail < 2 ? SQ_OUT_OF_MEMORY : SQ_OK));
-            if (status == SQ_OK)
+            ifn_status status = mapped ? ifn_safetensors_open(path, &options, &file)
+                                       : ifn_safetensors_open_memory(bytes, n, &options, &file);
+            CHECK(status == (fail < 2 ? IFN_OUT_OF_MEMORY : IFN_OK));
+            if (status == IFN_OK)
                 CHECK(file && f.live == 2);
             else
                 CHECK(!file && !f.live);
-            sq_safetensors_close(file);
+            ifn_safetensors_close(file);
             CHECK(!f.live);
         }
     }
     CHECK(!unlink(path));
-    CHECK(sq_safetensors_open(path, NULL, &file) == SQ_IO && !file);
+    CHECK(ifn_safetensors_open(path, NULL, &file) == IFN_IO && !file);
     /* Failed parse releases both owned allocations. */
     faults f = {0, SIZE_MAX, 0};
-    options = (sq_options)SQ_OPTIONS_INIT;
+    options = (ifn_options)IFN_OPTIONS_INIT;
     options.allocate = allocate;
     options.release = release;
     options.context = &f;
     bytes[8] = '[';
-    CHECK(sq_safetensors_open_memory(bytes, n, &options, &file) == SQ_FORMAT && !file && !f.live);
-    CHECK(sq_status_string(999) && sq_version());
+    CHECK(ifn_safetensors_open_memory(bytes, n, &options, &file) == IFN_FORMAT && !file && !f.live);
+    CHECK(ifn_status_string(999) && ifn_version());
     puts("host API, checked arithmetic, ownership and allocation failure tests passed");
     return 0;
 }

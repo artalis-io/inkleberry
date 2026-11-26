@@ -1,0 +1,9 @@
+prefix=@PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+Name: inkleberry
+Description: Inkleberry Finn checkpoint, tokenizer and inference host library
+Version: 0.1.0
+Libs: -L${libdir} -linkleberry
+Cflags: -I${includedir}
+Libs.private: -lm

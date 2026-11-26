@@ -44,3 +44,7 @@ Their third-party environment is optional and isolated in that directory; it is
 not required for library development or runtime. Experiments and old reports
 refer to their recorded revision, commands and benchmark inputs. Do not rewrite
 historical JSON receipts as if they described a new build.
+
+The maintained product is now **Inkleberry Finn**, with the `ifn_` public API.
+Historical names below this directory remain archival; optional validation
+adapters and `oracles.mk` target the current build outputs.

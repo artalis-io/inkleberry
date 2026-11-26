@@ -27,7 +27,7 @@ work/
 
 # C port artifacts
 .build/
-/squid-c
+/inkleberry
 *.dylib
 crash-*
 leak-*
@@ -36,8 +36,8 @@ leak-*
 # macOS metadata must not become C sources on Linux transfers
 ._*
 
-/squid-c-weights
+/inkleberry-weights
 
-/squid-c-generate
+/inkleberry-generate
 
-/libsq_backend.so.*
+/libinkleberry_backend.so.*

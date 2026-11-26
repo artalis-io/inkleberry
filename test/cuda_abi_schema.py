@@ -28,7 +28,11 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(len(self.schema['functions']), 76)
         self.assertEqual(sum(2 + len(r['fields']) for r in self.schema['records']), 72)
         for path, digest in baseline['payload_sha256'].items():
-            payload = outputs[path].split('*/\n', 1)[1].encode()
+            # Freeze the bridge declarations/layout modulo this public namespace rename.
+            text = outputs[path].split('*/\n', 1)[1]
+            self.assertNotIn('SQ_', text)
+            self.assertNotIn('sq_test_', text)
+            payload = text.replace('IFN_', 'SQ_').replace('ifn_', 'sq_').encode()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), digest, path)
 
     def test_nested_const_and_arrays(self):
@@ -86,7 +90,7 @@ class SchemaTests(unittest.TestCase):
                     gen.generate(schema)
 
     def test_bad_json(self):
-        with tempfile.TemporaryDirectory(prefix='sq-abi-json-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='ifn-abi-json-') as tmp:
             path = Path(tmp) / 'schema.json'
             # A duplicate in an otherwise valid schema must fail too; rejecting
             # a schema that is already incomplete would not prove this guard.
@@ -101,7 +105,7 @@ class SchemaTests(unittest.TestCase):
     def test_no_reference_or_manifest_dependency_and_fail_closed(self):
         # A separate tree has only the generator and schema: no Zig, manifest,
         # upstream helper, kernels or copy of the current generated artifacts.
-        with tempfile.TemporaryDirectory(prefix='sq-abi-independent-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='ifn-abi-independent-') as tmp:
             root = Path(tmp)
             (root / 'tools').mkdir()
             (root / 'abi').mkdir()

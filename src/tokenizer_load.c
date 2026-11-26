@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-uint64_t sq_token_hash(const void *data, size_t size) {
+uint64_t ifn_token_hash(const void *data, size_t size) {
     const unsigned char *p = data;
     uint64_t h = UINT64_C(14695981039346656037);
     for (size_t i = 0; i < size; i++)
@@ -20,7 +20,7 @@ uint64_t sq_token_hash(const void *data, size_t size) {
     return h ? h : 1;
 }
 
-uint64_t sq_pair_hash(uint64_t key) {
+uint64_t ifn_pair_hash(uint64_t key) {
     uint64_t h = key + UINT64_C(0x9e3779b97f4a7c15);
     h = (h ^ (h >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
     h = (h ^ (h >> 27)) * UINT64_C(0x94d049bb133111eb);
@@ -28,23 +28,23 @@ uint64_t sq_pair_hash(uint64_t key) {
     return h ? h : 1;
 }
 
-int32_t sq_special_lookup(const sq_tokenizer *t, const void *bytes, size_t size) {
+int32_t ifn_special_lookup(const ifn_tokenizer *t, const void *bytes, size_t size) {
     for (size_t i = 0; i < t->special_count; i++) {
         int32_t id = t->specials[i];
-        const sq_token_entry *e = &t->entries[id];
+        const ifn_token_entry *e = &t->entries[id];
         if (e->length == size && !memcmp(t->arena + e->offset, bytes, size))
             return id;
     }
     return -1;
 }
 
-int32_t sq_vocab_lookup(const sq_tokenizer *t, const void *bytes, size_t size) {
-    size_t slot = (size_t)sq_token_hash(bytes, size) & (t->vocab_slots - 1);
+int32_t ifn_vocab_lookup(const ifn_tokenizer *t, const void *bytes, size_t size) {
+    size_t slot = (size_t)ifn_token_hash(bytes, size) & (t->vocab_slots - 1);
     for (size_t i = 0; i < t->vocab_slots; i++, slot = (slot + 1) & (t->vocab_slots - 1)) {
         uint32_t value = t->vocab[slot];
         if (!value)
             return -1;
-        const sq_token_entry *e = &t->entries[value - 1];
+        const ifn_token_entry *e = &t->entries[value - 1];
         if (e->length == size && !memcmp(t->arena + e->offset, bytes, size))
             return (int32_t)(value - 1);
     }
@@ -55,7 +55,7 @@ static bool raw_token(const char *text, unsigned char *out, size_t *length) {
     size_t n = strlen(text), p = 0, k = 0;
     while (p < n) {
         uint32_t cp;
-        if (!sq_utf8_next((const unsigned char *)text, n, &p, &cp))
+        if (!ifn_utf8_next((const unsigned char *)text, n, &p, &cp))
             return false;
         int value = -1;
         if ((cp >= 33 && cp <= 126) || (cp >= 161 && cp <= 172) || (cp >= 174 && cp <= 255))
@@ -79,12 +79,13 @@ static bool raw_token(const char *text, unsigned char *out, size_t *length) {
     return k > 0;
 }
 
-static bool equal(sq_json value, const char *expected) {
-    return sq_json_equal(value, (sq_json){(const unsigned char *)expected, strlen(expected), 0}, 0);
+static bool equal(ifn_json value, const char *expected) {
+    return ifn_json_equal(value, (ifn_json){(const unsigned char *)expected, strlen(expected), 0},
+                          0);
 }
 
-static bool fields(sq_json value, sq_json_field *f, size_t n) {
-    if (!sq_json_object(&value, f, n) || !sq_json_done(&value))
+static bool fields(ifn_json value, ifn_json_field *f, size_t n) {
+    if (!ifn_json_object(&value, f, n) || !ifn_json_done(&value))
         return false;
     for (size_t i = 0; i < n; i++)
         if (!f[i].present)
@@ -92,19 +93,19 @@ static bool fields(sq_json value, sq_json_field *f, size_t n) {
     return true;
 }
 
-static sq_json_field field(const char *name) {
-    sq_json_field f = {0};
+static ifn_json_field field(const char *name) {
+    ifn_json_field f = {0};
     f.name = name;
     return f;
 }
 
 /* A supported-profile check prevents silently treating normalization, added-
  * token whitespace flags or arbitrary regexes as the pinned Inkling tokenizer. */
-static bool profile(sq_json json, sq_json *vocab, sq_json *merges, sq_json *added) {
-    sq_json_field top[] = {field("version"),        field("truncation"), field("padding"),
-                           field("added_tokens"),   field("normalizer"), field("pre_tokenizer"),
-                           field("post_processor"), field("decoder"),    field("model")};
-    if (!fields(json, top, 9) || !sq_json_text(top[0].value, "1.0") ||
+static bool profile(ifn_json json, ifn_json *vocab, ifn_json *merges, ifn_json *added) {
+    ifn_json_field top[] = {field("version"),        field("truncation"), field("padding"),
+                            field("added_tokens"),   field("normalizer"), field("pre_tokenizer"),
+                            field("post_processor"), field("decoder"),    field("model")};
+    if (!fields(json, top, 9) || !ifn_json_text(top[0].value, "1.0") ||
         !equal(top[1].value, "null") || !equal(top[2].value, "null") ||
         !equal(top[4].value, "null"))
         return false;
@@ -115,17 +116,17 @@ static bool profile(sq_json json, sq_json *vocab, sq_json *merges, sq_json *adde
         !equal(top[7].value, "{\"type\":\"ByteLevel\",\"add_prefix_space\":true,\"trim_offsets\":"
                              "true,\"use_regex\":true}"))
         return false;
-    sq_json_field model[] = {field("type"),
-                             field("dropout"),
-                             field("unk_token"),
-                             field("continuing_subword_prefix"),
-                             field("end_of_word_suffix"),
-                             field("fuse_unk"),
-                             field("byte_fallback"),
-                             field("ignore_merges"),
-                             field("vocab"),
-                             field("merges")};
-    if (!fields(top[8].value, model, 10) || !sq_json_text(model[0].value, "BPE"))
+    ifn_json_field model[] = {field("type"),
+                              field("dropout"),
+                              field("unk_token"),
+                              field("continuing_subword_prefix"),
+                              field("end_of_word_suffix"),
+                              field("fuse_unk"),
+                              field("byte_fallback"),
+                              field("ignore_merges"),
+                              field("vocab"),
+                              field("merges")};
+    if (!fields(top[8].value, model, 10) || !ifn_json_text(model[0].value, "BPE"))
         return false;
     for (size_t i = 1; i < 5; i++)
         if (!equal(model[i].value, "null"))
@@ -139,11 +140,11 @@ static bool profile(sq_json json, sq_json *vocab, sq_json *merges, sq_json *adde
     return true;
 }
 
-static bool added_entry(sq_json *j, char *name, size_t *id) {
-    sq_json_field f[] = {field("id"),     field("content"), field("single_word"),
-                         field("lstrip"), field("rstrip"),  field("normalized"),
-                         field("special")};
-    if (!sq_json_object(j, f, 7))
+static bool added_entry(ifn_json *j, char *name, size_t *id) {
+    ifn_json_field f[] = {field("id"),     field("content"), field("single_word"),
+                          field("lstrip"), field("rstrip"),  field("normalized"),
+                          field("special")};
+    if (!ifn_json_object(j, f, 7))
         return false;
     for (size_t i = 0; i < 7; i++)
         if (!f[i].present)
@@ -152,8 +153,9 @@ static bool added_entry(sq_json *j, char *name, size_t *id) {
         if (!equal(f[i].value, "false"))
             return false;
     uint64_t n;
-    if (!equal(f[6].value, "true") || !sq_json_u64(&f[0].value, &n) || !sq_json_done(&f[0].value) ||
-        n >= SQ_TOK_IDS || !sq_json_string(&f[1].value, name, 4096) || !name[0])
+    if (!equal(f[6].value, "true") || !ifn_json_u64(&f[0].value, &n) ||
+        !ifn_json_done(&f[0].value) || n >= IFN_TOK_IDS ||
+        !ifn_json_string(&f[1].value, name, 4096) || !name[0])
         return false;
     *id = (size_t)n;
     return true;
@@ -166,9 +168,9 @@ static size_t slots(size_t count) {
     return n;
 }
 
-static void *owned(sq_tokenizer *t, size_t n, size_t width) {
+static void *owned(ifn_tokenizer *t, size_t n, size_t width) {
     size_t bytes;
-    if (!sq_size_mul(n, width, &bytes))
+    if (!ifn_size_mul(n, width, &bytes))
         return NULL;
     void *p = t->allocator.allocate(t->allocator.context, bytes);
     if (p)
@@ -176,11 +178,11 @@ static void *owned(sq_tokenizer *t, size_t n, size_t width) {
     return p;
 }
 
-static bool store(sq_tokenizer *t, const void *bytes, size_t length, size_t id, bool special) {
+static bool store(ifn_tokenizer *t, const void *bytes, size_t length, size_t id, bool special) {
     if (!length || length > 4095 || id >= t->id_count || t->entries[id].present ||
         length > t->arena_size - t->arena_used)
         return false;
-    sq_token_entry *e = &t->entries[id];
+    ifn_token_entry *e = &t->entries[id];
     e->offset = (uint32_t)t->arena_used;
     e->length = (uint32_t)length;
     e->present = true;
@@ -191,15 +193,15 @@ static bool store(sq_tokenizer *t, const void *bytes, size_t length, size_t id, 
         if (t->special_count == 256 || length < 2 || memcmp(bytes, "<|", 2))
             return false;
         for (size_t i = 0; i < t->special_count; i++) {
-            const sq_token_entry *p = &t->entries[t->specials[i]];
+            const ifn_token_entry *p = &t->entries[t->specials[i]];
             if (p->length == length && !memcmp(t->arena + p->offset, bytes, length))
                 return false;
         }
         t->specials[t->special_count++] = (int32_t)id;
     } else {
-        if (sq_vocab_lookup(t, bytes, length) >= 0)
+        if (ifn_vocab_lookup(t, bytes, length) >= 0)
             return false;
-        size_t slot = (size_t)sq_token_hash(bytes, length) & (t->vocab_slots - 1);
+        size_t slot = (size_t)ifn_token_hash(bytes, length) & (t->vocab_slots - 1);
         while (t->vocab[slot])
             slot = (slot + 1) & (t->vocab_slots - 1);
         t->vocab[slot] = (uint32_t)id + 1;
@@ -207,10 +209,10 @@ static bool store(sq_tokenizer *t, const void *bytes, size_t length, size_t id, 
     return true;
 }
 
-void sq_tokenizer_close(sq_tokenizer *t) {
+void ifn_tokenizer_close(ifn_tokenizer *t) {
     if (!t)
         return;
-    sq_options a = t->allocator;
+    ifn_options a = t->allocator;
     if (t->merges)
         a.release(a.context, t->merges);
     if (t->vocab)
@@ -222,66 +224,66 @@ void sq_tokenizer_close(sq_tokenizer *t) {
     a.release(a.context, t);
 }
 
-sq_status sq_tokenizer_open_memory(const void *data, size_t bytes, const sq_options *options,
-                                   sq_tokenizer **out) {
+ifn_status ifn_tokenizer_open_memory(const void *data, size_t bytes, const ifn_options *options,
+                                     ifn_tokenizer **out) {
     if (out)
         *out = NULL;
     if (!data || !out)
-        return sq_error(SQ_INVALID_ARGUMENT, "missing tokenizer input/output");
-    if (bytes > SQ_TOK_JSON)
-        return sq_error(SQ_LIMIT, "tokenizer JSON exceeds 64 MiB");
-    sq_options allocator;
-    sq_status status = sq_options_resolve(options, &allocator);
-    if (status != SQ_OK)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing tokenizer input/output");
+    if (bytes > IFN_TOK_JSON)
+        return ifn_error(IFN_LIMIT, "tokenizer JSON exceeds 64 MiB");
+    ifn_options allocator;
+    ifn_status status = ifn_options_resolve(options, &allocator);
+    if (status != IFN_OK)
         return status;
-    sq_json vocab, merges, added;
-    if (!profile((sq_json){data, bytes, 0}, &vocab, &merges, &added))
-        return sq_error(SQ_FORMAT, "unsupported or malformed Inkling tokenizer profile");
+    ifn_json vocab, merges, added;
+    if (!profile((ifn_json){data, bytes, 0}, &vocab, &merges, &added))
+        return ifn_error(IFN_FORMAT, "unsupported or malformed Inkling tokenizer profile");
     /* Count before allocation; each item is independently bounded. */
-    sq_json v = vocab, m = merges, a = added;
+    ifn_json v = vocab, m = merges, a = added;
     size_t nv = 0, nm = 0, maxid = 0, arena_size = 0;
     char name[4096];
-    if (!sq_json_take(&v, '{') || sq_json_take(&v, '}'))
-        return sq_error(SQ_FORMAT, "empty/invalid vocabulary");
+    if (!ifn_json_take(&v, '{') || ifn_json_take(&v, '}'))
+        return ifn_error(IFN_FORMAT, "empty/invalid vocabulary");
     do {
         uint64_t id;
-        if (!sq_json_string(&v, name, sizeof name) || !name[0] || !sq_json_take(&v, ':') ||
-            !sq_json_u64(&v, &id) || id >= SQ_TOK_IDS || ++nv > SQ_TOK_IDS)
-            return sq_error(SQ_FORMAT, "invalid vocabulary ID/name/count");
+        if (!ifn_json_string(&v, name, sizeof name) || !name[0] || !ifn_json_take(&v, ':') ||
+            !ifn_json_u64(&v, &id) || id >= IFN_TOK_IDS || ++nv > IFN_TOK_IDS)
+            return ifn_error(IFN_FORMAT, "invalid vocabulary ID/name/count");
         if (id > maxid)
             maxid = (size_t)id;
         arena_size += strlen(name);
-    } while (sq_json_take(&v, ','));
-    if (!sq_json_take(&v, '}') || !sq_json_done(&v) || !sq_json_take(&m, '['))
-        return sq_error(SQ_FORMAT, "invalid vocabulary/merges");
-    if (!sq_json_take(&m, ']')) {
+    } while (ifn_json_take(&v, ','));
+    if (!ifn_json_take(&v, '}') || !ifn_json_done(&v) || !ifn_json_take(&m, '['))
+        return ifn_error(IFN_FORMAT, "invalid vocabulary/merges");
+    if (!ifn_json_take(&m, ']')) {
         do {
-            if (++nm > SQ_TOK_MERGES || !sq_json_skip(&m, 0))
-                return sq_error(SQ_LIMIT, "invalid or excessive merge count");
-        } while (sq_json_take(&m, ','));
-        if (!sq_json_take(&m, ']'))
-            return sq_error(SQ_FORMAT, "invalid merges");
+            if (++nm > IFN_TOK_MERGES || !ifn_json_skip(&m, 0))
+                return ifn_error(IFN_LIMIT, "invalid or excessive merge count");
+        } while (ifn_json_take(&m, ','));
+        if (!ifn_json_take(&m, ']'))
+            return ifn_error(IFN_FORMAT, "invalid merges");
     }
-    if (!sq_json_done(&m) || !sq_json_take(&a, '['))
-        return sq_error(SQ_FORMAT, "invalid added tokens");
+    if (!ifn_json_done(&m) || !ifn_json_take(&a, '['))
+        return ifn_error(IFN_FORMAT, "invalid added tokens");
     size_t ns = 0;
-    if (!sq_json_take(&a, ']')) {
+    if (!ifn_json_take(&a, ']')) {
         do {
             size_t id;
             if (++ns > 256 || !added_entry(&a, name, &id))
-                return sq_error(SQ_FORMAT, "invalid added token");
+                return ifn_error(IFN_FORMAT, "invalid added token");
             if (id > maxid)
                 maxid = id;
             arena_size += strlen(name);
-        } while (sq_json_take(&a, ','));
-        if (!sq_json_take(&a, ']'))
-            return sq_error(SQ_FORMAT, "invalid added tokens");
+        } while (ifn_json_take(&a, ','));
+        if (!ifn_json_take(&a, ']'))
+            return ifn_error(IFN_FORMAT, "invalid added tokens");
     }
-    if (!sq_json_done(&a) || arena_size > SQ_TOK_ARENA)
-        return sq_error(SQ_LIMIT, "token byte arena exceeds 8 MiB");
-    sq_tokenizer *t = allocator.allocate(allocator.context, sizeof *t);
+    if (!ifn_json_done(&a) || arena_size > IFN_TOK_ARENA)
+        return ifn_error(IFN_LIMIT, "token byte arena exceeds 8 MiB");
+    ifn_tokenizer *t = allocator.allocate(allocator.context, sizeof *t);
     if (!t)
-        return sq_error(SQ_OUT_OF_MEMORY, "allocate tokenizer");
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate tokenizer");
     memset(t, 0, sizeof *t);
     t->allocator = allocator;
     t->arena_size = arena_size;
@@ -293,33 +295,33 @@ sq_status sq_tokenizer_open_memory(const void *data, size_t bytes, const sq_opti
     t->vocab = owned(t, t->vocab_slots, sizeof *t->vocab);
     t->merges = owned(t, t->merge_slots, sizeof *t->merges);
     if (!t->arena || !t->entries || !t->vocab || !t->merges) {
-        sq_tokenizer_close(t);
-        return sq_error(SQ_OUT_OF_MEMORY, "allocate tokenizer tables");
+        ifn_tokenizer_close(t);
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate tokenizer tables");
     }
     for (size_t i = 0; i < t->merge_slots; i++)
         t->merges[i].pair = UINT64_MAX;
     v = vocab;
-    (void)sq_json_take(&v, '{');
+    (void)ifn_json_take(&v, '{');
     do {
         uint64_t id;
         unsigned char raw[4096];
         size_t n;
-        if (!sq_json_string(&v, name, sizeof name) || !sq_json_take(&v, ':') ||
-            !sq_json_u64(&v, &id) || !raw_token(name, raw, &n) ||
+        if (!ifn_json_string(&v, name, sizeof name) || !ifn_json_take(&v, ':') ||
+            !ifn_json_u64(&v, &id) || !raw_token(name, raw, &n) ||
             !store(t, raw, n, (size_t)id, false))
             goto invalid;
-    } while (sq_json_take(&v, ','));
+    } while (ifn_json_take(&v, ','));
     a = added;
-    (void)sq_json_take(&a, '[');
-    if (!sq_json_take(&a, ']'))
+    (void)ifn_json_take(&a, '[');
+    if (!ifn_json_take(&a, ']'))
         do {
             size_t id;
             if (!added_entry(&a, name, &id) || !store(t, name, strlen(name), id, true))
                 goto invalid;
-        } while (sq_json_take(&a, ','));
+        } while (ifn_json_take(&a, ','));
     for (size_t i = 0; i < 256; i++) {
         unsigned char b = (unsigned char)i;
-        t->byte_ids[i] = sq_vocab_lookup(t, &b, 1);
+        t->byte_ids[i] = ifn_vocab_lookup(t, &b, 1);
         if (t->byte_ids[i] < 0)
             goto invalid;
     }
@@ -333,17 +335,17 @@ sq_status sq_tokenizer_open_memory(const void *data, size_t bytes, const sq_opti
         t->specials[j] = x;
     }
     m = merges;
-    (void)sq_json_take(&m, '[');
+    (void)ifn_json_take(&m, '[');
     for (size_t rank = 0; rank < nm; rank++) {
         char left[4096], right[4096];
         unsigned char raw[8192];
         size_t na, nb;
-        if (sq_json_take(&m, '[')) {
-            if (!sq_json_string(&m, left, sizeof left) || !sq_json_take(&m, ',') ||
-                !sq_json_string(&m, right, sizeof right) || !sq_json_take(&m, ']'))
+        if (ifn_json_take(&m, '[')) {
+            if (!ifn_json_string(&m, left, sizeof left) || !ifn_json_take(&m, ',') ||
+                !ifn_json_string(&m, right, sizeof right) || !ifn_json_take(&m, ']'))
                 goto invalid;
         } else {
-            if (!sq_json_string(&m, name, sizeof name))
+            if (!ifn_json_string(&m, name, sizeof name))
                 goto invalid;
             char *space = strchr(name, ' ');
             if (!space || space == name || !space[1])
@@ -354,50 +356,50 @@ sq_status sq_tokenizer_open_memory(const void *data, size_t bytes, const sq_opti
         }
         if (!raw_token(left, raw, &na) || !raw_token(right, raw + na, &nb))
             goto invalid;
-        int32_t ia = sq_vocab_lookup(t, raw, na), ib = sq_vocab_lookup(t, raw + na, nb),
-                ic = sq_vocab_lookup(t, raw, na + nb);
+        int32_t ia = ifn_vocab_lookup(t, raw, na), ib = ifn_vocab_lookup(t, raw + na, nb),
+                ic = ifn_vocab_lookup(t, raw, na + nb);
         if (ia < 0 || ib < 0 || ic < 0)
             goto invalid;
         uint64_t pair = ((uint64_t)(uint32_t)ia << 32) | (uint32_t)ib;
-        size_t slot = (size_t)sq_pair_hash(pair) & (t->merge_slots - 1);
+        size_t slot = (size_t)ifn_pair_hash(pair) & (t->merge_slots - 1);
         while (t->merges[slot].pair != UINT64_MAX && t->merges[slot].pair != pair)
             slot = (slot + 1) & (t->merge_slots - 1);
         if (t->merges[slot].pair == UINT64_MAX)
-            t->merges[slot] = (sq_merge){pair, (uint32_t)rank, ic};
-        if (rank + 1 < nm && !sq_json_take(&m, ','))
+            t->merges[slot] = (ifn_merge){pair, (uint32_t)rank, ic};
+        if (rank + 1 < nm && !ifn_json_take(&m, ','))
             goto invalid;
     }
     *out = t;
-    return sq_error(SQ_OK, "");
+    return ifn_error(IFN_OK, "");
 invalid:
-    sq_tokenizer_close(t);
-    return sq_error(SQ_FORMAT, "invalid/duplicate tokenizer vocabulary or merge");
+    ifn_tokenizer_close(t);
+    return ifn_error(IFN_FORMAT, "invalid/duplicate tokenizer vocabulary or merge");
 }
 
-sq_status sq_tokenizer_open(const char *path, const sq_options *options, sq_tokenizer **out) {
+ifn_status ifn_tokenizer_open(const char *path, const ifn_options *options, ifn_tokenizer **out) {
     if (out)
         *out = NULL;
     if (!path || !path[0] || !out)
-        return sq_error(SQ_INVALID_ARGUMENT, "missing tokenizer path/output");
-    sq_options checked;
-    sq_status status = sq_options_resolve(options, &checked);
-    if (status != SQ_OK)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing tokenizer path/output");
+    ifn_options checked;
+    ifn_status status = ifn_options_resolve(options, &checked);
+    if (status != IFN_OK)
         return status;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
-        return sq_error(SQ_IO, "cannot open tokenizer");
+        return ifn_error(IFN_IO, "cannot open tokenizer");
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
-        (uintmax_t)st.st_size > SQ_TOK_JSON) {
+        (uintmax_t)st.st_size > IFN_TOK_JSON) {
         (void)close(fd);
-        return sq_error(SQ_FORMAT, "invalid tokenizer file size/type");
+        return ifn_error(IFN_FORMAT, "invalid tokenizer file size/type");
     }
     size_t n = (size_t)st.st_size;
     void *map = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
     (void)close(fd);
     if (map == MAP_FAILED)
-        return sq_error(SQ_IO, "cannot map tokenizer");
-    status = sq_tokenizer_open_memory(map, n, &checked, out);
+        return ifn_error(IFN_IO, "cannot map tokenizer");
+    status = ifn_tokenizer_open_memory(map, n, &checked, out);
     (void)munmap(map, n);
     return status;
 }

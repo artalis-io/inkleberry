@@ -10,18 +10,18 @@
 
 enum { H = 2304, Q = 3072, KV = 1024, E = 128, I = 1152, V = 201024, VU = 200058, M = 9216 };
 
-static void *pointer(sq_gpu_weights *w, uint64_t offset) {
+static void *pointer(ifn_gpu_weights *w, uint64_t offset) {
     return w->execute && offset != UINT64_MAX ? (unsigned char *)w->arena + (size_t)offset : NULL;
 }
 
-static sq_weight_view *view(sq_gpu_weights *w, const char *label, uint32_t type) {
-    if (w->status != SQ_OK)
+static ifn_weight_view *view(ifn_gpu_weights *w, const char *label, uint32_t type) {
+    if (w->status != IFN_OK)
         return NULL;
-    if (w->view_count == SQ_WEIGHT_MAX_VIEWS || strlen(label) >= sizeof w->views[0].label) {
-        sq_weight_fail(w, SQ_LIMIT, "weight view limit");
+    if (w->view_count == IFN_WEIGHT_MAX_VIEWS || strlen(label) >= sizeof w->views[0].label) {
+        ifn_weight_fail(w, IFN_LIMIT, "weight view limit");
         return NULL;
     }
-    sq_weight_view *v = &w->views[w->view_count++];
+    ifn_weight_view *v = &w->views[w->view_count++];
     memset(v, 0, sizeof *v);
     memcpy(v->label, label, strlen(label) + 1);
     v->type = type;
@@ -30,19 +30,20 @@ static sq_weight_view *view(sq_gpu_weights *w, const char *label, uint32_t type)
     return v;
 }
 
-static uint64_t block(sq_gpu_weights *w, const char *label, const char *suffix, size_t bytes) {
-    if (w->status != SQ_OK)
+static uint64_t block(ifn_gpu_weights *w, const char *label, const char *suffix, size_t bytes) {
+    if (w->status != IFN_OK)
         return UINT64_MAX;
     size_t aligned, end;
-    if (!bytes || !sq_size_align(bytes, 256, &aligned) || !sq_size_add(w->offset, aligned, &end) ||
-        (w->execute && end > w->capacity) || w->span_count == SQ_WEIGHT_MAX_SPANS) {
-        sq_weight_fail(w, SQ_LIMIT, "weight arena overflow");
+    if (!bytes || !ifn_size_align(bytes, 256, &aligned) ||
+        !ifn_size_add(w->offset, aligned, &end) || (w->execute && end > w->capacity) ||
+        w->span_count == IFN_WEIGHT_MAX_SPANS) {
+        ifn_weight_fail(w, IFN_LIMIT, "weight arena overflow");
         return UINT64_MAX;
     }
-    sq_weight_span *s = &w->spans[w->span_count];
+    ifn_weight_span *s = &w->spans[w->span_count];
     int n = snprintf(s->label, sizeof s->label, "%s%s", label, suffix);
     if (n < 0 || (size_t)n >= sizeof s->label) {
-        sq_weight_fail(w, SQ_LIMIT, "weight span label limit");
+        ifn_weight_fail(w, IFN_LIMIT, "weight span label limit");
         return UINT64_MAX;
     }
     s->offset = w->offset;
@@ -52,50 +53,50 @@ static uint64_t block(sq_gpu_weights *w, const char *label, const char *suffix, 
     return s->offset;
 }
 
-static void copy_tensor(sq_gpu_weights *w, uint32_t source, const char *name, void *dst,
+static void copy_tensor(ifn_gpu_weights *w, uint32_t source, const char *name, void *dst,
                         size_t bytes, bool prefix) {
-    if (!w->execute || w->status != SQ_OK)
+    if (!w->execute || w->status != IFN_OK)
         return;
     const void *data = NULL;
     size_t n = 0;
-    if (sq_inkling_lookup(w->checkpoint, source, name, &data, &n) != SQ_OK || n < bytes ||
+    if (ifn_inkling_lookup(w->checkpoint, source, name, &data, &n) != IFN_OK || n < bytes ||
         (!prefix && n != bytes)) {
-        sq_weight_fail(w, SQ_FORMAT, "weight source size mismatch");
+        ifn_weight_fail(w, IFN_FORMAT, "weight source size mismatch");
         return;
     }
-    sq_weight_backend_check(w, w->backend.copy(w->backend.context, dst, data, bytes, 0, w->stream),
-                            "upload tensor");
+    ifn_weight_backend_check(w, w->backend.copy(w->backend.context, dst, data, bytes, 0, w->stream),
+                             "upload tensor");
 }
 
-static void raw(sq_gpu_weights *w, const char *label, uint32_t source, const char *name,
+static void raw(ifn_gpu_weights *w, const char *label, uint32_t source, const char *name,
                 size_t bytes) {
-    sq_weight_view *v = view(w, label, SQ_WEIGHT_RAW);
+    ifn_weight_view *v = view(w, label, IFN_WEIGHT_RAW);
     if (!v)
         return;
     v->data = block(w, label, "", bytes);
-    if (w->status == SQ_OK)
+    if (w->status == IFN_OK)
         copy_tensor(w, source, name, pointer(w, v->data), bytes, false);
 }
 
-static void stage(sq_gpu_weights *w, uint32_t source, const char *name, size_t offset, size_t bytes,
-                  bool prefix) {
-    if (w->status != SQ_OK || !w->execute)
+static void stage(ifn_gpu_weights *w, uint32_t source, const char *name, size_t offset,
+                  size_t bytes, bool prefix) {
+    if (w->status != IFN_OK || !w->execute)
         return;
     if (offset > w->plan.staging_bytes || bytes > w->plan.staging_bytes - offset) {
-        sq_weight_fail(w, SQ_LIMIT, "weight staging overflow");
+        ifn_weight_fail(w, IFN_LIMIT, "weight staging overflow");
         return;
     }
     copy_tensor(w, source, name, (unsigned char *)w->stage + offset, bytes, prefix);
 }
 
-static sq_weight_view *linear(sq_gpu_weights *w, const char *label, unsigned rows, unsigned cols,
-                              unsigned kind, const void *input) {
-    sq_weight_view *v = view(w, label, SQ_WEIGHT_LINEAR);
+static ifn_weight_view *linear(ifn_gpu_weights *w, const char *label, unsigned rows, unsigned cols,
+                               unsigned kind, const void *input) {
+    ifn_weight_view *v = view(w, label, IFN_WEIGHT_LINEAR);
     if (!v)
         return NULL;
     size_t elements;
-    if (!rows || !cols || cols % 16 || kind > 2 || !sq_size_mul(rows, cols, &elements)) {
-        sq_weight_fail(w, SQ_LIMIT, "invalid linear geometry");
+    if (!rows || !cols || cols % 16 || kind > 2 || !ifn_size_mul(rows, cols, &elements)) {
+        ifn_weight_fail(w, IFN_LIMIT, "invalid linear geometry");
         return NULL;
     }
     v->precision = kind;
@@ -109,14 +110,14 @@ static sq_weight_view *linear(sq_gpu_weights *w, const char *label, unsigned row
         v->row_scales = block(w, label, ".row_scales", (size_t)rows * 4);
     if (kind == 2)
         v->scales = block(w, label, ".scales", elements / 16);
-    if (w->execute && w->status == SQ_OK) {
+    if (w->execute && w->status == IFN_OK) {
         if (kind == 0)
-            sq_weight_backend_check(w,
-                                    w->backend.copy(w->backend.context, pointer(w, v->data), input,
-                                                    elements * 2, 2, w->stream),
-                                    "copy BF16 matrix");
+            ifn_weight_backend_check(w,
+                                     w->backend.copy(w->backend.context, pointer(w, v->data), input,
+                                                     elements * 2, 2, w->stream),
+                                     "copy BF16 matrix");
         else
-            sq_weight_backend_check(
+            ifn_weight_backend_check(
                 w,
                 w->backend.pack(w->backend.context, input, pointer(w, v->data),
                                 pointer(w, kind == 1 ? v->row_scales : v->scales), w->amax,
@@ -126,21 +127,21 @@ static sq_weight_view *linear(sq_gpu_weights *w, const char *label, unsigned row
     return v;
 }
 
-static void staged_linear(sq_gpu_weights *w, const char *label, uint32_t source, const char *name,
+static void staged_linear(ifn_gpu_weights *w, const char *label, uint32_t source, const char *name,
                           unsigned rows, unsigned cols, unsigned kind, bool prefix) {
     stage(w, source, name, 0, (size_t)rows * cols * 2, prefix);
     (void)linear(w, label, rows, cols, kind, w->stage);
 }
 
-static void concat(sq_gpu_weights *w, const char *label, uint32_t source, const char *prefix,
+static void concat(ifn_gpu_weights *w, const char *label, uint32_t source, const char *prefix,
                    const char *const *suffix, const unsigned *rows, size_t count, unsigned cols,
                    unsigned kind) {
     size_t offset = 0, total = 0;
     char name[160];
-    for (size_t i = 0; i < count && w->status == SQ_OK; i++) {
+    for (size_t i = 0; i < count && w->status == IFN_OK; i++) {
         int n = snprintf(name, sizeof name, "%s%s", prefix, suffix[i]);
         if (n < 0 || (size_t)n >= sizeof name) {
-            sq_weight_fail(w, SQ_LIMIT, "tensor label limit");
+            ifn_weight_fail(w, IFN_LIMIT, "tensor label limit");
             return;
         }
         size_t bytes = (size_t)rows[i] * cols * 2;
@@ -159,9 +160,9 @@ static float f32le(const unsigned char *p) {
     return f;
 }
 
-static void expert(sq_gpu_weights *w, const char *label, const char *prefix, const char *bank,
+static void expert(ifn_gpu_weights *w, const char *label, const char *prefix, const char *bank,
                    unsigned layer, unsigned cols) {
-    sq_weight_view *v = view(w, label, SQ_WEIGHT_EXPERT);
+    ifn_weight_view *v = view(w, label, IFN_WEIGHT_EXPERT);
     if (!v)
         return;
     v->rows = H;
@@ -178,20 +179,20 @@ static void expert(sq_gpu_weights *w, const char *label, const char *prefix, con
         copy_tensor(w, 0, wn, pointer(w, v->data), elements / 2, false);
         copy_tensor(w, 0, sn, pointer(w, v->scales), elements / 16, false);
         v->expert_scale = block(w, label, ".expert_scale", E * 4);
-        if (w->execute && w->status == SQ_OK) {
+        if (w->execute && w->status == IFN_OK) {
             (void)snprintf(an, sizeof an, "%s_amax", wn);
             (void)snprintf(dn, sizeof dn, "%s_outer_scale_denominator", wn);
             const void *ap = NULL, *dp = NULL;
             size_t as = 0, ds = 0;
-            if (sq_inkling_lookup(w->checkpoint, 0, an, &ap, &as) != SQ_OK ||
-                sq_inkling_lookup(w->checkpoint, 0, dn, &dp, &ds) != SQ_OK || as != E * 4 ||
+            if (ifn_inkling_lookup(w->checkpoint, 0, an, &ap, &as) != IFN_OK ||
+                ifn_inkling_lookup(w->checkpoint, 0, dn, &dp, &ds) != IFN_OK || as != E * 4 ||
                 ds != 4) {
-                sq_weight_fail(w, SQ_FORMAT, "invalid expert scale metadata");
+                ifn_weight_fail(w, IFN_FORMAT, "invalid expert scale metadata");
                 return;
             }
             float denom = f32le(dp), scales[E];
             if (!isfinite(denom) || denom <= 0 || !isfinite(1.0f / denom)) {
-                sq_weight_fail(w, SQ_FORMAT, "invalid expert scale denominator");
+                ifn_weight_fail(w, IFN_FORMAT, "invalid expert scale denominator");
                 return;
             }
             float inverse = 1.0f / denom;
@@ -199,14 +200,15 @@ static void expert(sq_gpu_weights *w, const char *label, const char *prefix, con
                 float amax = f32le((const unsigned char *)ap + i * 4);
                 scales[i] = amax * inverse;
                 if (!isfinite(amax) || amax < 0 || !isfinite(scales[i])) {
-                    sq_weight_fail(w, SQ_FORMAT, "invalid expert amax");
+                    ifn_weight_fail(w, IFN_FORMAT, "invalid expert amax");
                     return;
                 }
             }
-            sq_weight_backend_check(w,
-                                    w->backend.copy(w->backend.context, pointer(w, v->expert_scale),
-                                                    scales, sizeof scales, 0, w->stream),
-                                    "upload expert scales");
+            ifn_weight_backend_check(w,
+                                     w->backend.copy(w->backend.context,
+                                                     pointer(w, v->expert_scale), scales,
+                                                     sizeof scales, 0, w->stream),
+                                     "upload expert scales");
         }
     } else if (w->config.mode != 2) {
         v->data = block(w, label, ".data", elements);
@@ -219,28 +221,29 @@ static void expert(sq_gpu_weights *w, const char *label, const char *prefix, con
         v->expert_scale = block(w, label, ".expert_scale", E * 4);
         v->data = block(w, label, ".data", elements / 2);
         v->scales = block(w, label, ".scales", elements / 16);
-        if (w->execute && w->status == SQ_OK)
-            sq_weight_backend_check(w,
-                                    w->backend.expert(w->backend.context, w->stage,
-                                                      (unsigned char *)w->stage + elements,
-                                                      pointer(w, v->data), pointer(w, v->scales),
-                                                      pointer(w, v->expert_scale), E, H, (int)cols,
-                                                      w->stream),
-                                    "convert MXFP8 experts");
+        if (w->execute && w->status == IFN_OK)
+            ifn_weight_backend_check(w,
+                                     w->backend.expert(w->backend.context, w->stage,
+                                                       (unsigned char *)w->stage + elements,
+                                                       pointer(w, v->data), pointer(w, v->scales),
+                                                       pointer(w, v->expert_scale), E, H, (int)cols,
+                                                       w->stream),
+                                     "convert MXFP8 experts");
     }
 }
 
-static void fuse(sq_gpu_weights *w) {
-    sq_weight_view *v = view(w, "dspark.fuse_alpha", SQ_WEIGHT_RAW);
+static void fuse(ifn_gpu_weights *w) {
+    ifn_weight_view *v = view(w, "dspark.fuse_alpha", IFN_WEIGHT_RAW);
     if (!v)
         return;
     v->data = block(w, v->label, "", 64);
-    if (!w->execute || w->status != SQ_OK)
+    if (!w->execute || w->status != IFN_OK)
         return;
     const void *data = NULL;
     size_t bytes = 0;
-    if (sq_inkling_lookup(w->checkpoint, 1, "fuse_weight", &data, &bytes) != SQ_OK || bytes != 32) {
-        sq_weight_fail(w, SQ_FORMAT, "invalid fusion weights");
+    if (ifn_inkling_lookup(w->checkpoint, 1, "fuse_weight", &data, &bytes) != IFN_OK ||
+        bytes != 32) {
+        ifn_weight_fail(w, IFN_FORMAT, "invalid fusion weights");
         return;
     }
     float alpha[16];
@@ -253,7 +256,7 @@ static void fuse(sq_gpu_weights *w) {
             float f;
             memcpy(&f, &bits, 4);
             if (!isfinite(f)) {
-                sq_weight_fail(w, SQ_FORMAT, "non-finite fusion weight");
+                ifn_weight_fail(w, IFN_FORMAT, "non-finite fusion weight");
                 return;
             }
             values[col] = f;
@@ -265,30 +268,30 @@ static void fuse(sq_gpu_weights *w) {
             sum += values[col];
         }
         if (!isfinite(sum) || sum <= 0) {
-            sq_weight_fail(w, SQ_FORMAT, "invalid fusion normalization");
+            ifn_weight_fail(w, IFN_FORMAT, "invalid fusion normalization");
             return;
         }
         for (size_t col = 0; col < 4; col++)
             alpha[row * 4 + col] = (float)(values[col] / sum);
     }
-    sq_weight_backend_check(
+    ifn_weight_backend_check(
         w,
         w->backend.copy(w->backend.context, pointer(w, v->data), alpha, sizeof alpha, 0, w->stream),
         "upload fusion alpha");
 }
 
-static sq_weight_view *named(sq_gpu_weights *w, const char *name) {
+static ifn_weight_view *named(ifn_gpu_weights *w, const char *name) {
     for (size_t i = 0; i < w->view_count; i++)
         if (!strcmp(w->views[i].label, name))
             return &w->views[i];
-    sq_weight_fail(w, SQ_FORMAT, "missing internal weight view");
+    ifn_weight_fail(w, IFN_FORMAT, "missing internal weight view");
     return NULL;
 }
 
-static void alias(sq_gpu_weights *w, const char *label, const sq_weight_view *source) {
-    if (!source || w->status != SQ_OK)
+static void alias(ifn_gpu_weights *w, const char *label, const ifn_weight_view *source) {
+    if (!source || w->status != IFN_OK)
         return;
-    sq_weight_view *v = view(w, label, source->type);
+    ifn_weight_view *v = view(w, label, source->type);
     if (!v)
         return;
     char name[128];
@@ -297,7 +300,7 @@ static void alias(sq_gpu_weights *w, const char *label, const sq_weight_view *so
     memcpy(v->label, name, sizeof name);
 }
 
-void sq_weights_recipe(sq_gpu_weights *w) {
+void ifn_weights_recipe(ifn_gpu_weights *w) {
     w->offset = w->span_count = w->view_count = 0;
     unsigned kind = w->config.mode, mtp_kind = kind == 0 || w->config.mtp_bf16 ? 0 : 2;
     raw(w, "embed", 0, "model.llm.embed.weight", (size_t)V * H * 2);
@@ -318,7 +321,7 @@ void sq_weights_recipe(sq_gpu_weights *w) {
     raw(w, "output_query", 0, "model.llm.attn_res.output_query", H * 4);
     raw(w, "cross_pass_queries", 0, "model.llm.middle_cycle_cross_pass_queries", 24 * H * 4);
     raw(w, "cross_pass_kv_queries", 0, "model.llm.middle_cycle_cross_pass_kv_queries", 24 * H * 4);
-    for (unsigned i = 0; i < 24 && w->status == SQ_OK; i++) {
+    for (unsigned i = 0; i < 24 && w->status == IFN_OK; i++) {
         (void)snprintf(prefix, sizeof prefix, "model.llm.layers.%u.", i);
 #define RAW(field, suffix, bytes)                                                                  \
     do {                                                                                           \
@@ -349,15 +352,15 @@ void sq_weights_recipe(sq_gpu_weights *w) {
         const unsigned kv_rows[] = {KV, KV};
         (void)snprintf(label, sizeof label, "layers.%u.w_kv", i);
         concat(w, label, 0, prefix, kv, kv_rows, 2, H, kind);
-        sq_weight_view *v = named(w, label);
+        ifn_weight_view *v = named(w, label);
         (void)snprintf(label, sizeof label, "layers.%u.w_k", i);
         alias(w, label, v);
-        sq_weight_view *k = named(w, label);
+        ifn_weight_view *k = named(w, label);
         if (k)
             k->rows = KV;
         (void)snprintf(label, sizeof label, "layers.%u.w_v", i);
         alias(w, label, v);
-        sq_weight_view *vv = named(w, label);
+        ifn_weight_view *vv = named(w, label);
         if (vv) {
             vv->rows = KV;
             vv->data += (size_t)KV * H * (kind == 0 ? 2u : 1u) / (kind == 2 ? 2u : 1u);
@@ -410,7 +413,7 @@ void sq_weights_recipe(sq_gpu_weights *w) {
 #undef LINEAR
 #undef RAW
     }
-    if (!w->config.with_mtp || w->status != SQ_OK)
+    if (!w->config.with_mtp || w->status != IFN_OK)
         return;
     fuse(w);
     raw(w, "dspark.mask_embed", 1, "mask_embed", H * 2);
@@ -421,42 +424,43 @@ void sq_weights_recipe(sq_gpu_weights *w) {
     raw(w, "dspark.hidden_out_w", 1, "markov_head.hidden_out.weight", H * 256 * 2);
     raw(w, "dspark.hidden_out_b", 1, "markov_head.hidden_out.bias", H * 2);
     stage(w, 1, "markov_head.rnn_proj.weight", 0, 768 * 5120 * 2, false);
-    sq_weight_view *sp = view(w, "dspark.rnn_w_sp", 0);
+    ifn_weight_view *sp = view(w, "dspark.rnn_w_sp", 0);
     if (!sp)
         return;
     sp->data = block(w, sp->label, "", 768 * 512 * 2);
-    sq_weight_view *rh = view(w, "dspark.rnn_w_h", 0);
+    ifn_weight_view *rh = view(w, "dspark.rnn_w_h", 0);
     if (!rh)
         return;
     rh->data = block(w, rh->label, "", 768 * H * 2);
-    sq_weight_view *rf = view(w, "dspark.rnn_w_f", 0);
+    ifn_weight_view *rf = view(w, "dspark.rnn_w_f", 0);
     if (!rf)
         return;
     rf->data = block(w, rf->label, "", 768 * H * 2);
-    if (w->execute && w->status == SQ_OK)
-        sq_weight_backend_check(w,
-                                w->backend.rnn(w->backend.context, w->stage, pointer(w, sp->data),
-                                               pointer(w, rh->data), pointer(w, rf->data),
-                                               w->stream),
-                                "split MTP RNN");
+    if (w->execute && w->status == IFN_OK)
+        ifn_weight_backend_check(w,
+                                 w->backend.rnn(w->backend.context, w->stage, pointer(w, sp->data),
+                                                pointer(w, rh->data), pointer(w, rf->data),
+                                                w->stream),
+                                 "split MTP RNN");
     stage(w, 0, "model.llm.unembed.weight", 0, (size_t)VU * H * 2, true);
     alias(w, "dspark.unembed_draft", named(w, "unembed"));
-    sq_weight_view *bias = view(w, "dspark.fold_b", 0);
+    ifn_weight_view *bias = view(w, "dspark.fold_b", 0);
     if (!bias)
         return;
     bias->data = block(w, bias->label, "", VU * 4);
-    if (w->execute && w->status == SQ_OK) {
-        sq_weight_view *hw = named(w, "dspark.hidden_out_w"), *hb = named(w, "dspark.hidden_out_b");
-        if (w->status == SQ_OK)
-            sq_weight_backend_check(w,
-                                    w->backend.fold(w->backend.context, w->stage,
-                                                    pointer(w, hw->data), pointer(w, hb->data),
-                                                    pointer(w, bias->data), w->fold_temp,
-                                                    w->stream),
-                                    "fold MTP Markov head");
+    if (w->execute && w->status == IFN_OK) {
+        ifn_weight_view *hw = named(w, "dspark.hidden_out_w"),
+                        *hb = named(w, "dspark.hidden_out_b");
+        if (w->status == IFN_OK)
+            ifn_weight_backend_check(w,
+                                     w->backend.fold(w->backend.context, w->stage,
+                                                     pointer(w, hw->data), pointer(w, hb->data),
+                                                     pointer(w, bias->data), w->fold_temp,
+                                                     w->stream),
+                                     "fold MTP Markov head");
     }
     (void)linear(w, "dspark.fold_w", VU, 256, mtp_kind, w->fold_temp);
-    for (unsigned i = 0; i < 3 && w->status == SQ_OK; i++) {
+    for (unsigned i = 0; i < 3 && w->status == IFN_OK; i++) {
         (void)snprintf(prefix, sizeof prefix, "layers.%u.", i);
 #define RAW(field, suffix, bytes)                                                                  \
     do {                                                                                           \

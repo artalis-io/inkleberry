@@ -146,7 +146,7 @@ def generate(schema):
             result += '[' + str(field['count']) + ']'
         return result
     banner = '/* Generated from abi/cuda.json by tools/generate_cuda_abi.py; do not edit.\n * SPDX-License-Identifier: Apache-2.0\n * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis */\n'
-    header = [banner, '#ifndef SQ_CUDA_ABI_H\n#define SQ_CUDA_ABI_H\n#include <stddef.h>\n#include <stdint.h>\n', '#ifndef SQ_CUDA_ABI_NO_TYPES\n']
+    header = [banner, '#ifndef IFN_CUDA_ABI_H\n#define IFN_CUDA_ABI_H\n#include <stddef.h>\n#include <stdint.h>\n', '#ifndef IFN_CUDA_ABI_NO_TYPES\n']
     for record in schema['records']:
         name, fields = record['name'], record['fields']
         header += [f'typedef struct {name} {{\n', *['    ' + declaration(f) + ';\n' for f in fields], f'}} {name};\n']
@@ -164,12 +164,12 @@ def generate(schema):
         name, fields = record['name'], record['fields']
         items += [(name + '.size', f'sizeof({name})'), (name + '.align', f'ALIGN({name})')]
         items += [(name + '.' + field, f'offsetof({name}, {field})') for field in [f['name'] for f in fields]]
-    c = [banner, '#include "cuda_abi.h"\n', 'const size_t *sq_test_c_layout(size_t *count) {\n    static const size_t values[] = {\n']
+    c = [banner, '#include "cuda_abi.h"\n', 'const size_t *ifn_test_c_layout(size_t *count) {\n    static const size_t values[] = {\n']
     c += ['        ' + expr.replace('ALIGN(', '_Alignof(') + ',\n' for _, expr in items]
     c += ['    };\n    *count = sizeof values / sizeof values[0];\n    return values;\n}\n']
-    cpp = [banner, '#include <cstddef>\n#include <cstdio>\n#include "../cuda/cuda_abi.cu"\n', ''.join('using ' + r['name'] + ' = ' + r['cpp_type'] + ';\n' for r in schema['records'] if 'cpp_type' in r), '#define SQ_CUDA_ABI_NO_TYPES\n#include "cuda_abi.h"\n', 'extern "C" const size_t *sq_test_c_layout(size_t *count);\nint main() {\n    const size_t expected[] = {\n']
+    cpp = [banner, '#include <cstddef>\n#include <cstdio>\n#include "../cuda/cuda_abi.cu"\n', ''.join('using ' + r['name'] + ' = ' + r['cpp_type'] + ';\n' for r in schema['records'] if 'cpp_type' in r), '#define IFN_CUDA_ABI_NO_TYPES\n#include "cuda_abi.h"\n', 'extern "C" const size_t *ifn_test_c_layout(size_t *count);\nint main() {\n    const size_t expected[] = {\n']
     cpp += ['        ' + expr.replace('ALIGN(', 'alignof(') + ',\n' for _, expr in items]
-    cpp += ['    };\n    const char *names[] = {\n', *['        "' + name + '",\n' for name, _ in items], '    };\n    size_t count = 0;\n    const size_t *actual = sq_test_c_layout(&count);\n    if (count != sizeof expected / sizeof expected[0]) return 1;\n    for (size_t i = 0; i < count; ++i) {\n        if (actual[i] != expected[i]) {\n            std::fprintf(stderr, "%s: C=%zu C++=%zu\\n", names[i], actual[i], expected[i]);\n            return 1;\n        }\n    }\n    std::printf("CUDA ABI: ' + str(len(functions)) + ' prototypes, ' + str(len(schema['records'])) + ' records, %zu layout checks passed\\n", count);\n    return 0;\n}\n']
+    cpp += ['    };\n    const char *names[] = {\n', *['        "' + name + '",\n' for name, _ in items], '    };\n    size_t count = 0;\n    const size_t *actual = ifn_test_c_layout(&count);\n    if (count != sizeof expected / sizeof expected[0]) return 1;\n    for (size_t i = 0; i < count; ++i) {\n        if (actual[i] != expected[i]) {\n            std::fprintf(stderr, "%s: C=%zu C++=%zu\\n", names[i], actual[i], expected[i]);\n            return 1;\n        }\n    }\n    std::printf("CUDA ABI: ' + str(len(functions)) + ' prototypes, ' + str(len(schema['records'])) + ' records, %zu layout checks passed\\n", count);\n    return 0;\n}\n']
     return {'src/cuda_abi.h': ''.join(header), 'test/cuda_abi_c.c': ''.join(c), 'test/cuda_abi_probe.cu': ''.join(cpp)}
 
 

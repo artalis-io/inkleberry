@@ -1,15 +1,15 @@
 # Text conversations and streaming foundation
 
-The host library now exposes `sq_chat.h`. This slice precedes HTTP: transport,
+The host library now exposes `ifn_chat.h`. This slice precedes HTTP: transport,
 worker admission, authentication and SSE framing remain separate. The HTTP
 adapter is to use the latest Keel release, resolved and pinned when implemented.
 The native implementation and its optional comparison material retain their pinned provenance.
 
 ## Conversation encoding
 
-`sq_chat_encode` accepts counted typed text messages: system, developer, user and
+`ifn_chat_encode` accepts counted typed text messages: system, developer, user and
 assistant, with optional names and historical reasoning. Initialize options with
-`SQ_CHAT_OPTIONS_INIT`. Defaults select thinking effort none, omit historical
+`IFN_CHAT_OPTIONS_INIT`. Defaults select thinking effort none, omit historical
 reasoning and append Inkling's model/text generation prefix. `keep_history_thinking`
 and `enable_thinking` are explicit booleans. All six existing thinking-effort
 presets are supported.
@@ -17,7 +17,7 @@ presets are supported.
 The encoder matches the pinned server's text-message layout, including leading
 system/developer messages, effort placement, assistant reasoning/content blocks,
 model-end markers and the system-prefix token count. That count can be passed to
-`sq_decode_options.system_prefix_tokens` for the existing opt-in prefix cache.
+`ifn_decode_options.system_prefix_tokens` for the existing opt-in prefix cache.
 Caller text and names use ordinary tokenization; only library-controlled protocol
 markers enable special-token parsing. Literal protocol-looking user text cannot
 insert control IDs. Ordinary vocabulary and special-marker lookup remain separate.
@@ -39,7 +39,7 @@ it cannot represent. The legacy single-user renderer/CLI behavior is unchanged.
 
 ## Shared streaming and collected-output filter
 
-`sq_stream_create` owns a bounded filter through the injected allocator and
+`ifn_stream_create` owns a bounded filter through the injected allocator and
 borrows an immutable tokenizer until destruction. Byte-only callers can use a
 NULL tokenizer with `parse_chat=0`. The object copies up to eight stop strings,
 each 1–64 valid UTF-8 bytes. Pushes allocate nothing and are limited to 32 MiB per
@@ -67,7 +67,7 @@ arguments leave state unchanged. Reset/destroy discard pending bytes without
 calling the callback; finish flushes unmatched prefixes and final Unicode state.
 Reset reuses the configured stops and allocation. Finish is idempotent.
 
-Initialize diagnostics with `SQ_STREAM_INFO_INIT`. Counts describe consumed
+Initialize diagnostics with `IFN_STREAM_INFO_INIT`. Counts describe consumed
 model token IDs (including control/EOS), produced content/reasoning bytes and
 Unicode replacements. They are not network-delivery receipts. Finish reasons
 separate stop, EOS, length, callback, cancellation and errors. An engine callback
@@ -85,18 +85,18 @@ make thread-sanitize
 make fuzz-smoke                    # adds a stream partition fuzzer
 make ZIG=/path/to/zig chat-oracle
 python3 reference/validation/validate_chat.py --model /external/model-directory \
-  --library ./libsq.so --oracle .build/chat-oracle
+  --library ./libinkleberry.so --oracle .build/chat-oracle
 make -j8 CUDA_ROOT=/usr/local/cuda-13.5 .build/chat-native
-export SQ_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID
+export INKLEBERRY_TEST_GPU_UUID=GPU-REPLACE-WITH-APPROVED-IDLE-UUID
 python3 tools/run_cuda_smoke.py /usr/local/cuda-13.5/lib64 \
   .build/chat-native /external/model-directory
-SQ_TEST_TIMEOUT_SECONDS=3600 python3 tools/run_cuda_smoke.py \
+INKLEBERRY_TEST_TIMEOUT_SECONDS=3600 python3 tools/run_cuda_smoke.py \
   /usr/local/cuda-13.5/lib64 /usr/local/cuda-13.5/bin/compute-sanitizer \
   --tool memcheck --leak-check full --error-exitcode 99 \
   .build/chat-native /external/model-directory
 ```
 
-Use `libsq.dylib` on macOS. The oracle needs the already available Zig 0.17.1;
+Use `libinkleberry.dylib` on macOS. The oracle needs the already available Zig 0.17.1;
 the C runtime does not. The test adapter copies pinned Zig sources under
 `.build` and changes visibility only, exposing the actual renderer and buffers.
 It does not replace the renderer with a Python reconstruction or patch originals.

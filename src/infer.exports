@@ -1,4 +1,4 @@
-SQ_INFER_1.0 {
-    global: sq_infer_get_api;
+IFN_INFER_1.0 {
+    global: ifn_infer_get_api;
     local: *;
 };

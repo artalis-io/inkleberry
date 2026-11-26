@@ -12,12 +12,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-struct sq_safetensors {
-    sq_options allocator;
+struct ifn_safetensors {
+    ifn_options allocator;
     const unsigned char *data;
     size_t size, base, count;
     bool mapped;
-    sq_tensor_info *tensors;
+    ifn_tensor_info *tensors;
     uint16_t table[4096];
 };
 
@@ -28,7 +28,7 @@ static uint64_t hash_name(const char *name, size_t length) {
     return hash;
 }
 
-static size_t lookup(const sq_safetensors *file, const char *name, size_t length) {
+static size_t lookup(const ifn_safetensors *file, const char *name, size_t length) {
     size_t slot = (size_t)(hash_name(name, length) & 4095u);
     for (size_t probe = 0; probe < 4096; probe++, slot = (slot + 1) & 4095u) {
         uint16_t index = file->table[slot];
@@ -41,48 +41,49 @@ static size_t lookup(const sq_safetensors *file, const char *name, size_t length
     return SIZE_MAX;
 }
 
-static bool tensor(sq_json *j, sq_tensor_info *info) {
-    if (!sq_json_take(j, '{'))
+static bool tensor(ifn_json *j, ifn_tensor_info *info) {
+    if (!ifn_json_take(j, '{'))
         return false;
     unsigned fields = 0;
     do {
         char key[32];
-        if (!sq_json_string(j, key, sizeof key) || !sq_json_take(j, ':'))
+        if (!ifn_json_string(j, key, sizeof key) || !ifn_json_take(j, ':'))
             return false;
         unsigned bit;
         if (!strcmp(key, "dtype")) {
             char type[32];
             bit = 1;
-            if (!sq_json_string(j, type, sizeof type))
+            if (!ifn_json_string(j, type, sizeof type))
                 return false;
             if (!strcmp(type, "U8"))
-                info->dtype = SQ_U8;
+                info->dtype = IFN_U8;
             else if (!strcmp(type, "BF16"))
-                info->dtype = SQ_BF16;
+                info->dtype = IFN_BF16;
             else if (!strcmp(type, "F32"))
-                info->dtype = SQ_F32;
+                info->dtype = IFN_F32;
             else if (!strcmp(type, "F8_E4M3"))
-                info->dtype = SQ_F8_E4M3;
+                info->dtype = IFN_F8_E4M3;
             else
                 return false;
         } else if (!strcmp(key, "shape")) {
             bit = 2;
-            if (!sq_json_take(j, '['))
+            if (!ifn_json_take(j, '['))
                 return false;
-            if (!sq_json_take(j, ']')) {
+            if (!ifn_json_take(j, ']')) {
                 do {
-                    if (info->rank == SQ_MAX_RANK || !sq_json_u64(j, &info->shape[info->rank]))
+                    if (info->rank == IFN_MAX_RANK || !ifn_json_u64(j, &info->shape[info->rank]))
                         return false;
                     info->rank++;
-                } while (sq_json_take(j, ','));
-                if (!sq_json_take(j, ']'))
+                } while (ifn_json_take(j, ','));
+                if (!ifn_json_take(j, ']'))
                     return false;
             }
         } else if (!strcmp(key, "data_offsets")) {
             uint64_t end;
             bit = 4;
-            if (!sq_json_take(j, '[') || !sq_json_u64(j, &info->offset) || !sq_json_take(j, ',') ||
-                !sq_json_u64(j, &end) || !sq_json_take(j, ']') || end < info->offset)
+            if (!ifn_json_take(j, '[') || !ifn_json_u64(j, &info->offset) ||
+                !ifn_json_take(j, ',') || !ifn_json_u64(j, &end) || !ifn_json_take(j, ']') ||
+                end < info->offset)
                 return false;
             info->bytes = end - info->offset;
         } else
@@ -90,171 +91,172 @@ static bool tensor(sq_json *j, sq_tensor_info *info) {
         if (fields & bit)
             return false;
         fields |= bit;
-    } while (sq_json_take(j, ','));
-    return sq_json_take(j, '}') && fields == 7;
+    } while (ifn_json_take(j, ','));
+    return ifn_json_take(j, '}') && fields == 7;
 }
 
-static bool metadata(sq_json *j) {
-    if (!sq_json_take(j, '{'))
+static bool metadata(ifn_json *j) {
+    if (!ifn_json_take(j, '{'))
         return false;
-    if (sq_json_take(j, '}'))
+    if (ifn_json_take(j, '}'))
         return true;
     do {
-        if (!sq_json_string(j, NULL, 0) || !sq_json_take(j, ':') || !sq_json_string(j, NULL, 0))
+        if (!ifn_json_string(j, NULL, 0) || !ifn_json_take(j, ':') || !ifn_json_string(j, NULL, 0))
             return false;
-    } while (sq_json_take(j, ','));
-    return sq_json_take(j, '}');
+    } while (ifn_json_take(j, ','));
+    return ifn_json_take(j, '}');
 }
 
-static sq_status parse(sq_safetensors *file) {
+static ifn_status parse(ifn_safetensors *file) {
     if (file->size < 10)
-        return sq_error(SQ_FORMAT, "truncated safetensors file");
+        return ifn_error(IFN_FORMAT, "truncated safetensors file");
     uint64_t header = 0;
     for (unsigned i = 0; i < 8; i++)
         header |= (uint64_t)file->data[i] << (8 * i);
-    if (header < 2 || header > SQ_MAX_HEADER || header > file->size - 8)
-        return sq_error(SQ_FORMAT, "invalid safetensors header length");
+    if (header < 2 || header > IFN_MAX_HEADER || header > file->size - 8)
+        return ifn_error(IFN_FORMAT, "invalid safetensors header length");
     file->base = 8 + (size_t)header;
-    sq_json j = {file->data + 8, (size_t)header, 0};
-    if (!sq_json_take(&j, '{'))
-        return sq_error(SQ_FORMAT, "expected tensor directory");
+    ifn_json j = {file->data + 8, (size_t)header, 0};
+    if (!ifn_json_take(&j, '{'))
+        return ifn_error(IFN_FORMAT, "expected tensor directory");
     bool seen_metadata = false;
-    if (!sq_json_take(&j, '}')) {
+    if (!ifn_json_take(&j, '}')) {
         do {
-            char name[SQ_MAX_NAME + 1];
-            if (!sq_json_string(&j, name, sizeof name) || !name[0] || !sq_json_take(&j, ':'))
-                return sq_error(SQ_FORMAT, "invalid tensor name/key");
+            char name[IFN_MAX_NAME + 1];
+            if (!ifn_json_string(&j, name, sizeof name) || !name[0] || !ifn_json_take(&j, ':'))
+                return ifn_error(IFN_FORMAT, "invalid tensor name/key");
             if (!strcmp(name, "__metadata__")) {
                 if (seen_metadata || !metadata(&j))
-                    return sq_error(SQ_FORMAT, "invalid metadata");
+                    return ifn_error(IFN_FORMAT, "invalid metadata");
                 seen_metadata = true;
                 continue;
             }
-            if (file->count == SQ_MAX_TENSORS || lookup(file, name, strlen(name)) != SIZE_MAX)
-                return sq_error(SQ_FORMAT, "duplicate tensor or tensor limit exceeded");
-            sq_tensor_info *info = &file->tensors[file->count];
+            if (file->count == IFN_MAX_TENSORS || lookup(file, name, strlen(name)) != SIZE_MAX)
+                return ifn_error(IFN_FORMAT, "duplicate tensor or tensor limit exceeded");
+            ifn_tensor_info *info = &file->tensors[file->count];
             memset(info, 0, sizeof *info);
             memcpy(info->name, name, strlen(name) + 1);
             if (!tensor(&j, info))
-                return sq_error(SQ_FORMAT, "invalid tensor schema/dtype/shape");
+                return ifn_error(IFN_FORMAT, "invalid tensor schema/dtype/shape");
             size_t elements = 1;
             for (uint32_t i = 0; i < info->rank; i++) {
                 if (info->shape[i] > SIZE_MAX ||
-                    !sq_size_mul(elements, (size_t)info->shape[i], &elements))
-                    return sq_error(SQ_FORMAT, "tensor shape overflow");
+                    !ifn_size_mul(elements, (size_t)info->shape[i], &elements))
+                    return ifn_error(IFN_FORMAT, "tensor shape overflow");
             }
             size_t expected;
-            size_t item = info->dtype == SQ_F32 ? 4 : info->dtype == SQ_BF16 ? 2 : 1;
-            if (!sq_size_mul(elements, item, &expected) || expected != info->bytes ||
+            size_t item = info->dtype == IFN_F32 ? 4 : info->dtype == IFN_BF16 ? 2 : 1;
+            if (!ifn_size_mul(elements, item, &expected) || expected != info->bytes ||
                 info->offset > file->size - file->base ||
                 info->bytes > file->size - file->base - info->offset)
-                return sq_error(SQ_FORMAT, "tensor size/offset mismatch");
+                return ifn_error(IFN_FORMAT, "tensor size/offset mismatch");
             size_t slot = (size_t)(hash_name(name, strlen(name)) & 4095u);
             while (file->table[slot] != UINT16_MAX)
                 slot = (slot + 1) & 4095u;
             file->table[slot] = (uint16_t)file->count++;
-        } while (sq_json_take(&j, ','));
-        if (!sq_json_take(&j, '}'))
-            return sq_error(SQ_FORMAT, "unterminated tensor directory");
+        } while (ifn_json_take(&j, ','));
+        if (!ifn_json_take(&j, '}'))
+            return ifn_error(IFN_FORMAT, "unterminated tensor directory");
     }
-    sq_json_ws(&j);
+    ifn_json_ws(&j);
     if (j.pos != j.size)
-        return sq_error(SQ_FORMAT, "trailing header data");
+        return ifn_error(IFN_FORMAT, "trailing header data");
     uint64_t total = 0, payload = file->size - file->base;
     for (size_t i = 0; i < file->count; i++) {
-        const sq_tensor_info *a = &file->tensors[i];
+        const ifn_tensor_info *a = &file->tensors[i];
         if (a->bytes > payload - total)
-            return sq_error(SQ_FORMAT, "overlapping tensor payload");
+            return ifn_error(IFN_FORMAT, "overlapping tensor payload");
         total += a->bytes;
         for (size_t k = 0; k < i; k++) {
-            const sq_tensor_info *b = &file->tensors[k];
+            const ifn_tensor_info *b = &file->tensors[k];
             if (a->bytes && b->bytes && a->offset < b->offset + b->bytes &&
                 b->offset < a->offset + a->bytes)
-                return sq_error(SQ_FORMAT, "overlapping tensor payload");
+                return ifn_error(IFN_FORMAT, "overlapping tensor payload");
         }
     }
     if (total != payload)
-        return sq_error(SQ_FORMAT, "unindexed tensor payload");
-    return sq_error(SQ_OK, "");
+        return ifn_error(IFN_FORMAT, "unindexed tensor payload");
+    return ifn_error(IFN_OK, "");
 }
 
-static sq_status create(const sq_options *options, sq_safetensors **out) {
-    sq_options allocator;
-    sq_status status = sq_options_resolve(options, &allocator);
-    if (status != SQ_OK)
+static ifn_status create(const ifn_options *options, ifn_safetensors **out) {
+    ifn_options allocator;
+    ifn_status status = ifn_options_resolve(options, &allocator);
+    if (status != IFN_OK)
         return status;
-    sq_safetensors *file = allocator.allocate(allocator.context, sizeof *file);
+    ifn_safetensors *file = allocator.allocate(allocator.context, sizeof *file);
     if (!file)
-        return sq_error(SQ_OUT_OF_MEMORY, "allocate tensor file");
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate tensor file");
     memset(file, 0, sizeof *file);
     file->allocator = allocator;
     memset(file->table, 0xff, sizeof file->table);
-    file->tensors = allocator.allocate(allocator.context, SQ_MAX_TENSORS * sizeof *file->tensors);
+    file->tensors = allocator.allocate(allocator.context, IFN_MAX_TENSORS * sizeof *file->tensors);
     if (!file->tensors) {
         allocator.release(allocator.context, file);
-        return sq_error(SQ_OUT_OF_MEMORY, "allocate tensor directory");
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate tensor directory");
     }
     *out = file;
-    return SQ_OK;
+    return IFN_OK;
 }
 
-void sq_safetensors_close(sq_safetensors *file) {
+void ifn_safetensors_close(ifn_safetensors *file) {
     if (!file)
         return;
-    sq_options allocator = file->allocator;
+    ifn_options allocator = file->allocator;
     if (file->mapped)
         (void)munmap((void *)file->data, file->size);
     allocator.release(allocator.context, file->tensors);
     allocator.release(allocator.context, file);
 }
 
-sq_status sq_safetensors_open_memory(const void *data, size_t bytes, const sq_options *options,
-                                     sq_safetensors **out) {
+ifn_status ifn_safetensors_open_memory(const void *data, size_t bytes, const ifn_options *options,
+                                       ifn_safetensors **out) {
     if (out)
         *out = NULL;
     if (!out || !data)
-        return sq_error(SQ_INVALID_ARGUMENT, "missing input/output");
-    sq_safetensors *file = NULL;
-    sq_status status = create(options, &file);
-    if (status != SQ_OK)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing input/output");
+    ifn_safetensors *file = NULL;
+    ifn_status status = create(options, &file);
+    if (status != IFN_OK)
         return status;
     file->data = data;
     file->size = bytes;
     status = parse(file);
-    if (status != SQ_OK) {
-        sq_safetensors_close(file);
+    if (status != IFN_OK) {
+        ifn_safetensors_close(file);
         return status;
     }
     *out = file;
-    return SQ_OK;
+    return IFN_OK;
 }
 
-sq_status sq_safetensors_open(const char *path, const sq_options *options, sq_safetensors **out) {
+ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
+                                ifn_safetensors **out) {
     if (out)
         *out = NULL;
     if (!out || !path || !path[0])
-        return sq_error(SQ_INVALID_ARGUMENT, "missing path/output");
-    sq_options checked;
-    sq_status status = sq_options_resolve(options, &checked);
-    if (status != SQ_OK)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing path/output");
+    ifn_options checked;
+    ifn_status status = ifn_options_resolve(options, &checked);
+    if (status != IFN_OK)
         return status;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
-        return sq_error(SQ_IO, "cannot open tensor file");
+        return ifn_error(IFN_IO, "cannot open tensor file");
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 10 ||
         (uintmax_t)st.st_size > SIZE_MAX) {
         (void)close(fd);
-        return sq_error(SQ_FORMAT, "invalid tensor file size/type");
+        return ifn_error(IFN_FORMAT, "invalid tensor file size/type");
     }
     size_t size = (size_t)st.st_size;
     void *mapping = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
     (void)close(fd);
     if (mapping == MAP_FAILED)
-        return sq_error(SQ_IO, "cannot map tensor file");
-    sq_safetensors *file = NULL;
+        return ifn_error(IFN_IO, "cannot map tensor file");
+    ifn_safetensors *file = NULL;
     status = create(&checked, &file);
-    if (status != SQ_OK) {
+    if (status != IFN_OK) {
         (void)munmap(mapping, size);
         return status;
     }
@@ -262,69 +264,70 @@ sq_status sq_safetensors_open(const char *path, const sq_options *options, sq_sa
     file->size = size;
     file->mapped = true;
     status = parse(file);
-    if (status != SQ_OK) {
-        sq_safetensors_close(file);
+    if (status != IFN_OK) {
+        ifn_safetensors_close(file);
         return status;
     }
     *out = file;
-    return SQ_OK;
+    return IFN_OK;
 }
 
-size_t sq_safetensors_count(const sq_safetensors *file) {
+size_t ifn_safetensors_count(const ifn_safetensors *file) {
     return file ? file->count : 0;
 }
 
-uint64_t sq_safetensors_data_bytes(const sq_safetensors *file) {
+uint64_t ifn_safetensors_data_bytes(const ifn_safetensors *file) {
     return file ? file->size - file->base : 0;
 }
 
-sq_status sq_safetensors_at(const sq_safetensors *file, size_t index, const sq_tensor_info **out) {
+ifn_status ifn_safetensors_at(const ifn_safetensors *file, size_t index,
+                              const ifn_tensor_info **out) {
     if (out)
         *out = NULL;
     if (!file || !out)
-        return sq_error(SQ_INVALID_ARGUMENT, "missing file/output");
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing file/output");
     if (index >= file->count)
-        return sq_error(SQ_NOT_FOUND, "tensor index not found");
+        return ifn_error(IFN_NOT_FOUND, "tensor index not found");
     *out = &file->tensors[index];
-    return sq_error(SQ_OK, "");
+    return ifn_error(IFN_OK, "");
 }
 
-sq_status sq_safetensors_find(const sq_safetensors *file, const char *name, size_t length,
-                              const sq_tensor_info **out) {
+ifn_status ifn_safetensors_find(const ifn_safetensors *file, const char *name, size_t length,
+                                const ifn_tensor_info **out) {
     if (out)
         *out = NULL;
-    if (!file || !out || !name || !length || length > SQ_MAX_NAME || memchr(name, 0, length))
-        return sq_error(SQ_INVALID_ARGUMENT, "invalid lookup name/output");
-    return sq_safetensors_at(file, lookup(file, name, length), out);
+    if (!file || !out || !name || !length || length > IFN_MAX_NAME || memchr(name, 0, length))
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid lookup name/output");
+    return ifn_safetensors_at(file, lookup(file, name, length), out);
 }
 
-sq_status sq_safetensors_data(const sq_safetensors *file, size_t index, const void **out,
-                              size_t *bytes) {
+ifn_status ifn_safetensors_data(const ifn_safetensors *file, size_t index, const void **out,
+                                size_t *bytes) {
     if (out)
         *out = NULL;
     if (bytes)
         *bytes = 0;
     if (!out || !bytes)
-        return sq_error(SQ_INVALID_ARGUMENT, "missing data outputs");
-    const sq_tensor_info *info;
-    sq_status status = sq_safetensors_at(file, index, &info);
-    if (status != SQ_OK)
+        return ifn_error(IFN_INVALID_ARGUMENT, "missing data outputs");
+    const ifn_tensor_info *info;
+    ifn_status status = ifn_safetensors_at(file, index, &info);
+    if (status != IFN_OK)
         return status;
     *out = file->data + file->base + (size_t)info->offset;
     *bytes = (size_t)info->bytes;
-    return SQ_OK;
+    return IFN_OK;
 }
 
-sq_status sq_safetensors_named_data(const sq_safetensors *file, const char *name, const void **out,
-                                    size_t *bytes) {
-    const sq_tensor_info *info = NULL;
-    sq_status status = sq_safetensors_find(file, name, strlen(name), &info);
-    if (status != SQ_OK) {
+ifn_status ifn_safetensors_named_data(const ifn_safetensors *file, const char *name,
+                                      const void **out, size_t *bytes) {
+    const ifn_tensor_info *info = NULL;
+    ifn_status status = ifn_safetensors_find(file, name, strlen(name), &info);
+    if (status != IFN_OK) {
         if (out)
             *out = NULL;
         if (bytes)
             *bytes = 0;
         return status;
     }
-    return sq_safetensors_data(file, (size_t)(info - file->tensors), out, bytes);
+    return ifn_safetensors_data(file, (size_t)(info - file->tensors), out, bytes);
 }

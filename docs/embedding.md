@@ -1,6 +1,6 @@
 # Embedding distribution
 
-`dist/sq.h` exposes the existing public C interfaces in one header. `dist/sq.c`
+`dist/ifn.h` exposes the existing public C interfaces in one header. `dist/ifn.c`
 contains the C implementation in one translation unit. The modular sources remain
 authoritative. Regenerate with `make amalgamation`; CI verifies it with
 `make amalgamation-check`. Do not edit generated files directly.
@@ -11,7 +11,7 @@ The two files and a C11 compiler are sufficient for checkpoint readers, tokenize
 conversation/stream filtering and CPU allocation planning:
 
 ```sh
-cc -O2 -std=c11 -Idist dist/sq.c examples/inspect.c -lm -o inspect
+cc -O2 -std=c11 -Idist dist/ifn.c examples/inspect.c -lm -o inspect
 ./inspect /external/checkpoint.safetensors
 ```
 
@@ -23,14 +23,14 @@ This host build does not implement CPU model generation.
 
 ## GPU inference
 
-Enable the C native host and provider with `SQ_ENABLE_CUDA`, then link the separately
+Enable the C native host and provider with `IFN_ENABLE_CUDA`, then link the separately
 compiled CUDA implementation and the existing NVIDIA/system libraries:
 
 ```sh
-make libsq-cuda.a
-cc -O2 -std=c11 -DSQ_ENABLE_CUDA -Idist -c dist/sq.c -o inference.o
+make libinkleberry-cuda.a
+cc -O2 -std=c11 -DIFN_ENABLE_CUDA -Idist -c dist/ifn.c -o inference.o
 cc -O2 -std=c11 -Idist -c examples/generate.c -o example.o
-c++ example.o inference.o libsq-cuda.a \
+c++ example.o inference.o libinkleberry-cuda.a \
   -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs \
   -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -o generate
 CUDA_VISIBLE_DEVICES=GPU-APPROVED-ID LD_LIBRARY_PATH=/usr/local/cuda/lib64 \
@@ -58,6 +58,6 @@ not edited. The generator follows the single-file distribution pattern while
 keeping the modules reviewable.
 
 Host regressions and parser fuzz smoke run against both implementations; public/global symbol sets must
-match. The native qualification target exercises the amalgamated GPU host; its
-execution is currently pending an idle GPU (see [validation](distribution-validation.md)). The generated source
+match. The native qualification target exercises the amalgamated GPU host; the
+extracted modular and amalgamated paths passed (see [validation](distribution-validation.md)). The generated source
 and its licenses/attribution travel together in the embedding archive.

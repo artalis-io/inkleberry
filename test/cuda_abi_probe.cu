@@ -6,9 +6,9 @@
 #include "../cuda/cuda_abi.cu"
 using CSampleConfig = squid::SampleConfig;
 using CLoopCDConfig = squid::LoopCDConfig;
-#define SQ_CUDA_ABI_NO_TYPES
+#define IFN_CUDA_ABI_NO_TYPES
 #include "cuda_abi.h"
-extern "C" const size_t *sq_test_c_layout(size_t *count);
+extern "C" const size_t *ifn_test_c_layout(size_t *count);
 int main() {
     const size_t expected[] = {
         sizeof(CSampleConfig),
@@ -159,7 +159,7 @@ int main() {
         "CDsparkWeights.layers",
     };
     size_t count = 0;
-    const size_t *actual = sq_test_c_layout(&count);
+    const size_t *actual = ifn_test_c_layout(&count);
     if (count != sizeof expected / sizeof expected[0]) return 1;
     for (size_t i = 0; i < count; ++i) {
         if (actual[i] != expected[i]) {

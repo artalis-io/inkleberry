@@ -23,12 +23,12 @@ stages its files under `.build/stage` and tests real installed consumers.
 
 ```sh
 make install DESTDIR=/staging/path PREFIX=/usr/local
-make -j8 gpu infer-shared squid-c-generate
+make -j8 gpu infer-shared inkleberry-generate
 make install-infer-backend DESTDIR=/staging/path PREFIX=/usr/local
 ```
 
-`libsq` supplies host input/validation APIs, `libsq-gpu.a` the modular native host,
-and `libsq_backend.so.1` the versioned provider. `libsq-cuda.a` supplies only the
+`libinkleberry` supplies host input/validation APIs, `libinkleberry-gpu.a` the modular native host,
+and `libinkleberry_backend.so.1` the versioned provider. `libinkleberry-cuda.a` supplies only the
 CUDA implementation for the amalgamated C host. Keep model files external.
 
 ## GPU validation
@@ -39,7 +39,7 @@ scheduler. These tests never terminate unrelated workloads or change GPU setting
 ```sh
 make cuda-abi-negative-check
 make .build/infer-native-shared .build/infer-native-amalgam
-SQ_TEST_GPU_UUID=GPU-APPROVED-ID SQ_TEST_TIMEOUT_SECONDS=600 \
+INKLEBERRY_TEST_GPU_UUID=GPU-APPROVED-ID INKLEBERRY_TEST_TIMEOUT_SECONDS=600 \
   python3 tools/run_cuda_smoke.py /usr/local/cuda/lib64 \
   .build/infer-native-amalgam /external/model-directory
 ```

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis */
-#ifndef SQ_LOOKUP_H
-#define SQ_LOOKUP_H
+#ifndef IFN_LOOKUP_H
+#define IFN_LOOKUP_H
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -12,9 +12,9 @@ typedef struct {
     uint64_t hash[16384];
     uint32_t newest[16384], older[16384];
     uint16_t stamp[16384];
-} sq_lookup;
+} ifn_lookup;
 
-void sq_lookup_reset(sq_lookup *);
-void sq_lookup_push(sq_lookup *, int32_t);
-bool sq_lookup_match(const sq_lookup *, int32_t[7]);
+void ifn_lookup_reset(ifn_lookup *);
+void ifn_lookup_push(ifn_lookup *, int32_t);
+bool ifn_lookup_match(const ifn_lookup *, int32_t[7]);
 #endif

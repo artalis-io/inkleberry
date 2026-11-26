@@ -29,7 +29,7 @@ def main():
               file=sys.stderr, flush=True)
         env = dict(os.environ)
         if args.long:
-            env['SQ_TEST_TIMEOUT_SECONDS'] = '3600'
+            env['INKLEBERRY_TEST_TIMEOUT_SECONDS'] = '3600'
         command = [sys.executable, 'tools/run_cuda_smoke.py', args.cuda_lib,
                    '.build/prefix-oracle', args.model, str(mode), str(kv),
                    str(graph), str(n), str(mtp)]

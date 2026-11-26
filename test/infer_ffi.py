@@ -21,7 +21,7 @@ class TablePrefix(c.Structure):
                 ('minor', c.c_uint32), ('reserved', c.c_uint32), ('backend_info', InfoFn)]
 
 lib = c.CDLL(sys.argv[1])
-get = lib.sq_infer_get_api
+get = lib.ifn_infer_get_api
 get.argtypes = [c.c_uint32, c.c_uint32, c.POINTER(c.c_void_p)]
 get.restype = c.c_uint32
 ptr = c.c_void_p(1)
@@ -32,6 +32,6 @@ assert api.major == 1 and api.struct_size >= c.sizeof(TablePrefix)
 info = Info(Out(c.sizeof(Info), 0))
 assert api.backend_info(c.byref(info), None) == 0
 assert info.hdr.written_size == c.sizeof(Info)
-assert c.string_at(info.backend_id.data, info.backend_id.bytes) == b'artalis.squid'
+assert c.string_at(info.backend_id.data, info.backend_id.bytes) == b'artalis.inkleberry'
 assert info.pointer_bits == 64 and info.max_active_runs == 1
 print('ctypes ABI negotiation and capability discovery passed')

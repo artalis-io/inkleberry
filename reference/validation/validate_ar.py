@@ -28,7 +28,7 @@ def main():
                    str(count), 'What is 2 + 2? Answer briefly.']
         env = dict(os.environ)
         if args.long:
-            env['SQ_TEST_TIMEOUT_SECONDS'] = '3600'
+            env['INKLEBERRY_TEST_TIMEOUT_SECONDS'] = '3600'
         start = time.monotonic()
         run = subprocess.run(command, env=env, text=True, capture_output=True)
         print(run.stdout, file=sys.stderr, end='')

@@ -2,7 +2,7 @@
 """Non-confidential fixtures; independent JSON/format edge cases via the real CLI."""
 import argparse,json,os,struct,subprocess,tempfile
 from pathlib import Path
-p=argparse.ArgumentParser();p.add_argument('binary',nargs='?',default='./squid-c');p.add_argument('--corpus');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('binary',nargs='?',default='./inkleberry');p.add_argument('--corpus');a=p.parse_args()
 def tensor(dtype='U8',shape=None,offsets=None):
  return {'dtype':dtype,'shape':[1] if shape is None else shape,'data_offsets':[0,1] if offsets is None else offsets}
 def encode(header,payload=b'\x11'):

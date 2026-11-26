@@ -69,21 +69,21 @@ def package(kind, output, version='0.1.0-dev', gpu=False, build_root=ROOT):
             if name not in entries:
                 add(name, ROOT / name, name.endswith('.sh'))
     elif kind == 'embedding':
-        for name in ['dist/sq.h', 'dist/sq.c', 'examples/inspect.c', 'examples/generate.c']:
+        for name in ['dist/ifn.h', 'dist/ifn.c', 'examples/inspect.c', 'examples/generate.c']:
             add(name, ROOT / name)
         entries['README.md'] = read_file(ROOT / 'docs/embedding.md')
         modes['README.md'] = 0o644
     elif kind == 'runtime':
-        add('bin/squid-c', build_root / 'squid-c', True, build_root)
-        shared = 'libsq.dylib' if platform.system() == 'Darwin' else 'libsq.so'
+        add('bin/inkleberry', build_root / 'inkleberry', True, build_root)
+        shared = 'libinkleberry.dylib' if platform.system() == 'Darwin' else 'libinkleberry.so'
         add('lib/' + shared, build_root / shared, base=build_root)
         for name in policy['public_headers']:
             add('include/' + Path(name).name, ROOT / name)
         if gpu:
-            add('bin/squid-c-generate', build_root / 'squid-c-generate', True, build_root)
-            add('lib/libsq_backend.so.1', build_root / 'libsq_backend.so.1', base=build_root)
-            add('lib/libsq-cuda.a', build_root / 'libsq-cuda.a', base=build_root)
-            links['lib/libsq_backend.so'] = 'libsq_backend.so.1'
+            add('bin/inkleberry-generate', build_root / 'inkleberry-generate', True, build_root)
+            add('lib/libinkleberry_backend.so.1', build_root / 'libinkleberry_backend.so.1', base=build_root)
+            add('lib/libinkleberry-cuda.a', build_root / 'libinkleberry-cuda.a', base=build_root)
+            links['lib/libinkleberry_backend.so'] = 'libinkleberry_backend.so.1'
         dependencies = {
             'system': ['C runtime', 'libm'],
             'gpu': ['compatible NVIDIA driver (libcuda.so.1)', 'CUDA runtime (libcudart)',
@@ -107,7 +107,7 @@ def package(kind, output, version='0.1.0-dev', gpu=False, build_root=ROOT):
     entries['MANIFEST.json'] = (json.dumps(metadata, sort_keys=True, indent=2) + '\n').encode()
     modes['MANIFEST.json'] = 0o644
     suffix = ('-' + metadata['platform'] + ('-cuda' if gpu else '')) if kind == 'runtime' else ''
-    prefix = 'native-inference-' + kind + '-' + version + suffix
+    prefix = 'inkleberry-' + kind + '-' + version + suffix
     output.mkdir(parents=True, exist_ok=True)
     path = output / (prefix + '.tar.gz')
     temporary = path.with_suffix(path.suffix + '.tmp')

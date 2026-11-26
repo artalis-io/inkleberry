@@ -1,6 +1,6 @@
 # Inference provider ABI
 
-The experimental v1 facade is implemented in `include/sq_infer.h`. Native GPU
+The experimental v1 facade is implemented in `include/ifn_infer.h`. Native GPU
 execution remains Linux AMD64/Blackwell; host tests run without CUDA. The original
 parser, tokenizer, generation CLI and low-level engine APIs remain available.
 CUDA mathematics and the pinned upstream files are unchanged.
@@ -15,7 +15,7 @@ request cannot redirect output or cancellation to another. Requests are one-shot
 **Independent streams do not imply simultaneous GPU execution.** Discover
 `max_prepared_sessions`, `max_active_runs` and `limit_scope`. The current provider
 allows one prepared native session and one active run per process. A competing run
-returns `SQ_BUSY` and leaves that request prepared. The host queues it and retries
+returns `IFN_BUSY` and leaves that request prepared. The host queues it and retries
 later; the backend does not spawn threads or implement an admission queue.
 Preparing/closing a request also returns BUSY while its session executes. Prepare
 queued work between runs; a server can retain unprepared input in its own bounded
@@ -32,27 +32,27 @@ to load duplicate providers and bypass native resource constraints.
 
 ```sh
 make check install-check                   # CPU tests, mock execution, C/C++/FFI
-make infer                                 # libsq-infer.a; no CUDA needed to build
+make infer                                 # libinkleberry-infer.a; no CUDA needed to build
 make gpu                                   # existing native backend, needs CUDA
-make infer-shared                          # Linux libsq_backend.so.1, CUDA required
+make infer-shared                          # Linux libinkleberry_backend.so.1, CUDA required
 make infer-provider-check                  # exported ABI, SONAME and real-provider FFI
 make DESTDIR=/your/stage PREFIX=/usr/local install-infer-backend
 ```
 
-The dynamic provider exports only `sq_infer_get_api`, versioned `SQ_INFER_1.0`,
-with SONAME `libsq_backend.so.1`. Internal and CUDA symbols are not part of the ABI.
-`pkg-config squid-infer` describes the installed shared provider. Never pass handles between different providers/function tables. Static consumers
-link `libsq-infer.a libsq-gpu.a libsq.a` and the existing CUDA/C++ runtime libraries.
-The CPU-only `libsq` has not acquired a CUDA dependency. Installed facade headers
+The dynamic provider exports only `ifn_infer_get_api`, versioned `IFN_INFER_1.0`,
+with SONAME `libinkleberry_backend.so.1`. Internal and CUDA symbols are not part of the ABI.
+`pkg-config inkleberry-infer` describes the installed shared provider. Never pass handles between different providers/function tables. Static consumers
+link `libinkleberry-infer.a libinkleberry-gpu.a libinkleberry.a` and the existing CUDA/C++ runtime libraries.
+The CPU-only `libinkleberry` has not acquired a CUDA dependency. Installed facade headers
 and the static facade archive are also available through the ordinary install.
 
 Negotiate before accessing the immutable function table:
 
 ```c
 const void *raw = NULL;
-sq_status status = sq_infer_get_api(1, 0, &raw);
-if (status != SQ_OK) { /* incompatible provider */ }
-const sq_infer_api_v1 *api = (const sq_infer_api_v1 *)raw;
+ifn_status status = ifn_infer_get_api(1, 0, &raw);
+if (status != IFN_OK) { /* incompatible provider */ }
+const ifn_infer_api_v1 *api = (const ifn_infer_api_v1 *)raw;
 ```
 
 Check negotiation success and table extent before calling fields. Never cast a
@@ -60,7 +60,7 @@ Check negotiation success and table extent before calling fields. Never cast a
 [ctypes consumer](../test/infer_ffi.py) and [native workflow](../test/infer_native.c)
 exercise the same contract. No HTTP library or harness-specific types cross it.
 
-Initialize records with `SQ_INFER_INIT`, then call `defaults` for configuration
+Initialize records with `IFN_INFER_INIT`, then call `defaults` for configuration
 records. Input records validate size, flags and reserved fields. Unknown zero
 tails are accepted; nonzero unknown input tails are unsupported. Arrays specify
 count and stride; extensible elements validate their own extents and zero tails.
@@ -103,7 +103,7 @@ another process from consuming it. OOM may still occur during acquisition.
 
 ## Configuration and capabilities
 
-Backend ID: `artalis.squid`. Current defaults:
+Backend ID: `artalis.inkleberry`. Current defaults:
 
 - Device ID: decimal CUDA ordinal `0` in the caller's visible-device namespace.
 - Weight profile: `nvfp4-ar`. Also `exact-ar`, `fp8-ar`, `exact-mtp`, `fp8-mtp`,
@@ -125,7 +125,7 @@ as integrity evidence. Source files must stay immutable while loading; no remote
 code or automatic downloads are executed. Profile enumeration is not implemented;
 only these documented identifiers are accepted.
 
-`sq_infer_squid.h` defines the versioned backend request extension (ID 1, version 1):
+`ifn_infer_inkling.h` defines the versioned backend request extension (ID 1, version 1):
 draft width 0..7, adaptive/lookup mode, confidence threshold, thinking effort and
 thinking enablement. Adaptive mode requires seven drafts, graphs and a valid
 threshold. Prompt lookup requires adaptive mode. Template controls require chat
@@ -176,7 +176,7 @@ reports a conservative prompt-processed count (zero until native return), not a
 continuous prefill counter. Do not expose a fabricated percentage in a server.
 
 Result spans are borrowed until request closure. Errors use caller-owned records;
-no cross-thread dependence on `sq_last_error`. Native diagnostics currently expose
+no cross-thread dependence on `ifn_last_error`. Native diagnostics currently expose
 normalized statuses rather than a reliable provider-specific numeric code:
 provider NONE means unavailable, not CUDA success. Secondary reset failures and
 poisoned/partial-output states are explicit. Never automatically retry a partial

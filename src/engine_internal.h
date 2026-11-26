@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
  * Fixed Inkling target/DSpark structures translated from pinned engine.zig/weights.zig. */
-#ifndef SQ_ENGINE_INTERNAL_H
-#define SQ_ENGINE_INTERNAL_H
+#ifndef IFN_ENGINE_INTERNAL_H
+#define IFN_ENGINE_INTERNAL_H
 #include "weights_internal.h"
-#include "sq_engine.h"
+#include "ifn_engine.h"
 #include "engine_control.h"
 #include "cuda_abi.h"
 #include "lookup.h"
@@ -36,31 +36,31 @@ typedef struct {
     void *router_bias;
     CExpertBank w13;
     CExpertBank w2;
-} sq_layer;
+} ifn_layer;
 
 typedef struct {
     void *embed, *embed_norm, *final_norm;
     CLinearWeight unembed;
     float *attn_queries[23], *mlp_queries[24], *output_query;
     float *cross_pass_queries, *cross_pass_kv_queries;
-    sq_layer layers[24];
+    ifn_layer layers[24];
     CDsparkWeights dspark;
-} sq_ar_model;
+} ifn_ar_model;
 
 typedef struct {
     uint32_t layer, pass;
     bool loop, global;
-} sq_visit;
+} ifn_visit;
 
-struct sq_session {
-    sq_options allocator;
-    sq_session_config config;
-    sq_gpu_weights *weights;
-    sq_ar_model model;
-    sq_visit schedule[48];
+struct ifn_session {
+    ifn_options allocator;
+    ifn_session_config config;
+    ifn_gpu_weights *weights;
+    ifn_ar_model model;
+    ifn_visit schedule[48];
     atomic_flag busy;
     atomic_bool cancelled;
-    const sq_run_control *request_control;
+    const ifn_run_control *request_control;
     bool poisoned, ready, retained;
     int32_t position;
     void *arena, *stream, *graph, *blas;
@@ -69,10 +69,10 @@ struct sq_session {
     int32_t *h_accepted, *h_count, *h_width;
     float adaptive_threshold;
     bool draft_in_flight;
-    sq_lookup lookup;
-    sq_decode_info decode_info;
-    sq_prefix prefix;
-    sq_prefix_info prefix_info;
+    ifn_lookup lookup;
+    ifn_decode_info decode_info;
+    ifn_prefix prefix;
+    ifn_prefix_info prefix_info;
     bool use_mtp, verifying;
     int32_t ds_cap[3];
     void *ds_k[3], *ds_v[3], *ds_ks[3], *ds_vs[3];
@@ -126,30 +126,30 @@ struct sq_session {
     float *p_ctrl_d;
     void *p_ctrl_d_h;
     float *p_ctrl_f, *p_ctrl_g;
-    sq_status status;
+    ifn_status status;
     char failure[192];
 };
 
-sq_status sq_decode_resolve(const sq_decode_options *, sq_decode_options *);
-void sq_spec_draft(sq_session *, uint32_t, float *);
-void sq_spec_target(sq_session *, uint32_t);
-void sq_spec_verify(sq_session *, uint32_t);
-void sq_adaptive_step(sq_session *, const sq_decode_options *, bool);
-sq_status sq_prefix_allocate(sq_session *);
-void sq_prefix_free(sq_session *);
-void sq_prefix_invalidate(sq_session *);
-uint32_t sq_prefix_begin(sq_session *, const int32_t *, uint32_t, uint32_t, bool);
-void sq_prefix_save(sq_session *, unsigned, uint32_t);
-void sq_prefix_prompt(sq_session *, const int32_t *, uint32_t, bool);
-void sq_prefix_feed(sq_session *, int32_t);
-void sq_prefix_finish(sq_session *, bool);
-void sq_adaptive_drain(sq_session *);
-void sq_spec_step(sq_session *, uint32_t);
-void sq_spec_commit(sq_session *, const float *, int32_t, const int32_t *);
-sq_status sq_ar_bind(sq_gpu_weights *, sq_ar_model *);
-void sq_ar_schedule(sq_visit[48]);
-void sq_ar_layout(sq_session *, size_t);
-void sq_ar_prefill(sq_session *, const int32_t *, int32_t);
-void sq_ar_forward(sq_session *, int32_t, bool);
-void sq_ar_check(sq_session *, int, const char *);
+ifn_status ifn_decode_resolve(const ifn_decode_options *, ifn_decode_options *);
+void ifn_spec_draft(ifn_session *, uint32_t, float *);
+void ifn_spec_target(ifn_session *, uint32_t);
+void ifn_spec_verify(ifn_session *, uint32_t);
+void ifn_adaptive_step(ifn_session *, const ifn_decode_options *, bool);
+ifn_status ifn_prefix_allocate(ifn_session *);
+void ifn_prefix_free(ifn_session *);
+void ifn_prefix_invalidate(ifn_session *);
+uint32_t ifn_prefix_begin(ifn_session *, const int32_t *, uint32_t, uint32_t, bool);
+void ifn_prefix_save(ifn_session *, unsigned, uint32_t);
+void ifn_prefix_prompt(ifn_session *, const int32_t *, uint32_t, bool);
+void ifn_prefix_feed(ifn_session *, int32_t);
+void ifn_prefix_finish(ifn_session *, bool);
+void ifn_adaptive_drain(ifn_session *);
+void ifn_spec_step(ifn_session *, uint32_t);
+void ifn_spec_commit(ifn_session *, const float *, int32_t, const int32_t *);
+ifn_status ifn_ar_bind(ifn_gpu_weights *, ifn_ar_model *);
+void ifn_ar_schedule(ifn_visit[48]);
+void ifn_ar_layout(ifn_session *, size_t);
+void ifn_ar_prefill(ifn_session *, const int32_t *, int32_t);
+void ifn_ar_forward(ifn_session *, int32_t, bool);
+void ifn_ar_check(ifn_session *, int, const char *);
 #endif
