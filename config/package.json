@@ -42,6 +42,7 @@
     "docs/runtime-package.md",
     "docs/serving-contract.md",
     "docs/storage.md",
+    "docs/validation/blackwell-gb10-2026-11-26.md",
     "docs/validation/library-hardening-2026-11-26.json",
     "docs/validation/library-hardening-2026-11-26.md",
     "examples/generate.c",

@@ -80,6 +80,7 @@ See [release contents](docs/releases.md).
 
 - [Contributor and agent guide](AGENTS.md) · [Claude Code guide](CLAUDE.md)
 - [Naming and pre-release API transition](docs/naming.md)
+- [Single-GPU RTX Blackwell / GB10 measurements](docs/validation/blackwell-gb10-2026-11-26.md)
 - [Build and testing](docs/build.md)
 - [Embedding and amalgamation](docs/embedding.md)
 - [Checkpoint storage and memory mapping](docs/storage.md)
