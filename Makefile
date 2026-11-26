@@ -83,6 +83,7 @@ generated-check:
 	python3 tools/generate_cuda_abi.py --check
 	python3 test/cuda_abi_schema.py
 	python3 test/native_namespace.py
+	python3 test/cuda_guard.py
 .build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
 	python3 $< $@
 .build/tokenizer-test: test/tokenizer.c libinkleberry.a .build/config
@@ -188,7 +189,7 @@ clean:
 # GPU backend is opt-in; the host library still builds without CUDA.
 .PHONY: gpu
 gpu: generated-check libinkleberry-gpu.a
-.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/cuda/capability.h src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 libinkleberry-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@
