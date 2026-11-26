@@ -31,9 +31,8 @@ constants and macros use `ifn_` / `IFN_`; the native environment flag is now
 `LLVMFuzzerTestOneInput`) and identifiers supplied by CUDA/the standard library
 keep their external conventions.
 
-Frozen Zig sources retain historical identifiers. Optional comparison builds
-adapt only link names in disposable `.build/native-oracle-src` copies, without
-changing checked-in originals. There are no legacy C/CUDA compatibility aliases.
+The retired Zig implementation and comparison harnesses are no longer included.
+There are no legacy C/CUDA compatibility aliases.
 
 The native namespace map records old names as provenance data, not production
 symbols. Reversing the identifier map and reviewed host-error adapters (and removing
@@ -46,15 +45,13 @@ Host qualification and numerical GPU qualification are distinct. See
 
 ## Canonical branch and history
 
-`main` is the integration and release branch for Inkleberry Finn. The old
-upstream-main history is preserved by tag `reference/upstream-main-51b85dd`.
-The pinned reference implementation and production CUDA provenance remain in
-`reference/`, `UPSTREAM.json`, `THIRD_PARTY.md` and `NOTICE`. Upstream changes are
+`main` is the integration and release branch of the standalone Inkleberry Finn
+repository. The original fork and its pull-request history are retained in the
+private `artalis-io/inkleberry-fork-archive` repository. Current CUDA provenance
+remains in `UPSTREAM.json`, `THIRD_PARTY.md` and `NOTICE`. Upstream changes are
 reviewed and qualified explicitly; there is no automatic synchronization branch.
 
-GitHub's fork-network label is separate from source provenance. Preserve the
-repository's PR history and settings when requesting metadata detachment:
-[GitHub's detachment documentation](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/detaching-a-fork)
-warns that self-service detachment loses repository metadata, while support-assisted
-detachment can preserve issue and PR history. Removing a fork relationship never
-replaces the project's retained attribution or frozen reference material.
+Removing the fork relationship and retiring the original host implementation do
+not change the retained license or attribution chain. Historical qualification
+reports in `reference/` describe their original revisions and are not executable
+validation instructions for the current tree.

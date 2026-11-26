@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
- * Test-only C entrypoints consumed by a Zig oracle, plus standalone C main.
+ * Native weight qualification helpers and standalone C validation main.
  * Full payload comparison excludes uninitialized alignment padding. */
 #define _POSIX_C_SOURCE 200809L
 #include "ifn_gpu.h"

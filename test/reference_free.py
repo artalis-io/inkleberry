@@ -23,18 +23,15 @@ def main():
             shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns('__pycache__', '*.zig'))
         assert not (root / 'reference').exists() and not list(root.rglob('*.zig'))
         verifier = [sys.executable, str(root / 'tools/verify_upstream.py')]
-        subprocess.run(verifier + ['--production-only'], check=True, capture_output=True)
-        # Production-only means Zig-independent, not weaker CUDA verification.
+        subprocess.run(verifier, check=True, capture_output=True)
+        # Removing retired sources must not weaken CUDA provenance verification.
         kernel = root / 'cuda/config.hpp'
         original = kernel.read_bytes()
         kernel.write_bytes(original + b'\n// intentional isolated provenance failure\n')
-        rejected = subprocess.run(verifier + ['--production-only'], capture_output=True, text=True)
+        rejected = subprocess.run(verifier, capture_output=True, text=True)
         if rejected.returncode == 0 or 'cuda/config.hpp' not in rejected.stderr:
             raise SystemExit('Production verification failed to reject altered CUDA input')
         kernel.write_bytes(original)
-        rejected = subprocess.run(verifier, capture_output=True, text=True)
-        if rejected.returncode == 0 or '.zig' not in rejected.stderr:
-            raise SystemExit('Full reference verification did not require the pinned Zig files')
         subprocess.run(['make', '-j2', 'CC=' + args.cc, 'CXX=' + args.cxx,
                         'check', 'install-check'], cwd=root, check=True)
     print('Production C checks/install checks passed without any Zig/reference files')

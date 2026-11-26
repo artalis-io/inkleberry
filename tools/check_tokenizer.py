@@ -4,11 +4,7 @@ import argparse
 import ctypes as c
 import hashlib
 import json
-import os
 from pathlib import Path
-import re
-import subprocess
-import tempfile
 
 CASES = [
     '', 'Hello, world!', 'Árvíztűrő tükörfúrógép. Gyermelyi — 24 t.',
@@ -24,7 +20,6 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('library', type=Path)
     p.add_argument('model', type=Path)
-    p.add_argument('--zig-oracle', type=Path)
     p.add_argument('--reference', action='store_true')
     args = p.parse_args()
     lib = c.CDLL(str(args.library.resolve()))
@@ -73,61 +68,39 @@ def main():
         lib.ifn_tokenizer_close(t)
         raise
     rows = []
-    template_zig = []
     try:
-        with tempfile.TemporaryDirectory(prefix='ifn-tokenizer-') as folder:
-            for i, text in enumerate(CASES):
-                raw = text.encode()
-                # Every output token consumes at least one input byte.
-                ids = (c.c_int32 * max(len(raw), 1))()
-                needed = c.c_size_t()
-                if lib.ifn_tokenizer_encode(t, raw, len(raw), 1, scratch, ids, len(ids), c.byref(needed)):
-                    raise SystemExit(lib.ifn_last_error().decode())
-                actual = list(ids[:needed.value])
-                restored = bytearray()
-                for token in actual:
-                    data, n = c.c_void_p(), c.c_size_t()
-                    if lib.ifn_tokenizer_decode(t, token, 0, c.byref(data), c.byref(n)):
-                        raise SystemExit('decode failed')
-                    restored += c.string_at(data, n.value)
-                row = {'case': i, 'bytes': len(raw), 'tokens': len(actual),
-                       'roundtrip': restored == raw,
-                       'ids_sha256': hashlib.sha256(b''.join(int(x).to_bytes(4,'little',signed=True) for x in actual)).hexdigest()}
-                if args.zig_oracle:
-                    path = Path(folder)/'input.txt'
-                    path.write_bytes(raw)
-                    r = subprocess.run([str(args.zig_oracle), 'tokenize', str(args.model), '--prompt-file', str(path), '--raw'], env={**os.environ, 'CUDA_VISIBLE_DEVICES': ''}, capture_output=True, text=True, timeout=180)
-                    match = re.search(r'^IDS:\s*([^\n]*)', r.stdout, re.M)
-                    expected = [int(x) for x in match[1].split(',') if x.strip()] if match else None
-                    row['zig'] = r.returncode == 0 and actual == expected
-                if reference:
-                    row['provider'] = actual == reference.encode(text, add_special_tokens=False).ids
-                rows.append(row)
-            for effort, level in enumerate(['0','0.1','0.2','0.7','0.9','0.99']):
-                text = 'Árvíztűrő 🚚'.encode()
-                expected = ('<|message_system|><|content_text|>Thinking effort level: '+level+'<|end_message|><|message_user|><|content_text|>').encode()+text+b'<|end_message|>'
-                needed = c.c_size_t()
-                out = c.create_string_buffer(len(expected))
-                if lib.ifn_render_user_prompt(text,len(text),effort,out,len(out),c.byref(needed)) or out.raw != expected:
-                    raise SystemExit('template mismatch')
-                if args.zig_oracle:
-                    ids=(c.c_int32*len(expected))()
-                    n=c.c_size_t()
-                    if lib.ifn_tokenizer_encode(t,out.raw,len(out.raw),1,scratch,ids,len(ids),c.byref(n)):
-                        raise SystemExit('template encoding failed')
-                    path=Path(folder)/'template.txt';path.write_bytes(text)
-                    label=['none','minimal','low','medium','high','max'][effort]
-                    r=subprocess.run([str(args.zig_oracle),'tokenize',str(args.model),'--prompt-file',str(path),'--effort',label],env={**os.environ,'CUDA_VISIBLE_DEVICES':''},text=True,capture_output=True,timeout=30)
-                    match=re.search(r'^IDS:\s*([^\n]*)',r.stdout,re.M)
-                    wanted=[int(x) for x in match[1].split(',') if x.strip()] if match else None
-                    template_zig.append(r.returncode==0 and list(ids[:n.value])==wanted)
-
+        for i, text in enumerate(CASES):
+            raw = text.encode()
+            # Every output token consumes at least one input byte.
+            ids = (c.c_int32 * max(len(raw), 1))()
+            needed = c.c_size_t()
+            if lib.ifn_tokenizer_encode(t, raw, len(raw), 1, scratch, ids, len(ids), c.byref(needed)):
+                raise SystemExit(lib.ifn_last_error().decode())
+            actual = list(ids[:needed.value])
+            restored = bytearray()
+            for token in actual:
+                data, n = c.c_void_p(), c.c_size_t()
+                if lib.ifn_tokenizer_decode(t, token, 0, c.byref(data), c.byref(n)):
+                    raise SystemExit('decode failed')
+                restored += c.string_at(data, n.value)
+            row = {'case': i, 'bytes': len(raw), 'tokens': len(actual),
+                   'roundtrip': restored == raw,
+                   'ids_sha256': hashlib.sha256(b''.join(int(x).to_bytes(4,'little',signed=True) for x in actual)).hexdigest()}
+            if reference:
+                row['provider'] = actual == reference.encode(text, add_special_tokens=False).ids
+            rows.append(row)
+        for effort, level in enumerate(['0','0.1','0.2','0.7','0.9','0.99']):
+            text = 'Árvíztűrő 🚚'.encode()
+            expected = ('<|message_system|><|content_text|>Thinking effort level: '+level+'<|end_message|><|message_user|><|content_text|>').encode()+text+b'<|end_message|>'
+            needed = c.c_size_t()
+            out = c.create_string_buffer(len(expected))
+            if lib.ifn_render_user_prompt(text,len(text),effort,out,len(out),c.byref(needed)) or out.raw != expected:
+                raise SystemExit('template mismatch')
     finally:
         lib.ifn_tokenizer_scratch_destroy(scratch)
         lib.ifn_tokenizer_close(t)
-    print(json.dumps({'vocabulary_entries_matched': vocab_checked, 'tokenizer_cases': rows, 'template_efforts_matched': 6, 'template_zig': template_zig}, indent=2))
-    if not all(template_zig):raise SystemExit('Zig template token mismatch')
-    if not all(r['roundtrip'] and r.get('zig', True) and r.get('provider', True) for r in rows):
+    print(json.dumps({'vocabulary_entries_matched': vocab_checked, 'tokenizer_cases': rows, 'template_efforts_matched': 6}, indent=2))
+    if not all(r['roundtrip'] and r.get('provider', True) for r in rows):
         raise SystemExit('Token parity mismatch')
 
 if __name__ == '__main__':
