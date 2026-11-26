@@ -83,6 +83,7 @@ generated-check:
 	python3 tools/generate_cuda_abi.py --check
 	python3 test/cuda_abi_schema.py
 	python3 test/native_namespace.py
+	python3 test/cuda_guard.py
 .build/tokenizer-fixture.json: test/tokenizer_fixtures.py | .build
 	python3 $< $@
 .build/tokenizer-test: test/tokenizer.c libinkleberry.a .build/config

@@ -45,7 +45,11 @@ INKLEBERRY_TEST_GPU_UUID=GPU-APPROVED-ID INKLEBERRY_TEST_TIMEOUT_SECONDS=600 \
 ```
 
 The guard rejects absent UUIDs, active compute processes and devices with more
-than 256 MiB in use. C/CUDA declaration and layout checks do not execute kernels.
+than 256 MiB in use. GB10 reports dedicated VRAM as unavailable because it uses
+unified memory; that case additionally requires zero reported GPU utilization,
+while still rejecting any compute process. Unavailable counters on other devices
+fail closed. Check system-memory headroom separately before model-backed GB10
+tests. C/CUDA declaration and layout checks do not execute kernels.
 Native model workflows do. A CPU-only CI result does not qualify GPU execution.
 
 ```sh

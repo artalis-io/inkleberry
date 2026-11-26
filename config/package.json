@@ -123,6 +123,7 @@
     "test/cuda_abi_negative.py",
     "test/cuda_abi_probe.cu",
     "test/cuda_abi_schema.py",
+    "test/cuda_guard.py",
     "test/cuda_smoke.c",
     "test/decode_compare.c",
     "test/decode_recovery.c",

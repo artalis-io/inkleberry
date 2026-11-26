@@ -12,8 +12,24 @@ def main():
         'nvidia-smi', '-i', uuid, '--query-gpu=uuid,name,memory.used',
         '--format=csv,noheader,nounits'], text=True).strip()
     fields = [x.strip() for x in query.split(',')]
-    if len(fields) != 3 or fields[0] != uuid or int(fields[2]) > 256:
-        raise SystemExit('GPU identity or idle VRAM preflight failed')
+    if len(fields) != 3 or fields[0] != uuid:
+        raise SystemExit('GPU identity preflight failed')
+    if fields[2] in ('[N/A]', 'N/A') and fields[1] == 'NVIDIA GB10':
+        # GB10 shares system memory and exposes no per-device VRAM counter.
+        # Require no activity as well as the compute-process check below;
+        # never interpret unavailable memory as zero on other devices.
+        utilization = subprocess.check_output([
+            'nvidia-smi', '-i', uuid, '--query-gpu=utilization.gpu',
+            '--format=csv,noheader,nounits'], text=True).strip()
+        if utilization != '0':
+            raise SystemExit('GB10 GPU activity preflight failed')
+    else:
+        try:
+            memory = int(fields[2])
+        except ValueError:
+            raise SystemExit('GPU VRAM measurement unavailable; refusing to run')
+        if memory < 0 or memory > 256:
+            raise SystemExit('GPU idle VRAM preflight failed')
     processes = subprocess.check_output([
         'nvidia-smi', '--query-compute-apps=gpu_uuid,pid',
         '--format=csv,noheader,nounits'], text=True)
