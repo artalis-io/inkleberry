@@ -4,7 +4,7 @@
  * Compile this instead of a second kernels_prefill object. Original entrypoints
  * remain available to the Zig oracle but are never used by the C session. */
 #include "../../cuda/kernels_prefill.cu"
-#include "../c/checked_prefill.h"
+#include "../checked_prefill.h"
 using namespace squid;
 
 static int blas_status(cublasStatus_t s) {

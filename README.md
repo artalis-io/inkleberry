@@ -19,6 +19,15 @@ The port follows [Jev Bush](https://github.com/artalis-io/jev-bush)'s explicit o
 
 **C autoregressive, fixed-width and adaptive speculative generation are implemented.** It includes the 48-visit forward path, Tensor Core batched prefill, BF16/FP8/Q4 KV, eager/graph decode, teacher-forced logits and cooperative cancellation. Temperature/top-p/top-k sampling and fixed-width DSpark speculation are also implemented. Adaptive 2/4/8-token verification and verified prompt lookup are implemented. Session-private prefix caching is available by explicit opt-in. Serving remains a subsequent slice. Model-backed validation is documented below. [Design and acceptance gates](docs/c-port-design.md); [first-slice evidence](docs/first-port-validation.md); [tokenizer/binding evidence](docs/input-port-validation.md); [GPU weight contract and evidence](docs/gpu-weights-validation.md); [AR execution contract and evidence](docs/ar-validation.md); [sampling/speculation contract](docs/speculation-validation.md); [adaptive/lookup contract](docs/adaptive-validation.md); [prefix-cache contract](docs/prefix-validation.md).
 
+## Source layout
+
+Production C sources live directly in `src/`; `src/cuda/` contains the checked
+CUDA adapters and `cuda/` the canonical pinned kernels. The unmodified Zig host
+is [reference-only](reference/README.md) under `reference/upstream/`. Normal C
+builds do not invoke Zig. After upgrading from the old `src/c/` layout, run
+`make clean` once to discard dependency files containing the previous paths. See
+[layout and validation details](docs/source-layout.md).
+
 ## Build and use
 
 Host-only tools need a C11 compiler, a C++ compiler for the header consumer test, Make and Python 3. There are no third-party host-library dependencies. Linux AMD64 and macOS ARM64 host tests are exercised; CUDA execution targets Linux AMD64 / Blackwell `sm_120a`.

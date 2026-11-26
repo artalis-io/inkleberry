@@ -24,5 +24,18 @@
     "src/vram_arena.zig": "75112e04283e347ab5a2d4e7ff873c33d92b9a08f47e6daa33c8c146b8986b91",
     "src/weights.zig": "96a379d4210bf32e57bcac58242b7c976c0ca3ca049a9a26ecb1f6bfb88d0f14"
   },
-  "policy": "CUDA mathematics and Zig oracle remain unchanged in the first port slice. Local host code is separate."
+  "policy": "CUDA mathematics and pinned Zig reference bytes remain unchanged. Relocations preserve original upstream paths and hashes; C is the production host.",
+  "relocated_files": {
+    "build.zig": "reference/upstream/build.zig",
+    "src/constants.zig": "reference/upstream/src/constants.zig",
+    "src/cuda.zig": "reference/upstream/src/cuda.zig",
+    "src/engine.zig": "reference/upstream/src/engine.zig",
+    "src/main.zig": "reference/upstream/src/main.zig",
+    "src/safetensors.zig": "reference/upstream/src/safetensors.zig",
+    "src/server.zig": "reference/upstream/src/server.zig",
+    "src/tiger.zig": "reference/upstream/src/tiger.zig",
+    "src/tokenizer.zig": "reference/upstream/src/tokenizer.zig",
+    "src/vram_arena.zig": "reference/upstream/src/vram_arena.zig",
+    "src/weights.zig": "reference/upstream/src/weights.zig"
+  }
 }

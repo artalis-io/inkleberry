@@ -7,11 +7,12 @@ import argparse
 import difflib
 from pathlib import Path
 import re
+from upstream import source_path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCALARS = {'u8': 'uint8_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'i32': 'int32_t',
            'f32': 'float', 'usize': 'size_t', 'anyopaque': 'void', 'void': 'void'}
-source = (ROOT / 'src/cuda.zig').read_text()
+source = source_path(ROOT, 'src/cuda.zig').read_text()
 records = []
 for name, body in re.findall(r'pub const (\w+) = extern struct \{(.*?)^\};', source, re.M | re.S):
     fields = []
@@ -82,7 +83,7 @@ cpp += ['    };\n    const char *names[] = {\n', *['        "' + name + '",\n' f
 parser = argparse.ArgumentParser()
 parser.add_argument('--check', action='store_true')
 args = parser.parse_args()
-outputs = {'src/c/cuda_abi.h': ''.join(header), 'test/cuda_abi_c.c': ''.join(c), 'test/cuda_abi_probe.cu': ''.join(cpp)}
+outputs = {'src/cuda_abi.h': ''.join(header), 'test/cuda_abi_c.c': ''.join(c), 'test/cuda_abi_probe.cu': ''.join(cpp)}
 for name, content in outputs.items():
     path = ROOT / name
     if args.check:

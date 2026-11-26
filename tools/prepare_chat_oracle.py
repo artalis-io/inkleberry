@@ -2,9 +2,10 @@
 """Oracle-only visibility adapter; never modifies hash-pinned originals."""
 from pathlib import Path
 import shutil
+from upstream import source_path
 root=Path(__file__).resolve().parents[1]
 out=root/'.build/chat-oracle-src';out.mkdir(parents=True,exist_ok=True)
-for source in (root/'src').glob('*.zig'):shutil.copy2(source,out/source.name)
+for source in source_path(root, 'src/server.zig').parent.glob('*.zig'):shutil.copy2(source,out/source.name)
 p=out/'server.zig';s=p.read_text()
 for before,after in [
  ('const tiger = @import','pub const tiger = @import'),

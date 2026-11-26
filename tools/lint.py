@@ -3,7 +3,10 @@
 import re
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
-for p in (root / 'src/c').glob('*.c'):
+sources = sorted((root / 'src').glob('*.c'))
+if not sources:
+    raise SystemExit('No production C sources found; refusing an empty lint pass')
+for p in sources:
     text = p.read_text()
     if re.search(r'\b(exit|abort|assert|system|popen)\s*\(', text):
         raise SystemExit(f'{p.name}: process termination/commands forbidden in library')
