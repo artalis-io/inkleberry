@@ -89,3 +89,61 @@ The workflow becomes available on the default branch once its PR is merged.
 The trusted, manually initiated model-backed GPU workflow remains separate.
 Native release qualification still requires a reserved device and external model
 assets; Linux CPU CI does not replace it.
+
+## Native Windows x64
+
+Use Visual Studio 2022 Build Tools with the x64 C++ workload and Windows SDK,
+LLVM `clang-cl` for the second compiler profile, and GNU Make/MSYS2 Bash for
+build recipes. Compilation, linking and runtime use the native Windows ABI and
+dynamic Microsoft CRT, not a MinGW or MSYS runtime. The environment helper only
+imports the installed toolchain into the current shell; it installs nothing.
+
+From MSYS2 Bash in the checkout:
+
+```sh
+source scripts/msvc-env.sh
+make -j4 CC=cl PYTHON=python check install-check
+make -j4 CC=clang-cl PYTHON=python check install-check
+```
+
+Put native Python and LLVM on PATH if they are not already available. The native
+profile sets Python UTF-8 mode and C/C++ source UTF-8 explicitly. MSVC uses
+`/std:c11 /experimental:c11atomics`; clang-cl uses its native C11 atomics. Both use
+`/W4 /WX /MD`. Output trees are separate:
+`.build/windows-msvc-x64-release-cuda120a` and
+`.build/windows-clang-cl-x64-release-cuda120a`. Do not mix archives/objects from
+different CRT, compiler, architecture or CUDA target configurations.
+
+With an existing CUDA installation (`CUDA_PATH`, or an explicit `CUDA_ROOT`):
+
+```sh
+make -j2 CC=cl PYTHON=python gpu infer-shared
+make -j2 CC=clang-cl PYTHON=python gpu infer-shared
+```
+
+NVCC continues to compile the retained CUDA C++20 implementation using its
+supported MSVC host compiler. `CC=clang-cl` selects the C host compiler, not
+Clang-CUDA. The default target remains `sm_120a`; Windows portability does not
+qualify Ampere or change the device capability gate. A successful build is not
+a model-backed numerical or throughput qualification.
+
+The native host SDK produces `inkleberry.lib`, `inkleberry-1.dll` and its distinct
+`inkleberry-1.lib` import library. The inference DLL is
+`inkleberry_backend-1.dll`; its `.def` exports only `ifn_infer_get_api`. Keep the
+DLLs beside the executable or on the operator-controlled DLL search path.
+CUDA/driver runtime dependencies are external and are not bundled.
+
+For Windows runtime packages, pass the selected native output directory:
+
+```sh
+python tools/release.py runtime --build-root .build/windows-msvc-x64-release-cuda120a
+# Add --gpu only after building and validating the native CUDA targets.
+```
+
+`make install` and `make install-contract-check` support native Windows custom
+prefixes without requiring symlink privileges. Use the installed `.lib` files
+explicitly with MSVC/clang-cl; GNU pkg-config metadata is emitted only on POSIX.
+`make windows-sdk-check` verifies deterministic archives and extracted C/C++
+consumers. `make windows-cuda-build-check` compiles/links CUDA, inspects PE exports
+and imports, negotiates the provider ABI and runs the C/C++ layout probe without
+loading model weights or executing inference.

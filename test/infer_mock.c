@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * Fake execution checks facade ownership/concurrency, never GPU numerics. */
 #include "infer_internal.h"
-#include <sched.h>
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -109,7 +109,7 @@ ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens
     if (atomic_load(&ifn_infer_mock_pause) == 1) {
         atomic_store(&ifn_infer_mock_arrived, 1);
         while (!atomic_load(&ifn_infer_mock_resume))
-            sched_yield();
+            ifn_test_yield();
     }
     stats->generation.prompt_tokens = (uint32_t)n;
     if (control->cancelled(control->context))
@@ -130,7 +130,7 @@ ifn_status ifn_session_generate_controlled(ifn_session *s, const int32_t *tokens
     if (atomic_load(&ifn_infer_mock_pause) == 2) {
         atomic_store(&ifn_infer_mock_arrived, 1);
         while (!atomic_load(&ifn_infer_mock_resume))
-            sched_yield();
+            ifn_test_yield();
     }
     return IFN_OK;
 }

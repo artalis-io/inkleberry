@@ -7,12 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "host_clock.h"
 
 static uint64_t ifn_benchmark_now(void) {
-    struct timespec t;
-    if (clock_gettime(CLOCK_MONOTONIC, &t))
-        return 0;
-    return (uint64_t)t.tv_sec * UINT64_C(1000000000) + (uint64_t)t.tv_nsec;
+    return ifn_host_now_ns();
 }
 
 typedef struct {

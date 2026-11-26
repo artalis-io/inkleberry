@@ -5,6 +5,26 @@
 #endif
 #include "ifn.h"
 
+/* src/allocation_alignment.h */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
+#ifndef IFN_ALLOCATION_ALIGNMENT_H
+#define IFN_ALLOCATION_ALIGNMENT_H
+#include <stddef.h>
+#if defined(_MSC_VER) && !defined(__cplusplus)
+/* MSVC's C headers omit max_align_t. Its x64 fundamental types need at most
+ * eight-byte alignment; a sixteen-byte extent also preserves malloc alignment
+ * when this record is prepended to a caller allocation. */
+typedef union {
+    long double real;
+    void *pointer;
+    unsigned char extent[16];
+} ifn_allocation_alignment;
+#else
+typedef max_align_t ifn_allocation_alignment;
+#endif
+#endif
+
+
 /* src/checked_cuda.h */
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #ifndef IFN_CHECKED_CUDA_H
@@ -322,6 +342,7 @@ typedef struct {
     int64_t code;
 } ifn_native_diagnostic;
 
+ifn_status ifn_win32_error(ifn_status, uint32_t, const char *);
 ifn_status ifn_os_error(ifn_status, int, const char *);
 ifn_status ifn_native_error(ifn_status, int, const char *);
 ifn_native_diagnostic ifn_native_diagnostic_get(void);
@@ -592,6 +613,36 @@ void ifn_ar_check(ifn_session *, int, const char *);
 #endif
 
 
+/* src/file_map.h */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
+#ifndef IFN_FILE_MAP_H
+#define IFN_FILE_MAP_H
+
+typedef struct {
+    const unsigned char *data;
+    size_t size;
+} ifn_file_map;
+
+/* Private read-only view. The caller keeps backing bytes immutable until close.
+ * Allocator is resolved; only temporary Windows path storage uses its callbacks. */
+ifn_status ifn_file_map_open(const char *, size_t, size_t, const ifn_options *, ifn_file_map *);
+void ifn_file_map_close(ifn_file_map *);
+#endif
+
+
+/* src/host_clock.h */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
+#ifndef IFN_HOST_CLOCK_H
+#define IFN_HOST_CLOCK_H
+#include <stdint.h>
+#include <stdbool.h>
+/* Monotonic nanoseconds; zero on failure. Never substitutes wall time. */
+uint64_t ifn_host_now_ns(void);
+/* Exact, checked QPC conversion, independent of OS calls for boundary tests. */
+bool ifn_clock_from_ticks(uint64_t, uint64_t, uint64_t *);
+#endif
+
+
 /* src/infer_internal.h */
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #ifndef IFN_INFER_INTERNAL_H
@@ -839,6 +890,205 @@ bool ifn_utf8_next(const unsigned char *text, size_t bytes, size_t *pos, uint32_
 #endif
 
 
+/* Module: src/host_clock.c */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
+
+bool ifn_clock_from_ticks(uint64_t ticks, uint64_t frequency, uint64_t *out) {
+    if (!out)
+        return false;
+    *out = 0;
+    if (!frequency || ticks / frequency > UINT64_MAX / UINT64_C(1000000000))
+        return false;
+    uint64_t whole = (ticks / frequency) * UINT64_C(1000000000);
+    uint64_t remainder = ticks % frequency, fraction = 0;
+    if (remainder <= UINT64_MAX / UINT64_C(1000000000)) {
+        fraction = remainder * UINT64_C(1000000000) / frequency;
+    } else {
+        /* floor(remainder * 1e9 / frequency), without a 128-bit extension.
+         * At every bit, fraction/remainder hold the quotient/remainder of the
+         * partial product. Subtraction tests avoid overflowing a doubled sum. */
+        uint64_t rest = 0;
+        for (int bit = 29; bit >= 0; bit--) {
+            fraction *= 2;
+            if (rest >= frequency - rest) {
+                rest -= frequency - rest;
+                fraction++;
+            } else {
+                rest += rest;
+            }
+            if ((UINT64_C(1000000000) >> bit) & 1) {
+                if (rest >= frequency - remainder) {
+                    rest -= frequency - remainder;
+                    fraction++;
+                } else {
+                    rest += remainder;
+                }
+            }
+        }
+    }
+    if (fraction > UINT64_MAX - whole)
+        return false;
+    *out = whole + fraction;
+    return true;
+}
+
+
+/* Module: src/host_posix.c */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
+ * OS-local services follow OTTO's narrow read-only mapping/clock pattern. */
+#define _POSIX_C_SOURCE 200809L
+#ifndef _WIN32
+
+
+
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+
+ifn_status ifn_file_map_open(const char *path, size_t minimum, size_t maximum,
+                             const ifn_options *allocator, ifn_file_map *out) {
+    (void)allocator;
+    if (out)
+        *out = (ifn_file_map){0};
+    if (!out || !path || !path[0] || !minimum || maximum < minimum)
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid file mapping request");
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    if (fd < 0)
+        return ifn_os_error(IFN_IO, errno, "cannot open mapped file");
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 0 ||
+        (uintmax_t)st.st_size < minimum || (uintmax_t)st.st_size > maximum) {
+        (void)close(fd);
+        return ifn_error(IFN_FORMAT, "invalid mapped file size/type");
+    }
+    size_t size = (size_t)st.st_size;
+    void *data = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    int error = errno;
+    (void)close(fd);
+    if (data == MAP_FAILED)
+        return ifn_os_error(IFN_IO, error, "cannot map file");
+    out->data = data;
+    out->size = size;
+    return IFN_OK;
+}
+
+void ifn_file_map_close(ifn_file_map *map) {
+    if (map && map->data) {
+        (void)munmap((void *)map->data, map->size);
+        *map = (ifn_file_map){0};
+    }
+}
+
+uint64_t ifn_host_now_ns(void) {
+    struct timespec t;
+    if (clock_gettime(CLOCK_MONOTONIC, &t) || t.tv_sec < 0 || t.tv_nsec < 0 ||
+        t.tv_nsec >= 1000000000L || (uint64_t)t.tv_sec > UINT64_MAX / UINT64_C(1000000000))
+        return 0;
+    uint64_t seconds = (uint64_t)t.tv_sec * UINT64_C(1000000000);
+    return UINT64_MAX - seconds < (uint64_t)t.tv_nsec ? 0 : seconds + (uint64_t)t.tv_nsec;
+}
+#else
+typedef int ifn_host_posix_inactive;
+#endif
+
+
+/* Module: src/host_win.c */
+/* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
+ * Mapping lifetime/clock shape adapted from OTTO; strict UTF-8, bounded files,
+ * injected temporary allocation and native error preservation are IFN policy. */
+#ifdef _WIN32
+
+
+
+#include <windows.h>
+#include <string.h>
+
+ifn_status ifn_file_map_open(const char *path, size_t minimum, size_t maximum,
+                             const ifn_options *allocator, ifn_file_map *out) {
+    if (out)
+        *out = (ifn_file_map){0};
+    if (!out || !path || !path[0] || !minimum || maximum < minimum || !allocator ||
+        !allocator->allocate || !allocator->release)
+        return ifn_error(IFN_INVALID_ARGUMENT, "invalid file mapping request");
+    /* A file API must not open a named pipe/device and wait for its peer. */
+    if (!strncmp(path, "\\\\.\\", 4) || !strncmp(path, "//./", 4))
+        return ifn_error(IFN_FORMAT, "device namespaces are not mapped files");
+    int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+    if (!count)
+        return ifn_win32_error(IFN_INVALID_ARGUMENT, GetLastError(), "invalid UTF-8 file path");
+    size_t bytes;
+    if (!ifn_size_mul((size_t)count, sizeof(wchar_t), &bytes))
+        return ifn_error(IFN_LIMIT, "file path is too large");
+    wchar_t *wide = allocator->allocate(allocator->context, bytes);
+    if (!wide)
+        return ifn_error(IFN_OUT_OF_MEMORY, "allocate file path");
+    if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, count)) {
+        DWORD error = GetLastError();
+        allocator->release(allocator->context, wide);
+        return ifn_win32_error(IFN_INVALID_ARGUMENT, error, "invalid UTF-8 file path");
+    }
+    HANDLE file = CreateFileW(wide, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL, NULL);
+    DWORD error = GetLastError();
+    allocator->release(allocator->context, wide);
+    if (file == INVALID_HANDLE_VALUE)
+        return ifn_win32_error(IFN_IO, error, "cannot open mapped file");
+    LARGE_INTEGER size;
+    if (GetFileType(file) != FILE_TYPE_DISK) {
+        (void)CloseHandle(file);
+        return ifn_error(IFN_FORMAT, "invalid mapped file type");
+    }
+    if (!GetFileSizeEx(file, &size)) {
+        error = GetLastError();
+        (void)CloseHandle(file);
+        return ifn_win32_error(IFN_IO, error, "cannot query mapped file size");
+    }
+    if (size.QuadPart < 0 || (uint64_t)size.QuadPart < minimum ||
+        (uint64_t)size.QuadPart > maximum) {
+        (void)CloseHandle(file);
+        return ifn_error(IFN_FORMAT, "invalid mapped file size/type");
+    }
+    HANDLE mapping = CreateFileMappingW(file, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (!mapping) {
+        error = GetLastError();
+        (void)CloseHandle(file);
+        return ifn_win32_error(IFN_IO, error, "cannot create file mapping");
+    }
+    void *data = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
+    error = GetLastError();
+    (void)CloseHandle(mapping);
+    (void)CloseHandle(file);
+    if (!data)
+        return ifn_win32_error(IFN_IO, error, "cannot map file");
+    out->data = data;
+    out->size = (size_t)size.QuadPart;
+    return IFN_OK;
+}
+
+void ifn_file_map_close(ifn_file_map *map) {
+    if (map && map->data) {
+        (void)UnmapViewOfFile(map->data);
+        *map = (ifn_file_map){0};
+    }
+}
+
+uint64_t ifn_host_now_ns(void) {
+    LARGE_INTEGER ticks, frequency;
+    uint64_t ns;
+    if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0 ||
+        !QueryPerformanceCounter(&ticks) || ticks.QuadPart < 0 ||
+        !ifn_clock_from_ticks((uint64_t)ticks.QuadPart, (uint64_t)frequency.QuadPart, &ns))
+        return 0;
+    return ns;
+}
+#else
+typedef int ifn_host_win_inactive;
+#endif
+
+
 /* Module: src/foundation.c */
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
  * Explicit ownership/error contracts follow Jev Bush's C library practices. */
@@ -878,6 +1128,15 @@ ifn_status ifn_os_error(ifn_status status, int code, const char *message) {
     ifn_error(status, message);
     if (status && code) {
         ifn_am_foundation_ifn_foundation_diagnostic.provider = 1;
+        ifn_am_foundation_ifn_foundation_diagnostic.code = code;
+    }
+    return status;
+}
+
+ifn_status ifn_win32_error(ifn_status status, uint32_t code, const char *message) {
+    ifn_error(status, message);
+    if (status && code) {
+        ifn_am_foundation_ifn_foundation_diagnostic.provider = 5;
         ifn_am_foundation_ifn_foundation_diagnostic.code = code;
     }
     return status;
@@ -1441,12 +1700,8 @@ bool ifn_json_equal(ifn_json a, ifn_json b, unsigned depth) {
 #define _POSIX_C_SOURCE 200809L
 
 
-#include <fcntl.h>
-#include <errno.h>
+
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 struct ifn_safetensors {
     ifn_options allocator;
@@ -1642,7 +1897,7 @@ void ifn_safetensors_close(ifn_safetensors *file) {
         return;
     ifn_options allocator = file->allocator;
     if (file->mapped)
-        (void)munmap((void *)file->data, file->size);
+        ifn_file_map_close(&(ifn_file_map){file->data, file->size});
     allocator.release(allocator.context, file->tensors);
     allocator.release(allocator.context, file);
 }
@@ -1678,29 +1933,18 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     ifn_status status = ifn_options_resolve(options, &checked);
     if (status != IFN_OK)
         return status;
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
-    if (fd < 0)
-        return ifn_os_error(IFN_IO, errno, "cannot open tensor file");
-    struct stat st;
-    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 10 ||
-        (uintmax_t)st.st_size > SIZE_MAX) {
-        (void)close(fd);
-        return ifn_error(IFN_FORMAT, "invalid tensor file size/type");
-    }
-    size_t size = (size_t)st.st_size;
-    void *mapping = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-    int mapping_errno = errno;
-    (void)close(fd);
-    if (mapping == MAP_FAILED)
-        return ifn_os_error(IFN_IO, mapping_errno, "cannot map tensor file");
+    ifn_file_map map;
+    status = ifn_file_map_open(path, 10, SIZE_MAX, &checked, &map);
+    if (status != IFN_OK)
+        return status;
     ifn_safetensors *file = NULL;
     status = ifn_am_safetensors_ifn_safetensors_local_create(&checked, &file);
     if (status != IFN_OK) {
-        (void)munmap(mapping, size);
+        ifn_file_map_close(&map);
         return status;
     }
-    file->data = mapping;
-    file->size = size;
+    file->data = map.data;
+    file->size = map.size;
     file->mapped = true;
     status = ifn_am_safetensors_ifn_safetensors_local_parse(file);
     if (status != IFN_OK) {
@@ -1789,12 +2033,8 @@ ifn_status ifn_safetensors_sha256(const ifn_safetensors *file, unsigned char out
 
 
 
-#include <fcntl.h>
-#include <errno.h>
+
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 uint64_t ifn_token_hash(const void *data, size_t size) {
     const unsigned char *p = data;
@@ -2189,27 +2429,18 @@ ifn_status ifn_tokenizer_open_verified(const char *path, const ifn_options *opti
     ifn_status status = ifn_options_resolve(options, &checked);
     if (status != IFN_OK)
         return status;
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
-    if (fd < 0)
-        return ifn_os_error(IFN_IO, errno, "cannot open tokenizer");
-    struct stat st;
-    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
-        (uintmax_t)st.st_size > IFN_TOK_JSON) {
-        (void)close(fd);
-        return ifn_error(IFN_FORMAT, "invalid tokenizer file size/type");
-    }
-    size_t n = (size_t)st.st_size;
-    void *map = mmap(NULL, n, PROT_READ, MAP_PRIVATE, fd, 0);
-    int map_errno = errno;
-    (void)close(fd);
-    if (map == MAP_FAILED)
-        return ifn_os_error(IFN_IO, map_errno, "cannot map tokenizer");
+    ifn_file_map mapping;
+    status = ifn_file_map_open(path, 1, IFN_TOK_JSON, &checked, &mapping);
+    if (status != IFN_OK)
+        return status;
+    const void *map = mapping.data;
+    size_t n = mapping.size;
     unsigned char digest[32];
     if (expected && (!ifn_sha256_hash(map, n, digest) || memcmp(digest, expected, 32)))
         status = ifn_error(IFN_FORMAT, "tokenizer checksum mismatch");
     else
         status = ifn_tokenizer_open_memory(map, n, &checked, out);
-    (void)munmap(map, n);
+    ifn_file_map_close(&mapping);
     return status;
 }
 
@@ -6842,12 +7073,13 @@ ifn_status ifn_gpu_weights_read(ifn_gpu_weights *w, size_t i, uint64_t o, void *
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #define _POSIX_C_SOURCE 200809L
 
+
+
 #include <stdio.h>
-#include <time.h>
 
 /* Header is maximally aligned and private to our allocator, never an ABI record. */
 typedef union {
-    max_align_t alignment;
+    ifn_allocation_alignment alignment;
 
     struct {
         size_t bytes;
@@ -7013,10 +7245,7 @@ ifn_status ifn_infer_no_extensions(ifn_infer_array a) {
 }
 
 uint64_t ifn_infer_now(void) {
-    struct timespec t;
-    if (clock_gettime(CLOCK_MONOTONIC, &t))
-        return 0;
-    return (uint64_t)t.tv_sec * UINT64_C(1000000000) + (uint64_t)t.tv_nsec;
+    return ifn_host_now_ns();
 }
 
 ifn_status ifn_infer_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {
@@ -7300,7 +7529,7 @@ ifn_status ifn_infer_model_load(ifn_infer_model *m, const ifn_infer_source_v1 *s
     char paths[3][4096];
     if (!rc)
         rc = ifn_am_infer_model_ifn_infer_model_local_source_paths(s, paths);
-    ifn_weight_plan plan;
+    ifn_weight_plan plan = {0};
     if (!rc)
         rc = ifn_weights_plan(&m->weights_config, &m->allocator, &plan);
     if (!rc && plan.peak_device_bytes > m->device_budget)
@@ -7482,7 +7711,7 @@ ifn_status ifn_infer_session_plan(ifn_infer_session *s, ifn_infer_memory_plan_v1
         return ifn_infer_error(e, IFN_INVALID_ARGUMENT, IFN_STAGE_VALIDATE, "missing session");
     if (!ifn_infer_lock(&s->busy))
         return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_VALIDATE, "session busy");
-    ifn_infer_memory_plan_v1 v;
+    ifn_infer_memory_plan_v1 v = {0};
     ifn_status rc = ifn_am_infer_session_ifn_infer_session_local_plan_locked(s, &v);
     if (!rc)
         rc = ifn_infer_output(out, &v, sizeof v);
@@ -7496,7 +7725,7 @@ ifn_status ifn_infer_session_prepare(ifn_infer_session *s, ifn_infer_error_v1 *e
     if (!ifn_infer_lock(&s->busy))
         return ifn_infer_error(e, IFN_BUSY, IFN_STAGE_PREPARE, "session busy");
     ifn_status rc = s->state == IFN_HANDLE_CREATED ? IFN_OK : IFN_INFER_INVALID_STATE;
-    ifn_infer_memory_plan_v1 v;
+    ifn_infer_memory_plan_v1 v = {0};
     if (!rc)
         rc = ifn_am_infer_session_ifn_infer_session_local_plan_locked(s, &v);
     if (!rc && v.peak_owned_device_bytes > s->device_budget)

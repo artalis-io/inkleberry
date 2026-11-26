@@ -6,12 +6,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "internal.h"
 #include "json.h"
-#include <fcntl.h>
-#include <errno.h>
+#include "file_map.h"
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 struct ifn_safetensors {
     ifn_options allocator;
@@ -207,7 +203,7 @@ void ifn_safetensors_close(ifn_safetensors *file) {
         return;
     ifn_options allocator = file->allocator;
     if (file->mapped)
-        (void)munmap((void *)file->data, file->size);
+        ifn_file_map_close(&(ifn_file_map){file->data, file->size});
     allocator.release(allocator.context, file->tensors);
     allocator.release(allocator.context, file);
 }
@@ -243,29 +239,18 @@ ifn_status ifn_safetensors_open(const char *path, const ifn_options *options,
     ifn_status status = ifn_options_resolve(options, &checked);
     if (status != IFN_OK)
         return status;
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
-    if (fd < 0)
-        return ifn_os_error(IFN_IO, errno, "cannot open tensor file");
-    struct stat st;
-    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 10 ||
-        (uintmax_t)st.st_size > SIZE_MAX) {
-        (void)close(fd);
-        return ifn_error(IFN_FORMAT, "invalid tensor file size/type");
-    }
-    size_t size = (size_t)st.st_size;
-    void *mapping = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-    int mapping_errno = errno;
-    (void)close(fd);
-    if (mapping == MAP_FAILED)
-        return ifn_os_error(IFN_IO, mapping_errno, "cannot map tensor file");
+    ifn_file_map map;
+    status = ifn_file_map_open(path, 10, SIZE_MAX, &checked, &map);
+    if (status != IFN_OK)
+        return status;
     ifn_safetensors *file = NULL;
     status = ifn_safetensors_local_create(&checked, &file);
     if (status != IFN_OK) {
-        (void)munmap(mapping, size);
+        ifn_file_map_close(&map);
         return status;
     }
-    file->data = mapping;
-    file->size = size;
+    file->data = map.data;
+    file->size = map.size;
     file->mapped = true;
     status = ifn_safetensors_local_parse(file);
     if (status != IFN_OK) {

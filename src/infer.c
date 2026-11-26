@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #define _POSIX_C_SOURCE 200809L
+#include "allocation_alignment.h"
 #include "infer_internal.h"
+#include "host_clock.h"
 #include <stdio.h>
-#include <time.h>
 
 /* Header is maximally aligned and private to our allocator, never an ABI record. */
 typedef union {
-    max_align_t alignment;
+    ifn_allocation_alignment alignment;
 
     struct {
         size_t bytes;
@@ -172,10 +173,7 @@ ifn_status ifn_infer_no_extensions(ifn_infer_array a) {
 }
 
 uint64_t ifn_infer_now(void) {
-    struct timespec t;
-    if (clock_gettime(CLOCK_MONOTONIC, &t))
-        return 0;
-    return (uint64_t)t.tv_sec * UINT64_C(1000000000) + (uint64_t)t.tv_nsec;
+    return ifn_host_now_ns();
 }
 
 ifn_status ifn_infer_defaults(uint32_t kind, void *out, ifn_infer_error_v1 *e) {

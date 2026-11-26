@@ -96,8 +96,8 @@ static int ifn_chat_local_bytes_tests(void) {
     ifn_stream_info info = IFN_STREAM_INFO_INIT;
     IFN_CHAT_LOCAL_CHECK(ifn_stream_create(NULL, &o, NULL, ifn_chat_local_collect, &c, &s) ==
                          IFN_OK);
-    const char bad[] = {(char)0xf0, (char)0x9f, 'x', (char)0xff, (char)0xe2};
-    IFN_CHAT_LOCAL_CHECK(ifn_stream_push_bytes(s, bad, sizeof bad) == IFN_OK &&
+    const unsigned char bad[] = {0xf0, 0x9f, 'x', 0xff, 0xe2};
+    IFN_CHAT_LOCAL_CHECK(ifn_stream_push_bytes(s, (const char *)bad, sizeof bad) == IFN_OK &&
                          ifn_stream_finish(s, IFN_STREAM_LENGTH) == IFN_OK);
     IFN_CHAT_LOCAL_CHECK(ifn_stream_get_info(s, &info) == IFN_OK && info.utf8_replacements == 3);
     IFN_CHAT_LOCAL_CHECK(c.n == 10 && !memcmp(c.text, "\xef\xbf\xbdx\xef\xbf\xbd\xef\xbf\xbd", 10));

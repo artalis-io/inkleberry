@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='ifn-pie-') as tmp:
     base = Path(tmp)
     source = base / 'source'
     source.mkdir()
-    for directory in ['src', 'include', 'cli', 'config']:
+    for directory in ['src', 'include', 'cli', 'config', 'mk']:
         shutil.copytree(ROOT / directory, source / directory)
     for name in ['Makefile', 'VERSION']:
         shutil.copy2(ROOT / name, source / name)

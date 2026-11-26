@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "filesystem.h"
 #define IFN_UNIT_LOCAL_CHECK(x)                                                                    \
     do {                                                                                           \
         if (!(x)) {                                                                                \
@@ -93,10 +93,10 @@ int main(void) {
         ifn_safetensors_open_memory(NULL, 0, NULL, &file) == IFN_INVALID_ARGUMENT && !file);
     IFN_UNIT_LOCAL_CHECK(ifn_safetensors_open_memory(bytes, n, NULL, NULL) == IFN_INVALID_ARGUMENT);
     /* Every allocator site, both memory and mapped-file entrypoints. */
-    char path[] = "/tmp/ifn-test-XXXXXX";
-    int fd = mkstemp(path);
-    IFN_UNIT_LOCAL_CHECK(fd >= 0 && write(fd, bytes, n) == (ssize_t)n && !close(fd));
-    for (size_t fail = 0; fail < 3; fail++) {
+    char path[512];
+    int fd = ifn_test_temp(path, sizeof path);
+    IFN_UNIT_LOCAL_CHECK(fd >= 0 && ifn_test_write(fd, bytes, n) == (int)n && !ifn_test_close(fd));
+    for (size_t fail = 0; fail < 4; fail++) {
         for (int mapped = 0; mapped < 2; mapped++) {
             ifn_unit_local_faults f = {0, fail, 0};
             options = (ifn_options)IFN_OPTIONS_INIT;
@@ -105,7 +105,12 @@ int main(void) {
             options.context = &f;
             ifn_status status = mapped ? ifn_safetensors_open(path, &options, &file)
                                        : ifn_safetensors_open_memory(bytes, n, &options, &file);
-            IFN_UNIT_LOCAL_CHECK(status == (fail < 2 ? IFN_OUT_OF_MEMORY : IFN_OK));
+            size_t allocations = 2;
+#ifdef _WIN32
+            allocations += (size_t)mapped;
+#endif
+            IFN_UNIT_LOCAL_CHECK(status ==
+                                 (ifn_status)(fail < allocations ? IFN_OUT_OF_MEMORY : IFN_OK));
             if (status == IFN_OK)
                 IFN_UNIT_LOCAL_CHECK(file && f.live == 2);
             else
@@ -114,7 +119,7 @@ int main(void) {
             IFN_UNIT_LOCAL_CHECK(!f.live);
         }
     }
-    IFN_UNIT_LOCAL_CHECK(!unlink(path));
+    IFN_UNIT_LOCAL_CHECK(!ifn_test_remove(path));
     IFN_UNIT_LOCAL_CHECK(ifn_safetensors_open(path, NULL, &file) == IFN_IO && !file);
     /* Failed parse releases both owned allocations. */
     ifn_unit_local_faults f = {0, SIZE_MAX, 0};

@@ -94,7 +94,11 @@ int main(int argc, char **argv) {
     bool invalid = argc == 4 && !strcmp(argv[1], "--invalid");
     IFN_INKLING_LOCAL_CHECK(invalid || argc == 3);
     const char *main_path = argv[invalid ? 2 : 1], *mtp = argv[invalid ? 3 : 2];
-    for (size_t fail = invalid ? 5 : 0; fail <= 5; fail++) {
+    size_t allocations = 5;
+#ifdef _WIN32
+    allocations += 2;
+#endif
+    for (size_t fail = invalid ? allocations : 0; fail <= allocations; fail++) {
         ifn_inkling_local_faults f = {0, fail, 0};
         ifn_options o = IFN_OPTIONS_INIT;
         o.allocate = ifn_inkling_local_alloc;
@@ -106,7 +110,8 @@ int main(int argc, char **argv) {
             IFN_INKLING_LOCAL_CHECK(status != IFN_OK && !c && !f.live);
             break;
         }
-        IFN_INKLING_LOCAL_CHECK(status == (fail < 5 ? IFN_OUT_OF_MEMORY : IFN_OK));
+        IFN_INKLING_LOCAL_CHECK(status ==
+                                (ifn_status)(fail < allocations ? IFN_OUT_OF_MEMORY : IFN_OK));
         IFN_INKLING_LOCAL_CHECK(status == IFN_OK ? c != NULL : c == NULL);
         if (c) {
             IFN_INKLING_LOCAL_CHECK(ifn_inkling_checkpoint_count(c) == 876);

@@ -16,6 +16,7 @@ typedef struct {
     int64_t code;
 } ifn_native_diagnostic;
 
+ifn_status ifn_win32_error(ifn_status, uint32_t, const char *);
 ifn_status ifn_os_error(ifn_status, int, const char *);
 ifn_status ifn_native_error(ifn_status, int, const char *);
 ifn_native_diagnostic ifn_native_diagnostic_get(void);

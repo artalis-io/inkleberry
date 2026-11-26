@@ -4,6 +4,7 @@
 The files have the architecture's logical sizes, but holes consume no payload
 storage and are never read by metadata binding. No real weights are generated.
 """
+from ifn_test_files import sparse_resize, allocated_bytes, fixture_alias
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -26,7 +27,7 @@ def write(path, header, payload):
     data=json.dumps(header,separators=(',',':')).encode()
     with path.open('wb') as f:
         f.write(struct.pack('<Q',len(data)));f.write(data)
-        f.truncate(8+len(data)+payload)
+        sparse_resize(f, 8+len(data)+payload)
         # Numeric auxiliaries for the private GPU-lifecycle simulation only.
         for name,entry in header.items():
             if name.endswith(('_weight_amax','_weight_outer_scale_denominator')):
@@ -34,7 +35,7 @@ def write(path, header, payload):
                 f.seek(8+len(data)+start)
                 f.write(struct.pack('<f',1.0)*((end-start)//4))
     # Fail if the platform materializes holes rather than creating sparse files.
-    if path.stat().st_blocks*512>2*1024*1024:
+    if allocated_bytes(path)>2*1024*1024:
         raise SystemExit('Filesystem did not create a sparse fixture; refusing bulk fixture storage')
 
 def run(args):
@@ -44,16 +45,16 @@ def run(args):
 
 with tempfile.TemporaryDirectory(prefix='ifn-schema-') as folder:
     probe=Path(folder)/'sparse-probe'
-    with probe.open('wb') as f:f.truncate(16*1024*1024)
-    if probe.stat().st_blocks*512>4096:
+    with probe.open('wb') as f:sparse_resize(f, 16*1024*1024)
+    if allocated_bytes(probe)>4096:
         raise SystemExit('Sparse files are required for metadata-only model fixtures')
     probe.unlink()
     paths=[Path(folder)/'main',Path(folder)/'mtp']
     for i in range(2):write(paths[i],headers[i],sizes[i])
     run([binary,*map(str,paths)])
     if len(sys.argv)>5:
-        (Path(folder)/'model-00001-of-00001.safetensors').symlink_to('main')
-        (Path(folder)/'mtp.safetensors').symlink_to('mtp')
+        fixture_alias(paths[0], Path(folder)/'model-00001-of-00001.safetensors')
+        fixture_alias(paths[1], Path(folder)/'mtp.safetensors')
         (Path(folder)/'tokenizer.json').write_bytes(Path(sys.argv[5]).read_bytes())
         run([sys.argv[4],'--load-fixture',folder])
     if len(sys.argv)>2:

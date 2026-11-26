@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "ifn.h"
-#include <pthread.h>
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -123,15 +123,19 @@ int main(int argc, char **argv) {
     ifn_tokenizer_close(copy);
 
     ifn_tokenizer_scratch_destroy(s);
-    pthread_t threads[2];
+    ifn_test_thread threads[2];
     ifn_tokenizer_local_worker_args args[2] = {{t, 1}, {t, 1}};
     for (size_t i = 0; i < 2; i++)
         IFN_TOKENIZER_LOCAL_CHECK(
-            !pthread_create(&threads[i], NULL, ifn_tokenizer_local_worker, &args[i]));
+            !ifn_test_thread_create(&threads[i], NULL, ifn_tokenizer_local_worker, &args[i]));
     for (size_t i = 0; i < 2; i++)
-        IFN_TOKENIZER_LOCAL_CHECK(!pthread_join(threads[i], NULL) && !args[i].result);
+        IFN_TOKENIZER_LOCAL_CHECK(!ifn_test_thread_join(threads[i], NULL) && !args[i].result);
     ifn_tokenizer_close(t);
-    for (size_t fail = 0; fail <= 5; fail++) {
+    size_t allocations = 5;
+#ifdef _WIN32
+    allocations++;
+#endif
+    for (size_t fail = 0; fail <= allocations; fail++) {
         ifn_tokenizer_local_faults f = {0, fail, 0};
         ifn_options o = IFN_OPTIONS_INIT;
         o.allocate = ifn_tokenizer_local_alloc;
@@ -139,7 +143,8 @@ int main(int argc, char **argv) {
         o.context = &f;
         t = NULL;
         ifn_status status = ifn_tokenizer_open(argv[1], &o, &t);
-        IFN_TOKENIZER_LOCAL_CHECK(status == (fail < 5 ? IFN_OUT_OF_MEMORY : IFN_OK));
+        IFN_TOKENIZER_LOCAL_CHECK(status ==
+                                  (ifn_status)(fail < allocations ? IFN_OUT_OF_MEMORY : IFN_OK));
         IFN_TOKENIZER_LOCAL_CHECK(status == IFN_OK ? t != NULL : t == NULL);
         ifn_tokenizer_close(t);
         IFN_TOKENIZER_LOCAL_CHECK(!f.live);
@@ -152,7 +157,7 @@ int main(int argc, char **argv) {
         o.context = &f;
         s = NULL;
         ifn_status status = ifn_tokenizer_scratch_create(&o, &s);
-        IFN_TOKENIZER_LOCAL_CHECK(status == (fail < 4 ? IFN_OUT_OF_MEMORY : IFN_OK));
+        IFN_TOKENIZER_LOCAL_CHECK(status == (ifn_status)(fail < 4 ? IFN_OUT_OF_MEMORY : IFN_OK));
         ifn_tokenizer_scratch_destroy(s);
         IFN_TOKENIZER_LOCAL_CHECK(!f.live);
     }

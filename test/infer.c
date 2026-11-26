@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "infer_internal.h"
-#include <pthread.h>
-#include <sched.h>
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 extern atomic_uint ifn_infer_mock_uploads;
@@ -174,13 +173,17 @@ static int ifn_infer_local_reject_manifest(const char *directory, const char *to
     source.format_id = (ifn_infer_bytes){"inkling-safetensors", sizeof("inkling-safetensors") - 1};
     ifn_infer_error_v1 error;
     IFN_INFER_INIT(error);
+    uint32_t os_provider = IFN_PROVIDER_OS;
+#ifdef _WIN32
+    os_provider = IFN_PROVIDER_WIN32;
+#endif
     for (unsigned pass = 0; pass < 2; pass++) {
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_create(&c, &model, NULL) == IFN_OK);
         ifn_status rc = ifn_infer_local_api->model_load(model, &source, &error);
-        IFN_INFER_LOCAL_CHECK(rc == (pass ? IFN_IO : IFN_FORMAT));
+        IFN_INFER_LOCAL_CHECK(rc == (ifn_status)(pass ? IFN_IO : IFN_FORMAT));
         IFN_INFER_LOCAL_CHECK(!atomic_load(&ifn_infer_mock_uploads));
         if (pass)
-            IFN_INFER_LOCAL_CHECK(error.provider == IFN_PROVIDER_OS && error.provider_code > 0);
+            IFN_INFER_LOCAL_CHECK(error.provider == os_provider && error.provider_code > 0);
         else
             IFN_INFER_LOCAL_CHECK(strstr(error.message, "checksum mismatch"));
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_close(&model, NULL) == IFN_OK);
@@ -215,10 +218,10 @@ static int ifn_infer_local_lifecycle(const char *fixture) {
     atomic_store(&ifn_infer_mock_arrived, 0);
     atomic_store(&ifn_infer_mock_resume, 0);
     ifn_infer_local_worker first = {r[0], 999, 0};
-    pthread_t t;
-    IFN_INFER_LOCAL_CHECK(pthread_create(&t, NULL, ifn_infer_local_run, &first) == 0);
+    ifn_test_thread t;
+    IFN_INFER_LOCAL_CHECK(ifn_test_thread_create(&t, NULL, ifn_infer_local_run, &first) == 0);
     while (!atomic_load(&ifn_infer_mock_arrived))
-        sched_yield();
+        ifn_test_yield();
     ifn_infer_local_worker second = {r[1], 999, 0};
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_run(r[1], ifn_infer_local_count_event,
                                                            &second.events, NULL) == IFN_BUSY);
@@ -229,7 +232,7 @@ static int ifn_infer_local_lifecycle(const char *fixture) {
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_cancel(r[0], &disposition, NULL) == IFN_OK &&
                           disposition == IFN_CANCEL_ALREADY_REQUESTED);
     atomic_store(&ifn_infer_mock_resume, 1);
-    IFN_INFER_LOCAL_CHECK(pthread_join(t, NULL) == 0 && first.status == IFN_CANCELLED &&
+    IFN_INFER_LOCAL_CHECK(ifn_test_thread_join(t, NULL) == 0 && first.status == IFN_CANCELLED &&
                           !first.events);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_result(r[0], &result, NULL) == IFN_OK &&
                           result.finish_reason == IFN_FINISH_CANCELLED_V1);
@@ -237,13 +240,13 @@ static int ifn_infer_local_lifecycle(const char *fixture) {
      * must have no path to the new request's native control token. */
     atomic_store(&ifn_infer_mock_arrived, 0);
     atomic_store(&ifn_infer_mock_resume, 0);
-    IFN_INFER_LOCAL_CHECK(pthread_create(&t, NULL, ifn_infer_local_run, &second) == 0);
+    IFN_INFER_LOCAL_CHECK(ifn_test_thread_create(&t, NULL, ifn_infer_local_run, &second) == 0);
     while (!atomic_load(&ifn_infer_mock_arrived))
-        sched_yield();
+        ifn_test_yield();
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_cancel(r[0], &disposition, NULL) == IFN_OK &&
                           disposition == IFN_CANCEL_TOO_LATE);
     atomic_store(&ifn_infer_mock_resume, 1);
-    IFN_INFER_LOCAL_CHECK(pthread_join(t, NULL) == 0 && second.status == IFN_OK &&
+    IFN_INFER_LOCAL_CHECK(ifn_test_thread_join(t, NULL) == 0 && second.status == IFN_OK &&
                           second.events == ifn_infer_local_rc.max_output_tokens);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_result(r[1], &result, NULL) == IFN_OK &&
                           !result.cancel_requested &&
@@ -265,14 +268,14 @@ static int ifn_infer_local_lifecycle(const char *fixture) {
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_create(s, &ifn_infer_local_input,
                                                                   &ifn_infer_local_rc, &one,
                                                                   NULL) == IFN_OK);
-        IFN_INFER_LOCAL_CHECK(
-            ifn_infer_local_api->request_run(one,
-                                             mode == 0   ? ifn_infer_local_cancel_event
-                                             : mode == 1 ? ifn_infer_local_stop_event
-                                                         : ifn_infer_local_invalid_event,
-                                             NULL, NULL) == (mode == 0   ? IFN_CANCELLED
-                                                             : mode == 1 ? IFN_OK
-                                                                         : IFN_INVALID_ARGUMENT));
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_run(
+                                  one,
+                                  mode == 0   ? ifn_infer_local_cancel_event
+                                  : mode == 1 ? ifn_infer_local_stop_event
+                                              : ifn_infer_local_invalid_event,
+                                  NULL, NULL) == (ifn_status)(mode == 0   ? IFN_CANCELLED
+                                                              : mode == 1 ? IFN_OK
+                                                                          : IFN_INVALID_ARGUMENT));
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_result(one, &result, NULL) == IFN_OK &&
                               result.generated_tokens == 1);
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_close(&one, NULL) == IFN_OK);
@@ -474,15 +477,15 @@ static int ifn_infer_local_text_and_recovery(const char *fixture) {
     atomic_store(&ifn_infer_mock_arrived, 0);
     atomic_store(&ifn_infer_mock_resume, 0);
     ifn_infer_local_worker work = {r, 999, 0};
-    pthread_t t;
-    IFN_INFER_LOCAL_CHECK(!pthread_create(&t, NULL, ifn_infer_local_run, &work));
+    ifn_test_thread t;
+    IFN_INFER_LOCAL_CHECK(!ifn_test_thread_create(&t, NULL, ifn_infer_local_run, &work));
     while (!atomic_load(&ifn_infer_mock_arrived))
-        sched_yield();
+        ifn_test_yield();
     uint32_t disposition;
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_cancel(r, &disposition, NULL) == IFN_OK &&
                           disposition == IFN_CANCEL_ACCEPTED);
     atomic_store(&ifn_infer_mock_resume, 1);
-    IFN_INFER_LOCAL_CHECK(!pthread_join(t, NULL) && work.status == IFN_CANCELLED);
+    IFN_INFER_LOCAL_CHECK(!ifn_test_thread_join(t, NULL) && work.status == IFN_CANCELLED);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_close(&r, NULL) == IFN_OK);
     atomic_store(&ifn_infer_mock_pause, 0);
     /* Accepted cancellation followed by a failed native reset must not report
@@ -522,13 +525,13 @@ static int ifn_infer_local_cancellation_races(void) {
                                                                   &ifn_infer_local_rc, &r,
                                                                   NULL) == IFN_OK);
         ifn_infer_local_worker w = {r, 999, 0};
-        pthread_t t;
-        IFN_INFER_LOCAL_CHECK(!pthread_create(&t, NULL, ifn_infer_local_run, &w));
+        ifn_test_thread t;
+        IFN_INFER_LOCAL_CHECK(!ifn_test_thread_create(&t, NULL, ifn_infer_local_run, &w));
         if (i & 1)
-            sched_yield();
+            ifn_test_yield();
         uint32_t disposition;
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_cancel(r, &disposition, NULL) == IFN_OK);
-        IFN_INFER_LOCAL_CHECK(!pthread_join(t, NULL));
+        IFN_INFER_LOCAL_CHECK(!ifn_test_thread_join(t, NULL));
         IFN_INFER_LOCAL_CHECK((disposition == IFN_CANCEL_ACCEPTED && w.status == IFN_CANCELLED) ||
                               (disposition == IFN_CANCEL_TOO_LATE && w.status == IFN_OK));
         IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->request_close(&r, NULL) == IFN_OK);

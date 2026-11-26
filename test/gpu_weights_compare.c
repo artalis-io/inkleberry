@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "host_clock.h"
 extern int ifn_test_context(ifn_gpu_weights **ifn_gpu_weights_compare_local_image, int destroy);
 static ifn_gpu_weights *ifn_gpu_weights_compare_local_image;
 static size_t ifn_gpu_weights_compare_local_checked_views,
@@ -19,9 +20,7 @@ static const void *ifn_gpu_weights_compare_local_oracle_allocation;
 static unsigned char ifn_gpu_weights_compare_local_oracle_guard[64];
 
 static double ifn_gpu_weights_compare_local_now(void) {
-    struct timespec t;
-    (void)clock_gettime(CLOCK_MONOTONIC, &t);
-    return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+    return (double)ifn_host_now_ns() / 1e9;
 }
 
 int ifn_test_start(const char *directory, uint32_t mode, uint32_t mtp, uint64_t oracle_capacity,

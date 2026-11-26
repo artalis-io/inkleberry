@@ -322,12 +322,12 @@ int main(void) {
                                             &control) == IFN_CANCELLED &&
             ifn_engine_local_forward_calls == before_controlled && !s->request_control);
         atomic_store(&request_cancel, false);
-        IFN_MOCK_GPU_LOCAL_CHECK(
-            ifn_session_generate_controlled(s, tokens, 4, 8, NULL,
-                                            ifn_engine_local_request_cancel_token, &request_cancel,
-                                            &controlled_stats, &control) == IFN_CANCELLED &&
-            controlled_stats.generation.generated_tokens == 1 && !s->request_control &&
-            s->position == 0 && !s->poisoned);
+        IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_generate_controlled(
+                                     s, tokens, 4, 8, NULL, ifn_engine_local_request_cancel_token,
+                                     (void *)&request_cancel, &controlled_stats,
+                                     &control) == IFN_CANCELLED &&
+                                 controlled_stats.generation.generated_tokens == 1 &&
+                                 !s->request_control && s->position == 0 && !s->poisoned);
         IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_generate(s, tokens, 4, 8, out, 8,
                                                       ifn_engine_local_callback_busy, s,
                                                       &stats) == IFN_OK &&
@@ -445,16 +445,16 @@ int main(void) {
     atomic_store(&m.arrived, 0);
     atomic_store(&m.resume, 0);
     ifn_engine_local_generate_args args = {s, IFN_OK};
-    pthread_t thread;
+    ifn_test_thread thread;
     IFN_MOCK_GPU_LOCAL_CHECK(
-        !pthread_create(&thread, NULL, ifn_engine_local_generate_thread, &args));
+        !ifn_test_thread_create(&thread, NULL, ifn_engine_local_generate_thread, &args));
     while (!atomic_load(&m.arrived))
-        sched_yield();
+        ifn_test_yield();
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_reset(s) == IFN_BUSY &&
                              ifn_session_destroy(&s) == IFN_BUSY && s);
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_cancel(s) == IFN_OK);
     atomic_store(&m.resume, 1);
-    IFN_MOCK_GPU_LOCAL_CHECK(!pthread_join(thread, NULL) && args.status == IFN_CANCELLED);
+    IFN_MOCK_GPU_LOCAL_CHECK(!ifn_test_thread_join(thread, NULL) && args.status == IFN_CANCELLED);
     atomic_store(&m.pause, 0);
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_reset(s) == IFN_OK);
     IFN_MOCK_GPU_LOCAL_CHECK(ifn_session_destroy(&s) == IFN_OK);

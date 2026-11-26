@@ -102,16 +102,16 @@ int main(int argc, char **argv) {
                                 ifn_ar_compare_local_token_count, 32, &changed, other, 64, NULL,
                                 NULL, &stats) == IFN_OK);
 #endif
-    pthread_t thread;
+    ifn_test_thread thread;
     double requested = 0;
     IFN_DECODE_RECOVERY_LOCAL_CHECK_RECOVERY(
-        !pthread_create(&thread, NULL, ifn_ar_compare_local_cancel_thread, &requested));
+        !ifn_test_thread_create(&thread, NULL, ifn_ar_compare_local_cancel_thread, &requested));
     ifn_status cancelled_status = ifn_session_generate_ex(
         ifn_ar_compare_local_session, ifn_ar_compare_local_tokens, ifn_ar_compare_local_token_count,
         32, &options, other, 64, NULL, NULL, &stats);
     double finished = ifn_ar_compare_local_now();
     IFN_DECODE_RECOVERY_LOCAL_CHECK_RECOVERY(
-        !pthread_join(thread, NULL) && cancelled_status == IFN_CANCELLED &&
+        !ifn_test_thread_join(thread, NULL) && cancelled_status == IFN_CANCELLED &&
         stats.generation.finish_reason == IFN_FINISH_CANCELLED);
     IFN_DECODE_RECOVERY_LOCAL_CHECK_RECOVERY(
         ifn_session_generate_ex(ifn_ar_compare_local_session, ifn_ar_compare_local_tokens,

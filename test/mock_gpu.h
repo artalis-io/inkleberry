@@ -4,12 +4,10 @@
  * Private backend simulation checks control flow/ownership, NOT GPU numerics. */
 #define _DEFAULT_SOURCE
 #include "weights_internal.h"
-#include <pthread.h>
-#include <sched.h>
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #define IFN_MOCK_GPU_LOCAL_CHECK(x)                                                                \
     do {                                                                                           \
         if (!(x)) {                                                                                \
@@ -96,8 +94,8 @@ static int ifn_mock_gpu_local_alloc_device(void *p, void **out, size_t bytes) {
     *out = NULL;
     if (ifn_mock_gpu_local_fail(m, ALLOC))
         return 2;
-    void *v = mmap(NULL, bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (v == MAP_FAILED)
+    void *v = ifn_test_reserve(bytes);
+    if (!v)
         return 2;
     for (size_t i = 0; i < 8; i++)
         if (!m->allocated[i]) {
@@ -107,7 +105,7 @@ static int ifn_mock_gpu_local_alloc_device(void *p, void **out, size_t bytes) {
             *out = v;
             return 0;
         }
-    (void)munmap(v, bytes);
+    (void)ifn_test_unreserve(v, bytes);
     return 2;
 }
 
@@ -117,7 +115,7 @@ static int ifn_mock_gpu_local_release_device(void *p, void *data) {
         return 700;
     for (size_t i = 0; i < 8; i++)
         if (m->allocated[i] == data) {
-            if (munmap(data, m->sizes[i]))
+            if (ifn_test_unreserve(data, m->sizes[i]))
                 return 700;
             m->allocated[i] = NULL;
             m->live--;
@@ -161,7 +159,7 @@ static int ifn_mock_gpu_local_copy(void *p, void *a, const void *b, size_t bytes
     if (atomic_load(&m->pause)) {
         atomic_store(&m->arrived, 1);
         while (!atomic_load(&m->resume))
-            sched_yield();
+            ifn_test_yield();
     }
     return ifn_mock_gpu_local_fail(m, IFN_MOCK_GPU_LOCAL_COPY) ? 700 : 0;
 }

@@ -55,7 +55,7 @@ def namespace(text, stem):
 def generated(root=ROOT):
     groups = sources(root)
     public = {Path(p).name: p for p in groups['PUBLIC_HEADERS']}
-    private = {p.name: str(p.relative_to(root)) for p in sorted((root / 'src').glob('*.h'))}
+    private = {p.name: p.relative_to(root).as_posix() for p in sorted((root / 'src').glob('*.h'))}
     if len(public) != len(groups['PUBLIC_HEADERS']) or set(public) & set(private):
         raise ValueError('Ambiguous header basename')
     known = {**public, **private}
