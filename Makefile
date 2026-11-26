@@ -8,16 +8,16 @@ SAN_CXX ?= clang++
 CFLAGS ?= -O2
 LDLIBS += -lm
 WARNFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Werror
-CPPFLAGS += -Iinclude -Isrc/c -D_FILE_OFFSET_BITS=64
+CPPFLAGS += -Iinclude -Isrc -D_FILE_OFFSET_BITS=64
 PREFIX ?= /usr/local
 CUDA_ROOT ?= /usr/local/cuda
 NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
-HOST = src/c/foundation.c src/c/json.c src/c/safetensors.c src/c/tokenizer_load.c src/c/tokenizer.c src/c/inkling.c src/c/weights_runtime.c src/c/weights_recipe.c src/c/sampling.c src/c/lookup.c src/c/chat.c src/c/stream.c
-OBJ = $(HOST:src/c/%.c=.build/%.o)
-PIC = $(HOST:src/c/%.c=.build/%.pic.o)
+HOST = src/foundation.c src/json.c src/safetensors.c src/tokenizer_load.c src/tokenizer.c src/inkling.c src/weights_runtime.c src/weights_recipe.c src/sampling.c src/lookup.c src/chat.c src/stream.c
+OBJ = $(HOST:src/%.c=.build/%.o)
+PIC = $(HOST:src/%.c=.build/%.pic.o)
 CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
 CUDA_MATH = kernels_gemv kernels_inkling kernels_dspark kernels_prefill
 CUDA_OBJECTS = $(addprefix .build/,$(addsuffix .cuda.o,$(CUDA_MATH)))
@@ -37,9 +37,9 @@ FORCE:
 	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS)' > $@.tmp
 	@cmp -s $@.tmp $@ || mv $@.tmp $@
 	@rm -f $@.tmp
-.build/%.o: src/c/%.c include/sq.h src/c/internal.h .build/config
+.build/%.o: src/%.c include/sq.h src/internal.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -MMD -MP -c $< -o $@
-.build/%.pic.o: src/c/%.c include/sq.h src/c/internal.h .build/config
+.build/%.pic.o: src/%.c include/sq.h src/internal.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -fvisibility=hidden -DSQ_SHARED -DSQ_BUILD_SHARED -MMD -MP -c $< -o $@
 libsq.a: $(OBJ)
 	$(AR) rcs $@ $^
@@ -125,15 +125,15 @@ install-check: install
 	.build/installed-shared
 .build/%.cuda.o: cuda/%.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
-.build/abi-probe.o: test/cuda_abi_probe.cu src/c/cuda_abi.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
-	$(NVCC) $(CUDAFLAGS) -Isrc/c -c $< -o $@
-.build/abi-c.o: test/cuda_abi_c.c src/c/cuda_abi.h .build/config
+.build/abi-probe.o: test/cuda_abi_probe.cu src/cuda_abi.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
+.build/abi-c.o: test/cuda_abi_c.c src/cuda_abi.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/abi-probe: .build/abi-probe.o .build/abi-c.o $(CUDA_OBJECTS)
 	$(CXX) $^ $(CUDA_LIBS) -o $@
 cuda-abi-check: generated-check .build/abi-probe
 	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' .build/abi-probe
-.build/cuda-smoke.o: test/cuda_smoke.c src/c/cuda_abi.h .build/config
+.build/cuda-smoke.o: test/cuda_smoke.c src/cuda_abi.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/cuda-smoke: .build/cuda-smoke.o .build/cuda_abi.cuda.o $(CUDA_OBJECTS)
 	$(CXX) $^ $(CUDA_LIBS) -o $@
@@ -146,7 +146,7 @@ clean:
 # GPU backend is opt-in; the host library still builds without CUDA.
 .PHONY: gpu
 gpu: generated-check libsq-gpu.a
-.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+.build/checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 libsq-gpu.a: .build/checked-prefill.cuda.o .build/engine_bind.o .build/engine_layout.o .build/engine_forward.o .build/engine_spec.o .build/engine_adaptive.o .build/engine_prefix.o .build/engine_prefill.o .build/engine_runtime.o .build/gpu_cuda.o .build/checked-weights.cuda.o $(filter-out .build/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@
@@ -160,12 +160,12 @@ squid-c-weights: .build/gpu-context.o .build/gpu-weight-main.o libsq-gpu.a libsq
 ZIG ?= zig
 .PHONY: gpu-weight-oracle
 gpu-weight-oracle: generated-check .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep weights -Mroot=test/oracle/weights.zig -Mweights=src/weights.zig .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/gpu-weight-oracle
+	$(ZIG) build-exe -O ReleaseFast --dep weights -Mroot=test/oracle/weights.zig -Mweights=reference/upstream/src/weights.zig .build/gpu-context.o .build/gpu-weight-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/gpu-weight-oracle
 
 .build/gpu-context.o: test/gpu_context.cu include/sq_gpu.h .build/config
 	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
-.build/packing.o: test/packing.cu src/c/checked_cuda.h .build/config
-	$(NVCC) $(CUDAFLAGS) -Isrc/c -c $< -o $@
+.build/packing.o: test/packing.cu src/checked_cuda.h .build/config
+	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
 .build/packing: .build/packing.o libsq-gpu.a
 	$(CXX) $^ $(CUDA_LIBS) -o $@
 .PHONY: gpu-packing-check install-gpu
@@ -192,9 +192,9 @@ squid-c-generate: .build/generate.o libsq-gpu.a libsq.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: ar-oracle
 ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/engine.zig -Mengine=src/engine.zig .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/ar-oracle
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/engine.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/ar-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/ar-oracle
 
-.build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/c/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
+.build/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 
 .build/engine-test: test/engine.c test/mock_gpu.h .build/engine_bind.o .build/engine_layout.o .build/engine_runtime.o .build/engine_adaptive.o .build/engine_prefix.o libsq.a .build/config
@@ -209,7 +209,7 @@ ar-oracle: generated-check .build/session-context.o .build/ar-compare.o libsq-gp
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: decode-oracle
 decode-oracle: generated-check .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/decode.zig -Mengine=src/engine.zig .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/decode-oracle
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/decode.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/decode-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/decode-oracle
 .build/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 .build/sampling-kernels: .build/sampling-kernels.o
@@ -228,12 +228,12 @@ sampling-kernel-check: generated-check .build/sampling-kernels
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: adaptive-oracle
 adaptive-oracle: generated-check .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/adaptive.zig -Mengine=src/engine.zig .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/adaptive-oracle
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/adaptive.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/adaptive-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/adaptive-oracle
 
 .build/lookup-test: test/lookup.c libsq.a .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $< libsq.a $(LDFLAGS) $(LDLIBS) -o $@
-.build/adaptive-graph.o: test/adaptive_graph.cu src/c/checked_cuda.h .build/config
-	$(NVCC) $(CUDAFLAGS) -Isrc/c -c $< -o $@
+.build/adaptive-graph.o: test/adaptive_graph.cu src/checked_cuda.h .build/config
+	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
 .build/adaptive-graph: .build/adaptive-graph.o libsq-gpu.a libsq.a
 	$(CXX) $^ $(CUDA_LIBS) -o $@
 
@@ -246,7 +246,7 @@ adaptive-oracle: generated-check .build/session-context.o .build/adaptive-compar
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .PHONY: prefix-oracle
 prefix-oracle: generated-check .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a
-	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/prefix.zig -Mengine=src/engine.zig .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/prefix-oracle
+	$(ZIG) build-exe -O ReleaseFast --dep engine -Mroot=test/oracle/prefix.zig -Mengine=reference/upstream/src/engine.zig .build/session-context.o .build/prefix-compare.o libsq-gpu.a libsq.a -L$(CUDA_ROOT)/lib64 -L$(CUDA_ROOT)/lib64/stubs -lcudart -lcublas -lcuda -lstdc++ -lm -lpthread -lc -femit-bin=.build/prefix-oracle
 .build/prefix-recovery.o: test/prefix_recovery.c test/prefix_compare.c test/decode_compare.c test/ar_compare.c include/sq_engine.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
 .build/prefix-recovery: .build/prefix-recovery.o .build/session-context.o libsq-gpu.a libsq.a
@@ -268,8 +268,8 @@ chat-oracle: generated-check
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 
 # Serving ABI: separate from libsq's CPU-only parser/tokenizer contract.
-INFER = src/c/infer.c src/c/infer_model.c src/c/infer_session.c src/c/infer_request.c
-INFER_OBJ = $(INFER:src/c/%.c=.build/%.o)
+INFER = src/infer.c src/infer_model.c src/infer_session.c src/infer_request.c
+INFER_OBJ = $(INFER:src/%.c=.build/%.o)
 .PHONY: infer infer-check infer-shared
 infer: libsq-infer.a
 libsq-infer.a: $(INFER_OBJ)
@@ -279,19 +279,19 @@ libsq-infer.a: $(INFER_OBJ)
 infer-check: .build/infer-test .build/chat-fixture.json
 	.build/infer-test .build/chat-fixture.json
 check: infer-check
-BACKEND_C = $(INFER) src/c/engine_bind.c src/c/engine_layout.c src/c/engine_forward.c src/c/engine_spec.c src/c/engine_adaptive.c src/c/engine_prefix.c src/c/engine_prefill.c src/c/engine_runtime.c src/c/gpu_cuda.c
-BACKEND_OBJ = $(BACKEND_C:src/c/%.c=.build/backend-%.o)
+BACKEND_C = $(INFER) src/engine_bind.c src/engine_layout.c src/engine_forward.c src/engine_spec.c src/engine_adaptive.c src/engine_prefix.c src/engine_prefill.c src/engine_runtime.c src/gpu_cuda.c
+BACKEND_OBJ = $(BACKEND_C:src/%.c=.build/backend-%.o)
 BACKEND_CUDA = $(addprefix .build/backend-,$(addsuffix .cuda.o,kernels_gemv kernels_inkling kernels_dspark)) .build/backend-checked-weights.cuda.o .build/backend-checked-prefill.cuda.o
-.build/backend-%.o: src/c/%.c .build/config
+.build/backend-%.o: src/%.c .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -fvisibility=hidden -DSQ_SHARED -MMD -MP -c $< -o $@
 .build/backend-%.cuda.o: cuda/%.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
-.build/backend-checked-weights.cuda.o: src/cuda/checked_weights.cu src/c/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
+.build/backend-checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
-.build/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/c/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
+.build/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) .build/config
 	$(NVCC) $(CUDAFLAGS) -Xcompiler=-fPIC,-fvisibility=hidden -c $< -o $@
-libsq_backend.so.1: $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) src/c/infer.exports
-	$(CXX) -shared -Wl,-soname,libsq_backend.so.1 -Wl,--version-script=src/c/infer.exports -Wl,-z,defs $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) $(CUDA_LIBS) $(LDFLAGS) -o $@
+libsq_backend.so.1: $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) src/infer.exports
+	$(CXX) -shared -Wl,-soname,libsq_backend.so.1 -Wl,--version-script=src/infer.exports -Wl,-z,defs $(BACKEND_OBJ) $(BACKEND_CUDA) $(PIC) $(CUDA_LIBS) $(LDFLAGS) -o $@
 infer-shared: generated-check libsq_backend.so.1
 .build/infer-native.o: test/infer_native.c include/sq_infer.h .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -c $< -o $@
@@ -299,11 +299,11 @@ infer-shared: generated-check libsq_backend.so.1
 	$(CXX) $^ $(CUDA_LIBS) $(LDFLAGS) -o $@
 
 .build/infer-consumer: test/infer_consumer.c .build/stage/usr/local/include/sq_infer.h libsq-infer.a libsq.a .build/config
-	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include -Iinclude -Isrc/c test/infer_consumer.c test/infer_mock.c .build/stage/usr/local/lib/libsq-infer.a .build/stage/usr/local/lib/libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(WARNFLAGS) -I.build/stage/usr/local/include -Iinclude -Isrc test/infer_consumer.c test/infer_mock.c .build/stage/usr/local/lib/libsq-infer.a .build/stage/usr/local/lib/libsq.a -pthread $(LDFLAGS) $(LDLIBS) -o $@
 .build/stage/usr/local/include/sq_infer.h: install
 .build/infer-mock.pic.o: test/infer_mock.c .build/config
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -fPIC -MMD -MP -c $< -o $@
-.build/infer-mock.so: $(INFER:src/c/%.c=.build/%.pic.o) $(PIC) .build/infer-mock.pic.o
+.build/infer-mock.so: $(INFER:src/%.c=.build/%.pic.o) $(PIC) .build/infer-mock.pic.o
 	$(CC) $(SHARED_FLAGS) $^ -pthread $(LDFLAGS) $(LDLIBS) -o $@
 .PHONY: infer-consumer-check
 infer-consumer-check: .build/infer-consumer .build/infer-mock.so

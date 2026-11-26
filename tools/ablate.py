@@ -159,7 +159,7 @@ _KL_TEXT = os.environ.get("SQUID_KL_TEXT") or os.pathsep.join((
     str(ROOT / "LITE.md"),
     str(ROOT / "LEARNINGS.md"),
     str(ROOT / "PLAN.md"),
-    str(ROOT / "src" / "*.zig"),
+    str(ROOT / "reference" / "upstream" / "src" / "*.zig"),
     str(ROOT / "cuda" / "*.cu"),
 ))
 TEXT_SOURCES = [Path(p) for pat in _KL_TEXT.split(os.pathsep) for p in sorted(glob.glob(os.path.expanduser(pat)))]
@@ -982,7 +982,7 @@ def main():
     p.add_argument("--think-prompts", type=int, default=32, help="harmful validation prompts answered with reasoning (of 48)")
     p.add_argument("--default-prompts", type=int, default=0,
                    help="harmful validation prompts answered with reasoning at the default effort (for finalists)")
-    p.add_argument("--server", default=str(ROOT / "zig-out/bin/squid5090"))
+    p.add_argument("--server", default=str(ROOT / "reference/upstream/zig-out/bin/squid5090"))
     p.add_argument("--model-dir", default=str(MODEL_DIR)); p.add_argument("--port", type=int, default=8019)
     p.add_argument("--enqueue", action="append", help="JSON parameters to evaluate first")
     p = sub.add_parser("show"); p.add_argument("--work", required=True); p.add_argument("--top", type=int, default=30)

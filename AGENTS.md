@@ -25,3 +25,8 @@ while porting host code.
 - Never check in checkpoints, keys or generated bulk evaluation outputs.
 - Do not claim C generation, speedups or quality parity until the actual C
   inference path is implemented and model-backed gates have run.
+
+Production C sources are directly under `src/`, with checked adapters in
+`src/cuda/`. Pinned Zig sources/build script live under `reference/upstream/`;
+resolve original upstream names through `UPSTREAM.json`'s `relocated_files` map.
+Keep upstream file hashes and historical provenance unchanged when moving files.
