@@ -66,7 +66,11 @@ Generate the internal CUDA contract with `tools/generate_cuda_abi.py` from
 `make generated-check` verifies retained dependency pins and schema output.
 CUDA files carry a modification notice; `tools/native_namespace.py` reverses
 `config/native-namespace.json` and the exact reviewed host-only error adapters in
-`config/native-host-adaptations.json` to reproduce the original pinned bytes.
+`config/native-host-adaptations.json` plus the explicit host launch/resource hooks
+in `config/native-platform-adaptations.json` to reproduce the original pinned bytes.
+Platform hooks must not transform device numerical bodies. Experimental Ampere
+requires `CUDA_ARCH=86 EXPERIMENTAL_AMPERE=1`; a successful build is not GPU
+qualification. CPU `cuda-policy-check` uses fake host API calls only.
 Do not expand the map to hide algorithm changes. A dependency update requires
 an explicit reviewed change, never a silent hash refresh.
 Preserve Apache-2.0 LICENSE, NOTICE and translation attribution.

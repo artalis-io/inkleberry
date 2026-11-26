@@ -147,3 +147,10 @@ explicitly with MSVC/clang-cl; GNU pkg-config metadata is emitted only on POSIX.
 consumers. `make windows-cuda-build-check` compiles/links CUDA, inspects PE exports
 and imports, negotiates the provider ABI and runs the C/C++ layout probe without
 loading model weights or executing inference.
+
+## Experimental Ampere
+
+The compatibility layer requires explicit `CUDA_ARCH=86 EXPERIMENTAL_AMPERE=1`.
+It has host-only dispatch/resource tests and isolated build/package artifacts;
+GPU compilation and execution of this implementation are deferred.
+See [experimental Ampere status and build contract](experimental-ampere.md).

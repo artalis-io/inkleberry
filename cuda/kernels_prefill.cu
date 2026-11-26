@@ -829,9 +829,12 @@ static void ifn_cuda_dispatch_wgemm_tm(
     constexpr int NE = (MODE == ifn_cuda_wgemm_mode::IFN_CUDA_UP) ? (2 * IFN_CUDA_INTERMEDIATE) : IFN_CUDA_HIDDEN;
     constexpr int NTILES_N = NE / IFN_CUDA_WG_TN;
     constexpr int SMEM = ifn_cuda_wg_cfg<FMT, K, TM>::SMEM;
+#if IFN_CUDA_USE_PDL
     static const cudaError_t attr = cudaFuncSetAttribute(
         ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);
     (void)attr;
+#endif
+    // Ampere opt-in is checked per context during ifn_blas_create, before capture.
     // Max 256 active tiles by pigeonhole bound (B<=512 w/ TR=32 or B<=2048 w/ TR=128)
     int grid = 256 * NTILES_N;
     ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM><<<grid, IFN_CUDA_WG_NT, SMEM, stream>>>(

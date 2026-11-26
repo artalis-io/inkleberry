@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,10 +36,11 @@ def main():
         # Do not pre-build infer or other archives: that hid a missing prerequisite.
         build=['make','-j8','CC='+a.cc,'CXX='+a.cxx,'CUDA_ROOT='+str(a.cuda_root)]
         subprocess.run(build+['runtime-gpu-package'],cwd=source,check=True)
-        archives=list((source/'.build/releases').glob('inkleberry-runtime-*-cuda.tar.gz'))
+        archives=list((source/'.build/releases').glob('inkleberry-runtime-*-cuda-sm*.tar.gz'))
         if len(archives)!=1:raise SystemExit('Expected exactly one native runtime archive')
         runtime=checks.extract(archives[0],folder/'runtime')
-        subprocess.run(build+['native-namespace-check','.build/infer-native-shared'],cwd=source,check=True)
+        build_dir=Path(subprocess.check_output(build+['--no-print-directory','-s','print-build-dir'],cwd=source,text=True).strip())
+        subprocess.run(build+['native-namespace-check',str(build_dir/'infer-native-shared')],cwd=source,check=True)
         subprocess.run([sys.executable,str(source/'tools/check_hardening.py'),
                         str(runtime/'bin/inkleberry'),str(runtime/'bin/inkleberry-generate'),
                         str(runtime/'lib/libinkleberry.so')],check=True)
@@ -46,7 +48,7 @@ def main():
         env=dict(os.environ,INKLEBERRY_TEST_TIMEOUT_SECONDS='600')
         libraries=str(runtime/'lib')+':'+str(a.cuda_root/'lib64')
         guard=[sys.executable,str(ROOT/'tools/run_cuda_smoke.py'),libraries]
-        subprocess.run(guard+[str(source/'.build/infer-native-shared'),str(a.model)],env=env,check=True)
+        subprocess.run(guard+[str(source/build_dir/'infer-native-shared'),str(a.model)],env=env,check=True)
         # Consume the installed static SDK through pkg-config, with the shared
         # host library present as in a real SDK. Explicit archives must prevent
         # the linker choosing a hidden-symbol shared host implementation.
@@ -60,6 +62,7 @@ def main():
         # exercise the same native acceptance through a standalone C host.
         text=(source/'test/infer_native.c').read_text().replace('#include "ifn_infer.h"','#include "ifn.h"').replace('#include "ifn_infer_inkling.h"','')
         (embed/'consumer.c').write_text(text)
+        shutil.copy2(source/'test/platform.h', embed/'platform.h')
         cc,cxx=shlex.split(a.cc),shlex.split(a.cxx)
         subprocess.run(cc+['-std=c11','-O2','-DIFN_ENABLE_CUDA','-Idist','-c','dist/ifn.c','-o','host.o'],cwd=embed,check=True)
         subprocess.run(cc+['-std=c11','-O2','-Idist','-c','consumer.c','-o','consumer.o'],cwd=embed,check=True)
