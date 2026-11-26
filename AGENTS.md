@@ -84,6 +84,13 @@ make sanitize
 make fuzz-smoke amalgamation-fuzz-smoke
 ```
 
+Native Windows host/build changes also require both `CC=cl` and `CC=clang-cl`
+with `check install-check install-contract-check windows-sdk-check`, through
+`scripts/msvc-env.sh` and the same Make/source graph. The explicit
+`windows-cuda-build-check` verifies CUDA compilation/linking and ABI layout; it
+cannot establish inference correctness or qualify another GPU architecture.
+Keep Linux gates mandatory; do not substitute Windows compilation for them.
+
 Tests must exercise behavior and failure boundaries: allocation faults, malformed
 inputs, ownership, concurrency, cancellation, mapping lifetime, symbol visibility
 and extracted C/C++ consumers. Keep existing regression coverage. Add focused

@@ -73,6 +73,21 @@ session. The CPU-only C/NVCC ABI probe checks 76 prototypes, seven records and
 - Failed build outputs are removed, and configuration fingerprints include native
   linker/CUDA options to prevent stale-success artifacts.
 
+## POSIX regression evidence
+
+Local macOS checks, installed consumers, custom-prefix install contracts,
+reference-free builds, extracted distributions, lint, ASan/UBSan and seven fuzz
+smoke targets (3,000 runs each) passed. Isolated Linux GCC checks, installed
+consumers, install contracts, source/embedding/runtime distributions and ELF
+hardening regressions passed on `core`. Linux Clang checks and installed consumers
+also passed using the existing GCC 13 C++ headers explicitly (the machine's
+default Clang selection found an incomplete GCC 14 header installation). No
+system dependency was installed or changed.
+
+CI exposed two test-infrastructure omissions: POSIX feature macros must precede
+system headers in nested qualification sources, and isolated hardening trees
+must include `mk/`. Both are corrected without dropping any checks.
+
 ## Remaining qualification
 
 Windows model loading/generation, numerical equivalence, throughput, cancellation
