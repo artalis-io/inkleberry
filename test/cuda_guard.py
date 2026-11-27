@@ -41,6 +41,28 @@ class GuardTests(unittest.TestCase):
                     guard.main()
                 run.assert_not_called()
 
+    def test_timeout_requires_explicit_long_run(self):
+        for opt_in, timeout, accepted in [('', '28800', False), ('1', '28800', True),
+                                         ('1', '86401', False), ('', '0', False)]:
+            with self.subTest(opt_in=opt_in, timeout=timeout):
+                def query(command, **kwargs):
+                    if '--query-gpu=uuid,name,memory.used' in command:
+                        return f'{UUID}, NVIDIA RTX PRO 6000, 2'
+                    return ''
+                with patch.dict(guard.os.environ, dict(INKLEBERRY_TEST_GPU_UUID=UUID,
+                        INKLEBERRY_TEST_LONG_RUN=opt_in, INKLEBERRY_TEST_TIMEOUT_SECONDS=timeout), clear=True), \
+                     patch.object(guard.sys, 'argv', ['guard', '/cuda/lib64', '/benchmark']), \
+                     patch.object(guard.subprocess, 'check_output', side_effect=query), \
+                     patch.object(guard.subprocess, 'run') as run, \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    if accepted:
+                        guard.main()
+                        self.assertEqual(run.call_args.kwargs['timeout'], int(timeout))
+                    else:
+                        with self.assertRaises(SystemExit):
+                            guard.main()
+                        run.assert_not_called()
+
     def test_idle_dedicated_gpu(self): self.invoke()
     def test_busy_vram(self): self.invoke(memory='257', succeeds=False)
     def test_invalid_counter(self): self.invoke(memory='garbage', succeeds=False)

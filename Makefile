@@ -635,3 +635,17 @@ audit-check: generated-check audit-boundary-check
 qualification-safety-check:
 	$(PYTHON) test/qualification_safety.py
 check: qualification-safety-check
+
+# Worker-lifetime client intentionally compiles against the installed ABI only.
+# Install the native provider first; PREFIX identifies that installation.
+.PHONY: worker-lifetime worker-lifetime-check
+worker-lifetime: $(BUILD_DIR)/config
+	$(CC) $(CFLAGS) $(WARNFLAGS) -I$(PREFIX)/include -Itest test/worker_lifetime.c -L$(PREFIX)/lib -Wl,-rpath,$(PREFIX)/lib -linkleberry_backend -lpthread -o $(BUILD_DIR)/worker-lifetime
+$(BUILD_DIR)/worker-lifetime-mock$(EXE): test/worker_lifetime.c test/worker_lifetime_mock.c $(BUILD_DIR)/config
+	$(call ifn_program,$(CC),$(CFLAGS) $(WARNFLAGS) -Iinclude -Itest,test/worker_lifetime.c test/worker_lifetime_mock.c,$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
+worker-lifetime-check: $(BUILD_DIR)/worker-lifetime-mock$(EXE)
+	$(PYTHON) test/worker_lifetime.py ./$(BUILD_DIR)/worker-lifetime-mock$(EXE)
+	$(PYTHON) test/worker_runner.py ./$(BUILD_DIR)/worker-lifetime-mock$(EXE)
+ifeq ($(shell uname -s),Linux)
+check: worker-lifetime-check
+endif

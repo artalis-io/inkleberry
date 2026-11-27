@@ -135,11 +135,13 @@ def main():
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=uuid, LD_LIBRARY_PATH=sys.argv[1])
     if os.name == 'nt':
         env['PATH'] = sys.argv[1] + os.pathsep + env.get('PATH', '')
-    print('Idle GPU preflight:', query, flush=True)
+    print('Idle GPU preflight:', query, flush=True,
+          file=sys.stderr if os.environ.get('INKLEBERRY_TEST_GUARD_STDERR') == '1' else sys.stdout)
     # A race with external schedulers remains; use a reserved GPU for release tests.
     timeout = int(os.environ.get('INKLEBERRY_TEST_TIMEOUT_SECONDS', '180'))
-    if timeout < 1 or timeout > 3600:
-        raise SystemExit('INKLEBERRY_TEST_TIMEOUT_SECONDS must be 1..3600')
+    maximum = 86400 if os.environ.get('INKLEBERRY_TEST_LONG_RUN') == '1' else 3600
+    if timeout < 1 or timeout > maximum:
+        raise SystemExit(f'INKLEBERRY_TEST_TIMEOUT_SECONDS must be 1..{maximum}')
     subprocess.run(sys.argv[2:], env=env, check=True, timeout=timeout)
 
 if __name__ == '__main__':
