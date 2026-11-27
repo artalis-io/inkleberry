@@ -154,7 +154,7 @@
     }
   ],
   "gb10_runtime_status": "completed primary matrix and focused prefill probe; vLLM restored healthy after both pauses",
-  "ampere_runtime_status": "not run: operator-reviewed expiring desktop reservation still pending",
+  "ampere_runtime_status": "Completed all three weight profiles, real prefill, 168 runs per engine/facade client, and eager/graph linear-shape tests; cross-device numerical equivalence not established",
   "common_prefix_probe": {
     "source_revision": "879712614f41ff16edb554dcc82bf2e774d20613",
     "shared_prompt_tokens": 27,
@@ -260,6 +260,10 @@
       "gb10": {
         "value": 0.24429093301296234,
         "absolute_error": 5.194571445210627e-08
+      },
+      "ampere": {
+        "value": 0.24429091811180115,
+        "absolute_error": 6.684687564595393e-08
       }
     },
     {
@@ -272,6 +276,10 @@
       "gb10": {
         "value": 10.599723815917969,
         "absolute_error": 2.591779483651635e-05
+      },
+      "ampere": {
+        "value": 10.599710464477539,
+        "absolute_error": 3.926923526620385e-05
       }
     },
     {
@@ -284,6 +292,10 @@
       "gb10": {
         "value": 6.569715976715088,
         "absolute_error": 1.156718566974746e-05
+      },
+      "ampere": {
+        "value": 6.5697102546691895,
+        "absolute_error": 1.728923156818496e-05
       }
     }
   ],
@@ -379,10 +391,225 @@
       "benchmark_source_revision": "879712614f41ff16edb554dcc82bf2e774d20613",
       "retained_diagnostic_source_revision": "9ce816d1aff9ce7fb4ac67b17fe3a2c2c75cdf82",
       "tested_gpu_uuid": "GPU-1780681b-278e-12e5-955e-ff5683a715cf"
+    },
+    "ampere": {
+      "source_revision": "0f14217",
+      "platform": "Windows-11-10.0.26300-SP0",
+      "nvcc": {
+        "returncode": 0,
+        "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Tue_Jun__9_14:30:19_Pacific_Daylight_Time_2026\nCuda compilation tools, release 13.3, V13.3.73\nBuild cuda_13.3.r13.3/compiler.38244171_0"
+      },
+      "gpu": {
+        "returncode": 0,
+        "stdout": "GPU-5784d04b-bfbd-7b3d-922a-34cec3f3ce92, NVIDIA GeForce RTX 3090 Ti, 621.01, 8.6, 24564 MiB"
+      },
+      "binaries": {
+        "numerical": "4cd56e7d5d48b3786595643c6cfd6e8902daaba1d80b0a3d968b3b01af148ea8",
+        "native-benchmark": "c18b421955fe7c474cfba1c495bba2b3c81f0a59356ca565a9b97bdb612f6197",
+        "facade-benchmark": "2af6e25f02c11a616fbb1e5a6eda84d9cf719112a70e3300f3b2e65326f025ec",
+        "linear-shapes": "3bfac0b91ce588b2de5df9cfa1448d07826c7e62165f9a43e710d81c16e35527"
+      },
+      "build_flags": "cl cl ar -Iinclude -Isrc -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS /O2 /MD /GS /nologo /utf-8 /TC /std:c11 /experimental:c11atomics /W4 /WX /DYNAMICBASE /NXCOMPAT /WX\nC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3 -O3 --use_fast_math -std=c++20 -gencode arch=compute_86,code=sm_86 --expt-relaxed-constexpr -Icuda -Xcompiler=/MD -DIFN_CUDA_TARGET_SM=86 -DIFN_CUDA_ENABLE_EXPERIMENTAL_AMPERE=1  /nologo /utf-8 /std:c++14 /W4 /WX /EHsc /MD /LIBPATH:\"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/lib/x64\" cudart.lib cublas.lib cuda.lib /NODEFAULTLIB:LIBCMT \"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe\" /DLL /DEF:src/infer.def /IMPLIB:.build/windows-msvc-x64-release-cuda86/inkleberry_backend-1.lib 0.2.0-dev 1  \n",
+      "production_source_files_compared": 76,
+      "production_sources_identical_to_core": true,
+      "tested_gpu_uuid": "GPU-5784d04b-bfbd-7b3d-922a-34cec3f3ce92",
+      "vendor_dll_file_versions": [
+        {
+          "version": "6,14,11,1360",
+          "name": "cublas64_13.dll"
+        },
+        {
+          "version": "6,14,11,1360",
+          "name": "cublasLt64_13.dll"
+        },
+        {
+          "version": "6,14,11,13030",
+          "name": "cudart64_13.dll"
+        }
+      ]
     }
   },
   "original_pilot_executable_hash_recorded": false,
-  "ampere_runtime_executed": false,
+  "ampere_runtime_executed": true,
   "quantization_or_math_policy_fix_implemented": false,
-  "proposed_next_experiment": "Isolated explicit prefill GEMM precision policy and matched-toolkit control, measured before any production change; separate from singleton fused-projection arithmetic."
+  "proposed_next_experiment": "Isolated explicit prefill GEMM precision policy and matched-toolkit control, measured before any production change; separate from singleton fused-projection arithmetic.",
+  "ampere_diagnostic_source_revision": "0f14217363ca0ed525a264f6afa12d8df9900732",
+  "ampere_comparisons": {
+    "gb202-vs-ampere-b1": {
+      "first_gemm_operands_equal": null,
+      "generated_tokens": {
+        "left": null,
+        "right": -1
+      },
+      "left_batch": 1,
+      "right_batch": 1,
+      "packed_records": 1690,
+      "packing_difference_count": 0,
+      "compared_tensors": 2712,
+      "different_tensors": 2660,
+      "first_difference": {
+        "position": 0,
+        "visit": 0,
+        "stage": "moe_output",
+        "max_abs": 2.8073787689208984e-05,
+        "rms": 8.211279039210139e-06,
+        "different_values": 2292,
+        "worst_index": 1070,
+        "left": 0.7693701386451721,
+        "right": 0.7693420648574829
+      },
+      "numerical_acceptance_established": false,
+      "different_logit_top1_positions": []
+    },
+    "gb202-vs-ampere-b8": {
+      "first_gemm_operands_equal": null,
+      "generated_tokens": {
+        "left": null,
+        "right": -1
+      },
+      "left_batch": 8,
+      "right_batch": 8,
+      "packed_records": 1690,
+      "packing_difference_count": 0,
+      "compared_tensors": 2712,
+      "different_tensors": 2696,
+      "first_difference": {
+        "position": 0,
+        "visit": 0,
+        "stage": "qrgs",
+        "max_abs": 1.9073486328125e-06,
+        "rms": 1.6261339873934808e-07,
+        "different_values": 3879,
+        "worst_index": 5128,
+        "left": -10.925912857055664,
+        "right": -10.925910949707031
+      },
+      "numerical_acceptance_established": false,
+      "different_logit_top1_positions": []
+    },
+    "gb202-vs-ampere-prefill": {
+      "first_gemm_operands_equal": true,
+      "generated_tokens": {
+        "left": 200001,
+        "right": 200001
+      },
+      "left_batch": 0,
+      "right_batch": 0,
+      "packed_records": 1690,
+      "packing_difference_count": 0,
+      "compared_tensors": 10632,
+      "different_tensors": 10560,
+      "first_difference": {
+        "position": 0,
+        "visit": 0,
+        "stage": "qrgs",
+        "max_abs": 3.24249267578125e-05,
+        "rms": 3.0601010360462053e-06,
+        "different_values": 6474,
+        "worst_index": 3277,
+        "left": 10.599742889404297,
+        "right": 10.599710464477539
+      },
+      "numerical_acceptance_established": false,
+      "different_logit_top1_positions": []
+    },
+    "mode0-shapes": {
+      "first_gemm_operands_equal": null,
+      "generated_tokens": {
+        "left": -1,
+        "right": -1
+      },
+      "left_batch": 1,
+      "right_batch": 8,
+      "packed_records": 1425,
+      "packing_difference_count": 0,
+      "compared_tensors": 2712,
+      "different_tensors": 0,
+      "first_difference": null,
+      "numerical_acceptance_established": false,
+      "different_logit_top1_positions": []
+    },
+    "mode1-shapes": {
+      "first_gemm_operands_equal": null,
+      "generated_tokens": {
+        "left": -1,
+        "right": -1
+      },
+      "left_batch": 1,
+      "right_batch": 8,
+      "packed_records": 1514,
+      "packing_difference_count": 0,
+      "compared_tensors": 2712,
+      "different_tensors": 2696,
+      "first_difference": {
+        "position": 0,
+        "visit": 0,
+        "stage": "qrgs",
+        "max_abs": 8.58306884765625e-06,
+        "rms": 7.240510290215233e-07,
+        "different_values": 6185,
+        "worst_index": 3281,
+        "left": 9.082715034484863,
+        "right": 9.082706451416016
+      },
+      "numerical_acceptance_established": false,
+      "different_logit_top1_positions": []
+    },
+    "mode2-shapes": {
+      "first_gemm_operands_equal": null,
+      "generated_tokens": {
+        "left": -1,
+        "right": -1
+      },
+      "left_batch": 1,
+      "right_batch": 8,
+      "packed_records": 1690,
+      "packing_difference_count": 0,
+      "compared_tensors": 2712,
+      "different_tensors": 2696,
+      "first_difference": {
+        "position": 0,
+        "visit": 0,
+        "stage": "qrgs",
+        "max_abs": 0.0021958351135253906,
+        "rms": 0.00036877716513981625,
+        "different_values": 6552,
+        "worst_index": 6544,
+        "left": 4.899341106414795,
+        "right": 4.90153694152832
+      },
+      "numerical_acceptance_established": false,
+      "different_logit_top1_positions": []
+    }
+  },
+  "ampere_generation_regression": {
+    "groups_per_client": 28,
+    "measured_repetitions": 5,
+    "engine_golden_matches": 11,
+    "facade_golden_matches": 11,
+    "engine_facade_token_parity": 28,
+    "deterministic_repetitions": true,
+    "decode_tps": {
+      "ar": 114.82384269955448,
+      "fixed": 143.9193760625416,
+      "adaptive": 175.4794282695512,
+      "sampled": 109.92066389304048
+    },
+    "own_historical_tokens_equal": true,
+    "own_historical_performance_gate_passed": true
+  },
+  "ampere_linear_shapes": {
+    "cases": 8,
+    "repetitions_per_mode": 5,
+    "all_eager_graph_equal": true,
+    "maximum_reference_error": 0.18994140625,
+    "maximum_singleton_difference": 0.18994140625,
+    "interpretation": "Known shape-dependent arithmetic remains; graph replay agrees with eager execution, not an independent model quality proof"
+  },
+  "ampere_postflight": {
+    "reservation_closed_at": 1795784915.3814948,
+    "gpu": "GPU-5784d04b-bfbd-7b3d-922a-34cec3f3ce92, 1934, 0",
+    "services_stopped": false,
+    "global_configuration_changed": false
+  }
 }

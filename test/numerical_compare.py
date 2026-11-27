@@ -53,6 +53,17 @@ class NumericComparison(unittest.TestCase):
             self.assertFalse(report['first_gemm_operands_equal'])
             self.assertFalse(report['numerical_acceptance_established'])
 
+    def test_legacy_short_probe_generation_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()
+            for root,metadata in [(left,{'tokens':[7]}),(right,{'tokens':[7],'generation_probe':0})]:
+                (root/'run.json').write_text(json.dumps(metadata))
+                (root/'spans.jsonl').write_text('')
+            tensors={(0,0,'embedding'):struct.pack('<f',1)}
+            with patch.object(m,'load',side_effect=[tensors,tensors]):self.assertEqual(m.compare(left,right)['different_tensors'],0)
+            (right/'run.json').write_text(json.dumps({'tokens':[7],'generation_probe':1}))
+            with self.assertRaises(ValueError):m.compare(left,right)
+
     def test_prefill_execution_order_before_tail(self):
         with tempfile.TemporaryDirectory() as tmp:
             left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()

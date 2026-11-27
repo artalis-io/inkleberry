@@ -2,8 +2,8 @@
 
 PR #9 merged into the Ampere branch as `ce923e2` after green CI. This pass adds
 diagnostic tests and analysis. **No kernel, golden, default precision, sampling
-rule or production math policy changed.** GB202 and GB10 measurements are complete;
-Ampere runtime measurements await an approved desktop reservation.
+rule or production math policy changed.** GB202, GB10 and Ampere measurements are complete. Cross-device numerical
+equivalence is **not** established; the observed differences remain visible.
 
 ## Controlled inputs and software
 
@@ -25,7 +25,7 @@ Changes between these diagnostic revisions do not change library mathematics.
 | --- | --- | --- |
 | GB202-class RTX PRO 6000 Blackwell Max-Q, `core` | Completed | CUDA 13.5.37 / cuBLAS 13.10.0.20 |
 | GB10, Linux ARM64, `spark-7468` | Completed; approved vLLM pause/restore | CUDA 13.0.88 / cuBLAS 13.1.1.3 |
-| RTX 3090 Ti, Windows x64, `edge` | Native MSVC/CUDA build prepared at the frozen primary revision; GPU runs pending | Installed native toolkit; no driver/toolchain change |
+| RTX 3090 Ti, Windows x64, `edge` | Native MSVC/CUDA traces, generation and graphs completed at `0f14217` | CUDA 13.3.73 / driver 621.01; no driver/toolchain change |
 
 See [machine-readable evidence](numerical-diagnosis-2026-11-27.json) for model
 checksums, retained binary checksums, measured results and lifecycle evidence.
@@ -115,12 +115,13 @@ the observation is possible, not every resulting generation difference.
 Each uninstrumented client ran seven workload families across AR, fixed
 speculative, adaptive speculative and sampled generation: one warm-up and five
 measured repetitions per group. Engine/facade tokens match in all 28 groups on
-each device. Both devices pass their own historical token/performance gates.
+each device. All three devices pass their own historical token/performance gates.
 
 | Device | Engine / facade matches against existing GB202 goldens | AR | Fixed | Adaptive | Sampled |
 | --- | --- | ---: | ---: | ---: | ---: |
 | GB202 | 28/28 each | 239.13 | 331.70 | 413.14 | 225.71 |
 | GB10 | 17/28 each | 71.36 | 80.23 | 89.01 | 69.24 |
+| Ampere | 11/28 each | 114.82 | 143.92 | 175.48 | 109.92 |
 
 Rates are pooled median decode tokens/s from eligible groups, not per-context
 latency guarantees. Since cross-device outputs differ, the table is not an
@@ -152,7 +153,7 @@ for B=1 be evaluated, with scale-folding, layout and performance checks. Do not
 rewrite all kernels, change the default to `exact`, fit a permissive tolerance,
 or update goldens. No corrective arithmetic policy has been implemented here.
 
-## Runtime safety and pending Ampere work
+## Runtime safety and Ampere follow-up
 
 Only the previously approved `qwen3_8-flash-next-fp4-local` vLLM service on
 `spark-7468` was temporarily stopped. Both bounded supervisors restored it and
@@ -161,10 +162,48 @@ container IDs. The focused prefill window began only after the first restoration
 was verified. Cursus, PostgreSQL, Velo and Carta stayed unchanged; `spark-3eb0`
 was not modified. No GPU settings, driver or global dependencies changed.
 
-The current `edge` desktop requires a new operator-reviewed expiring reservation.
-It has not been admitted automatically. Its model checksums match and the frozen
-primary diagnostic builds natively, but no new Ampere GPU result is claimed.
-Three-device numerical qualification remains incomplete.
+The operator approved the refreshed `edge` desktop reservation. The guard still
+requires the captured process identities, idle samples, memory ceiling and expiry.
+The first launcher attempt failed before model execution because CUDA 13.3 keeps
+its DLLs in `bin/x64`; correcting the external launcher's runtime directory fixed
+loading. No system PATH, desktop application, driver or repository kernel changed.
+
+### Ampere numerical follow-up
+
+The same 76 production source files and 1,690 NVFP4 packed span/view records match
+GB202. Short teacher-forced probes preserve top-1 at all eight positions, but
+stage tensors differ:
+
+| Probe against GB202 | First observed boundary | Maximum absolute difference |
+| --- | --- | ---: |
+| Singleton NVFP4 | Visit 0 MoE output | 0.000028073787689208984 |
+| Batch-8 NVFP4 | Visit 0 Q/R/gate/sink projection | 0.0000019073486328125 |
+| Actual 32-token prefill | Visit 0 first cuBLAS Q/R/gate/sink projection | 0.0000324249267578125 |
+
+The MoE tap follows gate/up and down projection: it does not identify which
+internal operation first differs. Do not label it as proof of a particular
+expert-kernel defect. Within Ampere, the `exact` fixture has zero differences
+between batches 1 and 8; FP8 and NVFP4 first differ at the initial fused projection.
+All eight top-1 tokens still agree in those shape comparisons.
+
+Actual prefill weight/activation hashes and scale bits match GB202 and GB10.
+Its selected-coordinate FP64 references match too. At row 3277, Ampere returns
+10.599710464477539, versus FP64 10.599749733712805 (absolute error about 0.00003927).
+This is a selected represented-input arithmetic check, not a full-model quality
+bound. Toolkit, vendor library, operating system and GPU architecture differ.
+
+Ampere completed 168 runs per client (28 groups, one warm-up and five measured
+repetitions), with native/facade token agreement in all 28 groups and deterministic
+measured repetitions. Both clients match 11/28 existing Blackwell golden sequences.
+Its own historical output and performance gates pass without relaxed thresholds.
+The synthetic linear-shape suite passes eager/graph agreement across five
+repetitions per mode; existing singleton/batched arithmetic differences remain.
+Graph agreement does not establish an independent numerical/quality oracle.
+
+The final GPU sample is 0% utilization and 1,934 MiB desktop memory, matching the
+runtime window's starting baseline. The external reservation was closed after
+testing. No desktop apps or services were stopped. Three-device execution is now
+measured, but three-device numerical equivalence remains unproven.
 
 ## Reproduction and checks
 
@@ -200,10 +239,12 @@ Local host/install/contract checks, pin/namespace/lint checks, reference-free an
 extracted packages pass; comparator regression tests cover input identity,
 missing/duplicate data, finiteness, GEMM operands and prefill execution order.
 Native compilation and model source checks were performed on all three hosts;
-GPU execution is Linux GB202/GB10 only. Default Linux forward **and prefill**
+GPU traces, repeated generation and graph checks have executed on all three
+targets. Eight comparator regression tests pass, including legacy short-probe
+metadata compatibility without permitting generation-mode mismatches. Default Linux forward **and prefill**
 objects match their pre-diagnostic object bytes exactly with tracing disabled.
 
 Raw controller artifacts are under `data/inkleberry-numerics-2026-11-27/`.
 Linux workspaces are `/data/scratch/inkleberry-numerics-2026-11-27`; Windows uses
-`C:/data/cache/inkleberry/numerics-2026-11-27`. Preserve sources and artifacts when
-continuing Ampere. Review PR CI separately; do not report pending runs as passed.
+`C:/data/cache/inkleberry/numerics-2026-11-27`. Preserve sources and artifacts for
+continued numerical qualification. Review PR CI separately; do not report pending runs as passed.

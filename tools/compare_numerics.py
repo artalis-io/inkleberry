@@ -53,6 +53,8 @@ def compare(left, right, left_batch=1, right_batch=1):
     if left_run.exists():
         x,y=json.loads(left_run.read_text()),json.loads(right_run.read_text())
         x.pop('generated_token',None);y.pop('generated_token',None)
+        # Older completed short probes predate the explicit generation-mode flag.
+        x.setdefault('generation_probe',0);y.setdefault('generation_probe',0)
         if x!=y:raise ValueError('Input/configuration identity mismatch')
     a,b=load(left,left_batch),load(right,right_batch)
     if a.keys()!=b.keys():raise ValueError('Trace identity mismatch')
