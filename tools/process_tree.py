@@ -43,7 +43,7 @@ class WindowsJob:
             self.api.CloseHandle(self.handle);self.handle=None
 
 
-def run(command, *, stdout=None, stderr=None, env=None, timeout=650):
+def run(command, *, stdout=None, stderr=None, env=None, timeout=650, cwd=None):
     """Child cannot spawn the real command before containment is established."""
     if threading.current_thread() is not threading.main_thread():
         raise ValueError('Qualification process supervision requires the main thread')
@@ -57,7 +57,7 @@ def run(command, *, stdout=None, stderr=None, env=None, timeout=650):
             if sig is not None:handlers[sig]=signal.signal(sig,interrupted)
         job=WindowsJob() if os.name=='nt' else None
         process=subprocess.Popen([sys.executable,str(Path(__file__).resolve()),'--child',*command],
-                                 stdin=subprocess.PIPE,stdout=stdout,stderr=stderr,env=env,
+                                 stdin=subprocess.PIPE,stdout=stdout,stderr=stderr,env=env,cwd=cwd,
                                  start_new_session=os.name!='nt')
         if job:job.assign(process)
         process.stdin.write(b'1');process.stdin.close()
