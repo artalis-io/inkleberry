@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "weights_internal.h"
+#include "inkling_geometry.h"
 #include "cuda_abi.h"
 #include "checked_cuda.h"
 
@@ -75,7 +76,7 @@ static int ifn_gpu_cuda_local_rnn(void *c, const void *a, void *b, void *d, void
 static int ifn_gpu_cuda_local_fold(void *c, const void *a, const void *b, const void *d, void *e,
                                    void *f, void *s) {
     (void)c;
-    return ifn_cuda_fold(a, b, d, e, f, 200058, s);
+    return ifn_cuda_fold(a, b, d, e, f, IFN_INKLING_VOCAB, s);
 }
 
 static const ifn_weight_backend ifn_gpu_cuda_local_backend = {NULL,

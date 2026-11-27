@@ -2,6 +2,7 @@
  * Owned GPU-image lifecycle. Backend injection is private and used by fault
  * tests; public GPU entrypoints bind only the actual CUDA backend. */
 #include "weights_internal.h"
+#include "inkling_geometry.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -106,9 +107,9 @@ ifn_status ifn_weights_create(const ifn_weight_config *input, const ifn_options 
     w->plan.arena_bytes = w->offset;
     w->plan.allocations = w->span_count;
     w->plan.views = w->view_count;
-    w->plan.staging_bytes = (size_t)200058 * 2304 * 2;
+    w->plan.staging_bytes = (size_t)IFN_INKLING_VOCAB * IFN_INKLING_HIDDEN * 2;
     w->plan.amax_bytes = 4;
-    w->plan.fold_temporary_bytes = config.with_mtp ? (size_t)200058 * 256 * 2 : 0;
+    w->plan.fold_temporary_bytes = config.with_mtp ? (size_t)IFN_INKLING_VOCAB * 256 * 2 : 0;
     size_t peak = w->offset;
     if (!ifn_size_add(peak, (size_t)w->plan.staging_bytes, &peak) ||
         !ifn_size_add(peak, 4, &peak) ||

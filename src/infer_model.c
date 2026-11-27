@@ -107,14 +107,21 @@ ifn_status ifn_infer_model_create(const ifn_infer_model_config_v1 *c, ifn_infer_
         return ifn_infer_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE, "model host budget too small");
     ifn_weight_config wc = IFN_WEIGHT_CONFIG_INIT;
     wc.with_mtp = 0;
-    const char *profiles[] = {"exact-ar",  "fp8-ar",  "nvfp4-ar",
-                              "exact-mtp", "fp8-mtp", "nvfp4-mtp"};
+
+    const struct {
+        const char *name;
+        ifn_weight_mode mode;
+        uint32_t with_mtp;
+    } profiles[] = {{"exact-ar", IFN_WEIGHT_EXACT, 0}, {"fp8-ar", IFN_WEIGHT_FP8, 0},
+                    {"nvfp4-ar", IFN_WEIGHT_NVFP4, 0}, {"exact-mtp", IFN_WEIGHT_EXACT, 1},
+                    {"fp8-mtp", IFN_WEIGHT_FP8, 1},    {"nvfp4-mtp", IFN_WEIGHT_NVFP4, 1}};
+
     const char *profile = NULL;
-    for (uint32_t i = 0; i < 6; i++)
-        if (ifn_infer_equal(c->weight_profile, profiles[i])) {
-            wc.mode = i % 3;
-            wc.with_mtp = i / 3;
-            profile = profiles[i];
+    for (size_t i = 0; i < sizeof profiles / sizeof profiles[0]; i++)
+        if (ifn_infer_equal(c->weight_profile, profiles[i].name)) {
+            wc.mode = profiles[i].mode;
+            wc.with_mtp = profiles[i].with_mtp;
+            profile = profiles[i].name;
         }
     if (!profile || !ifn_infer_span(c->device_id, 10) || !c->device_id.bytes)
         return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE,

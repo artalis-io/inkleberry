@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "config.hpp"
+#include "../src/cuda/geometry_contract.hpp"
 #include "../src/cuda/capability.h"
 #include "../src/cuda/resource_policy.hpp"
 #include <cstdio>

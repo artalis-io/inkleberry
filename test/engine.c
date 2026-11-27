@@ -256,6 +256,15 @@ static int ifn_engine_local_request_cancel_token(void *context, int32_t token) {
 }
 
 int main(void) {
+    ifn_visit visits[48];
+    ifn_ar_schedule(visits);
+    for (unsigned i = 0; i < 48; i++) {
+        unsigned layer = i < 6 ? i : i < 42 ? 6 + (i - 6) % 12 : i - 24;
+        unsigned pass = i >= 6 && i < 42 ? (i - 6) / 12 : 0;
+        IFN_MOCK_GPU_LOCAL_CHECK(visits[i].layer == layer && visits[i].pass == pass &&
+                                 visits[i].loop == (i >= 6 && i < 42) &&
+                                 visits[i].global == ((layer + 1) % 6 == 0));
+    }
     IFN_MOCK_GPU_LOCAL_CHECK(!strcmp(ifn_status_string(IFN_CANCELLED), "cancelled"));
     ifn_session_config c = IFN_SESSION_CONFIG_INIT;
     c.context_tokens = 128;

@@ -31,14 +31,19 @@ ifn_status ifn_infer_session_create(ifn_infer_model *m, const ifn_infer_session_
         return ifn_infer_error(e, IFN_LIMIT, IFN_STAGE_VALIDATE,
                                "session context or host budget invalid");
     sc.context_tokens = (uint32_t)c->context_tokens;
-    const char *profiles[] = {"bf16-eager", "fp8-eager", "q4-eager",
-                              "bf16-graph", "fp8-graph", "q4-graph"};
+
+    const struct {
+        const char *name;
+        uint32_t kv_format, use_graphs;
+    } profiles[] = {{"bf16-eager", 0, 0}, {"fp8-eager", 1, 0}, {"q4-eager", 2, 0},
+                    {"bf16-graph", 0, 1}, {"fp8-graph", 1, 1}, {"q4-graph", 2, 1}};
+
     const char *profile = NULL;
-    for (uint32_t i = 0; i < 6; i++)
-        if (ifn_infer_equal(c->execution_profile, profiles[i])) {
-            sc.kv_format = i % 3;
-            sc.use_graphs = i / 3;
-            profile = profiles[i];
+    for (size_t i = 0; i < sizeof profiles / sizeof profiles[0]; i++)
+        if (ifn_infer_equal(c->execution_profile, profiles[i].name)) {
+            sc.kv_format = profiles[i].kv_format;
+            sc.use_graphs = profiles[i].use_graphs;
+            profile = profiles[i].name;
         }
     if (!profile)
         return ifn_infer_error(e, IFN_UNSUPPORTED, IFN_STAGE_VALIDATE, "unknown execution profile");
