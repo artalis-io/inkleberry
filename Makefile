@@ -622,3 +622,16 @@ $(BUILD_DIR)/semantic$(EXE): $(BUILD_DIR)/semantic.o $(GPU_STATIC) $(HOST_STATIC
 semantic-validator-check:
 	$(PYTHON) test/semantic_acceptance.py
 check: $(BUILD_DIR)/semantic.o semantic-validator-check
+
+.PHONY: audit-boundary-check audit-check
+audit-boundary-check:
+	$(PYTHON) tools/check_audit_boundaries.py
+	$(PYTHON) test/audit_boundaries.py
+check: audit-boundary-check
+audit-check: generated-check audit-boundary-check
+	$(PYTHON) tools/lint.py
+
+.PHONY: qualification-safety-check
+qualification-safety-check:
+	$(PYTHON) test/qualification_safety.py
+check: qualification-safety-check

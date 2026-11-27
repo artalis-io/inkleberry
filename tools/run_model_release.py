@@ -13,6 +13,7 @@ import time
 import uuid
 from pathlib import Path
 from model_release import FILES, digest, compare, records
+from process_tree import run as run_owned
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -66,10 +67,10 @@ def main():
     def run(args, output=None):
         if output:
             with output.open('w') as f:
-                subprocess.run(args, cwd=ROOT, env=env, stdout=f,
-                               stderr=subprocess.STDOUT, check=True)
+                run_owned(args, cwd=ROOT, env=env, stdout=f,
+                          stderr=subprocess.STDOUT, timeout=7200).check_returncode()
         else:
-            subprocess.run(args, cwd=ROOT, env=env, check=True)
+            run_owned(args, cwd=ROOT, env=env, timeout=7200).check_returncode()
 
     try:
         if not a.gpu.startswith('GPU-'):
