@@ -43,7 +43,13 @@ qualified release is an operational milestone, not a reason to redesign packagin
 
 ## Recommended order
 
-Finish the four audit fixes, keep their regressions mandatory, then prioritize
+The four audit fixes are implemented with their regressions mandatory. Prioritize
 held-out semantic coverage and the device/precision evidence matrix. Follow with
 focused numerical/failure tests. No new framework, backend abstraction, kernel
 rewrite or deployment work is needed for these steps.
+
+Evidence caveat: bitnet.c's backend matrix includes file-presence and dependency
+checks, not proof that every listed combination executes correctly. Its model
+matrix can skip missing assets unless required. Borrow the explicit coverage
+accounting and independent oracles, and always report executed versus skipped
+cases. A longer capability list alone is not a stronger qualification result.
