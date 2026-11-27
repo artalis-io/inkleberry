@@ -1,11 +1,15 @@
 # Experimental Ampere compatibility layer
 
-Implementation status: host-tested; **CUDA compilation and GPU execution of
-this implementation are deferred**. The owner requested that `edge` remain
-untouched while it is being used for gaming. No SSH connection, remote build,
-GPU test, benchmark, model load or service change was performed there for this
-implementation. The earlier [audit](design/ampere-compatibility.md) compiled the
-unchanged baseline; that result does not qualify the new code.
+Implementation status: **native Windows CUDA compilation/linking and ABI/package
+checks passed under MSVC and clang-cl** on `edge`'s RTX 3090 Ti target. GPU kernel
+execution, model correctness and performance remain unqualified. See the
+[2026-11-27 validation report](validation/ampere-windows-2026-11-27.md).
+
+The owner released `edge` for testing after the implementation-only phase.
+Its active Windows desktop exceeds the existing dedicated-GPU idle guard; the
+guard was exercised and correctly refused to launch a child. A reviewed Windows
+reservation contract is required before running tests on this desktop baseline.
+No desktop apps, services, drivers, power settings or watchdogs were changed.
 
 ## Behavior
 
@@ -37,7 +41,7 @@ policy and checked resource preparation; kernel implementations are shared.
 
 ## Build and artifact contract
 
-These are **build-only commands for later use**, not commands executed on `edge`:
+Build-only commands (executed on `edge` with both `CC=cl` and `CC=clang-cl`):
 
 ```sh
 # Native Windows: source scripts/msvc-env.sh first; choose CC=cl or clang-cl.
@@ -87,13 +91,13 @@ concurrency, cancellation, parser and distribution regressions remain in place.
 
 ## Deferred acceptance gates
 
-Before enabling this for actual use: compile/link with real NVCC under both
-Windows host compilers, inspect target images/exports, run native layout checks,
-then qualify primitives, eager/graph AR, fixed/adaptive speculation, prefix reuse,
+The Windows compile/link, image/export and native layout checks have passed.
+Before enabling this for actual use, qualify primitives, eager/graph AR,
+fixed/adaptive speculation, prefix reuse,
 real cancellation and cleanup on a reserved device. Verify conditional SWITCH
 graph support and resource opt-in through real execution. Keep Blackwell goldens
 and performance gates intact; report any numerical drift explicitly.
 
 Do not bypass the existing idle-GPU guard, change the desktop's driver/watchdog
 settings or interrupt gaming to satisfy these gates. Real inference, benchmarks,
-maximum context and performance claims remain on hold for separate authorization.
+maximum context and performance claims remain unqualified until these tests run.
