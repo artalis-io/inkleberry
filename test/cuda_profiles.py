@@ -52,7 +52,9 @@ for arch, opt in [('120a', False), ('121a', False), ('86', True)]:
             assert '.build/sm86-experimental/libinkleberry-gpu.a' in output
             assert '.build/sm86-experimental/inkleberry-generate' in output
             cleanup = dry([*args, 'clean'])
-            for name in shlex.split(cleanup)[2:]:
+            commands = [shlex.split(line) for line in cleanup.splitlines() if line.startswith('rm -rf ')]
+            assert len(commands) == 1, cleanup
+            for name in commands[0][2:]:
                 assert name.startswith('.build/sm86-experimental'), name
         package = dry([*args, 'runtime-gpu-package'])
         assert '--cuda-profile' in package and '--build-root' in package
