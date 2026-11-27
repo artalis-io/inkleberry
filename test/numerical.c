@@ -3,6 +3,7 @@
 #include "engine_internal.h"
 #include "sha256.h"
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,16 @@ static int ifn_numeric_device_hash(const void *device, size_t bytes, char hex[65
     return failed;
 }
 
+/* Independent binary16 decode for the small host FP64 reference, not model execution. */
+static double ifn_numeric_half(uint16_t bits) {
+    unsigned exponent = (bits >> 10) & 31, mantissa = bits & 1023;
+    if (exponent == 31)
+        return NAN;
+    double value =
+        ldexp((double)(mantissa + (exponent ? 1024 : 0)), exponent ? (int)exponent - 25 : -24);
+    return bits & 32768 ? -value : value;
+}
+
 static int ifn_numeric_first_gemm(ifn_session *s, int32_t batch) {
     const ifn_cuda_c_linear_weight *weight = &s->model.layers[0].w_qrgs;
     char weights[65], input[65], path[2048];
@@ -29,17 +40,44 @@ static int ifn_numeric_first_gemm(ifn_session *s, int32_t batch) {
                                 weights) ||
         ifn_numeric_device_hash(s->p_attn_in_h[0], (size_t)batch * (size_t)weight->cols * 2, input))
         return 1;
+    const int rows[3] = {0, 3277, weight->rows - 1};
+    double reference[3] = {0};
+    uint16_t *x = malloc((size_t)weight->cols * 2), *row = malloc((size_t)weight->cols * 2);
+    if (!x || !row) {
+        free(x);
+        free(row);
+        return 1;
+    }
+    int failed = ifn_cuda_memcpy_d2h(x, s->p_attn_in_h[0], (size_t)weight->cols * 2);
+    for (unsigned r = 0; !failed && r < 3; r++) {
+        const void *data =
+            (const unsigned char *)s->p_w_f16 + (size_t)rows[r] * (size_t)weight->cols * 2;
+        failed = ifn_cuda_memcpy_d2h(row, data, (size_t)weight->cols * 2);
+        for (int k = 0; !failed && k < weight->cols; k++)
+            reference[r] += ifn_numeric_half(x[k]) * ifn_numeric_half(row[k]);
+        reference[r] *= weight->global_scale;
+        if (!isfinite(reference[r]))
+            failed = 1;
+    }
+    free(x);
+    free(row);
+    if (failed)
+        return 1;
     uint32_t alpha;
     memcpy(&alpha, &weight->global_scale, sizeof alpha);
     snprintf(path, sizeof path, "%s/first-gemm.json", ifn_numeric_directory);
     FILE *file = fopen(path, "wb");
     if (!file)
         return 1;
+    /* Row 3277 is the observed worst discrepancy; row 0 and the last row are controls. */
     int result =
         fprintf(file,
-                "{\"rows\":%d,\"cols\":%d,\"batch\":%d,\"kind\":%u,\"alpha_bits\":%u,\"fp16_"
-                "weights_sha256\":\"%s\",\"fp16_input_sha256\":\"%s\"}\n",
-                weight->rows, weight->cols, batch, (unsigned)weight->kind, alpha, weights, input);
+                "{\"rows\":%d,\"cols\":%d,\"batch\":%d,\"kind\":%u,\"alpha_bits\":%u,"
+                "\"fp16_weights_sha256\":\"%s\",\"fp16_input_sha256\":\"%s\","
+                "\"fp64_reference_position0\":[{\"row\":%d,\"value\":%.17g},{\"row\":%d,\"value\":%"
+                ".17g},{\"row\":%d,\"value\":%.17g}]}\n",
+                weight->rows, weight->cols, batch, (unsigned)weight->kind, alpha, weights, input,
+                rows[0], reference[0], rows[1], reference[1], rows[2], reference[2]);
     return fclose(file) || result < 0;
 }
 
@@ -193,6 +231,9 @@ int main(int argc, char **argv) {
     if (ifn_numeric_generation && (strcmp(argv[5], "generation") || common || token_count <= 32))
         return 2;
     ifn_numeric_trace_from = common;
+    if (ifn_numeric_half(0x3c00) != 1 || ifn_numeric_half(0xc000) != -2 ||
+        ifn_numeric_half(1) != ldexp(1, -24))
+        return 2;
     unsigned mode = (unsigned)(argv[3][0] - '0');
     ifn_numeric_directory = argv[2];
     char path[2048], mtp[2048];

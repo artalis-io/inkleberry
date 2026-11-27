@@ -37,6 +37,22 @@ class NumericComparison(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'coverage'):m.load(root,1)
             (root/'trace.jsonl').write_text((json.dumps(row)+'\n')*2)
             with self.assertRaisesRegex(ValueError,'Duplicate'):m.load(root,1)
+    def test_gemm_operands_and_changed_output_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()
+            for root,token in [(left,1),(right,2)]:
+                (root/'run.json').write_text(json.dumps({'tokens':[7],'generated_token':token}))
+                (root/'first-gemm.json').write_text(json.dumps({'fp16_weights_sha256':'a'*64,'fp16_input_sha256':'b'*64}))
+                (root/'spans.jsonl').write_text('')
+            tensors={(0,0,'embedding'):struct.pack('<f',1)}
+            with patch.object(m,'load',side_effect=[tensors,tensors]):report=m.compare(left,right)
+            self.assertTrue(report['first_gemm_operands_equal'])
+            self.assertEqual(report['generated_tokens'],{'left':1,'right':2})
+            (right/'first-gemm.json').write_text(json.dumps({'fp16_weights_sha256':'c'*64,'fp16_input_sha256':'b'*64}))
+            with patch.object(m,'load',side_effect=[tensors,tensors]):report=m.compare(left,right)
+            self.assertFalse(report['first_gemm_operands_equal'])
+            self.assertFalse(report['numerical_acceptance_established'])
+
     def test_changed_input_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()

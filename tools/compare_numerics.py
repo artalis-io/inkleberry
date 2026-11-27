@@ -57,8 +57,18 @@ def compare(left, right, left_batch=1, right_batch=1):
     a,b=load(left,left_batch),load(right,right_batch)
     if a.keys()!=b.keys():raise ValueError('Trace identity mismatch')
     order={stage:i for i,stage in enumerate(STAGES)}
+    run=json.loads(left_run.read_text()) if left_run.exists() else {}
+    if run.get('generation_probe'):
+        prefill=((run['token_count']-1)//8)*8
+        def trace_order(k):return (int(k[0]>=prefill),k[1],order[k[2]],k[0])
+    elif left_batch==right_batch:
+        start=run.get('trace_from',0)
+        def trace_order(k):return ((k[0]-start)//left_batch,k[1],order[k[2]],k[0])
+    else:
+        # Different shapes have different execution schedules: compare by logical token.
+        def trace_order(k):return (k[0],k[1],order[k[2]])
     results=[]
-    for key in sorted(a,key=lambda k:(k[0],k[1],order[k[2]])):
+    for key in sorted(a,key=trace_order):
         x,y=floats(a[key]),floats(b[key])
         if a[key]==b[key]:continue
         delta=[abs(u-v) for u,v in zip(x,y)]
@@ -75,8 +85,16 @@ def compare(left, right, left_batch=1, right_batch=1):
     span_b=[json.loads(s) for s in (right/'spans.jsonl').read_text().splitlines()]
     if len(span_a)!=len(span_b):raise ValueError('Packed span/view count mismatch')
     packing=[{'left':x,'right':y} for x,y in zip(span_a,span_b) if x!=y]
-    return {'left_batch':left_batch,'right_batch':right_batch,'packed_records':len(span_a),
-            'packing_differences':packing,'compared_tensors':len(a),'different_tensors':len(results),
+    gemm_a,gemm_b=left/'first-gemm.json',right/'first-gemm.json'
+    fields=('rows','cols','batch','kind','alpha_bits','fp16_weights_sha256','fp16_input_sha256')
+    if gemm_a.exists() and gemm_b.exists():
+        ga,gb=json.loads(gemm_a.read_text()),json.loads(gemm_b.read_text())
+        gemm_equal={k:ga.get(k) for k in fields}=={k:gb.get(k) for k in fields}
+    else:gemm_equal=None
+    generated={k:json.loads(path.read_text()).get('generated_token') if path.exists() else None
+               for k,path in [('left',left_run),('right',right_run)]}
+    return {'first_gemm_operands_equal':gemm_equal,'generated_tokens':generated,'left_batch':left_batch,'right_batch':right_batch,'packed_records':len(span_a),
+            'packing_difference_count':len(packing),'packing_differences':packing,'compared_tensors':len(a),'different_tensors':len(results),
             'first_difference':results[0] if results else None,'differences':results,
             'numerical_acceptance_established':False}
 
