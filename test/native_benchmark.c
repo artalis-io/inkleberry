@@ -10,6 +10,14 @@
 #include "host_clock.h"
 #include "sha256.h"
 
+/* Stable configuration identity across CRT hex-float formatting conventions. */
+static unsigned ifn_benchmark_float_bits(float value) {
+    uint32_t bits;
+    _Static_assert(sizeof value == sizeof bits, "benchmark requires binary32");
+    memcpy(&bits, &value, sizeof bits);
+    return (unsigned)bits;
+}
+
 static uint64_t ifn_benchmark_now(void) {
     return ifn_host_now_ns();
 }
@@ -172,11 +180,11 @@ int main(int argc, char **argv) {
             ifn_sha256_hex(hash, input_sha);
             int length =
                 snprintf(settings, sizeof settings,
-                         "native-benchmark-v2/%s/%llu/96/%a/%a/%d/%llu/%u/%u/%u/%a", representation,
-                         (unsigned long long)sc.context_tokens, (double)options.temperature,
-                         (double)options.top_p, options.top_k, (unsigned long long)options.seed,
-                         options.draft_tokens, options.adaptive, options.prompt_lookup,
-                         (double)options.spec_threshold);
+                         "native-benchmark-v2/%s/%llu/96/%08x/%08x/%d/%llu/%u/%u/%u/%08x",
+                         representation, (unsigned long long)sc.context_tokens,
+                         (double)options.temperature, (double)options.top_p, options.top_k,
+                         (unsigned long long)options.seed, options.draft_tokens, options.adaptive,
+                         options.prompt_lookup, ifn_benchmark_float_bits(options.spec_threshold));
             if (length < 0 || (size_t)length >= sizeof settings ||
                 !ifn_sha256_hash(settings, (size_t)length, hash)) {
                 rc = IFN_LIMIT;
