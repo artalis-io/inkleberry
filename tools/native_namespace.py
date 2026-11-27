@@ -65,8 +65,7 @@ def platform_patches(root=ROOT):
             original = ('    static const cudaError_t attr = cudaFuncSetAttribute(\n'
                         '        ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);\n'
                         '    (void)attr;')
-            expected = ('#if IFN_CUDA_USE_PDL\n' + original + '\n#endif\n'
-                        '    // Ampere opt-in is checked per context during ifn_blas_create, before capture.')
+            expected = '    // Resource opt-in is checked per context during ifn_blas_create, before capture.'
             if patch['before'] != original or patch['after'] != expected:
                 raise ValueError('Platform resource hook escaped its reviewed host scope')
         seen.add(patch['kind'])

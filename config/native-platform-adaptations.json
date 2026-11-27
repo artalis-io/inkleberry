@@ -11,7 +11,7 @@
       "path": "cuda/kernels_prefill.cu",
       "kind": "host-resource-policy",
       "before": "    static const cudaError_t attr = cudaFuncSetAttribute(\n        ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);\n    (void)attr;",
-      "after": "#if IFN_CUDA_USE_PDL\n    static const cudaError_t attr = cudaFuncSetAttribute(\n        ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);\n    (void)attr;\n#endif\n    // Ampere opt-in is checked per context during ifn_blas_create, before capture."
+      "after": "    // Resource opt-in is checked per context during ifn_blas_create, before capture."
     }
   ]
 }

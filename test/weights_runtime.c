@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #include "mock_gpu.h"
+#include "inkling_quant.h"
 
 typedef struct {
     ifn_gpu_weights *weights;
@@ -25,6 +26,15 @@ static void ifn_weights_runtime_local_ignored_free(void *c, void *p) {
 }
 
 int main(int argc, char **argv) {
+    for (unsigned mode = 0; mode < 3; mode++) {
+        for (unsigned layer = 0; layer < 24; layer++)
+            IFN_MOCK_GPU_LOCAL_CHECK(ifn_inkling_expert_precision(mode, layer) ==
+                                     (mode == 2 || layer < 20 ? 2u : 1u));
+        for (unsigned force = 0; force < 2; force++)
+            IFN_MOCK_GPU_LOCAL_CHECK(ifn_inkling_mtp_precision(mode, force) ==
+                                     (mode == 0 || force ? 0u : 2u));
+    }
+
     ifn_weight_config config = IFN_WEIGHT_CONFIG_INIT;
     ifn_weight_plan plan = {0};
     ifn_options a = IFN_OPTIONS_INIT;

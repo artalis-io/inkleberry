@@ -11,17 +11,37 @@ def digest(path):
     with path.open('rb') as f:
         for block in iter(lambda:f.read(8*1024*1024),b''):h.update(block)
     return h.hexdigest()
-def records(path):
+def records(path, require_identity=False):
     rows=[json.loads(s) for s in path.read_text().splitlines() if s.startswith('{')]
     groups={}
+    identity_fields=('workload_revision','input_sha256','config_sha256')
+    identified=require_identity or any(any(k in r for k in identity_fields) for r in rows)
     for r in rows:
+        if type(r.get('warmup')) is not bool:raise ValueError('Invalid warmup flag')
         if r['warmup']:continue
-        assert r['generated']==len(r['tokens']) and r['generated']>0
-        assert 0<r['first_token_ns']<=r['elapsed_ns']
+        if (type(r.get('case')) is not int or r['case'] not in range(7) or
+                r.get('profile') not in ('ar','fixed','adaptive','sampled')):
+            raise ValueError('Unknown workload/profile')
+        if (type(r.get('run')) is not int or r['run']<0 or
+                type(r.get('prompt_tokens')) is not int or r['prompt_tokens']<=0 or
+                type(r.get('generated')) is not int or not isinstance(r.get('tokens'),list) or
+                r['generated']!=len(r['tokens']) or r['generated']<=0 or
+                any(type(t) is not int or not 0<=t<200058 for t in r['tokens'])):
+            raise ValueError('Invalid token counts/IDs or repetition')
+        if any(type(r.get(k)) is not int for k in ('first_token_ns','elapsed_ns')) or not 0<r['first_token_ns']<=r['elapsed_ns']:
+            raise ValueError('Invalid benchmark timings')
+        if identified and (r.get('workload_revision')!='native-benchmark-v2' or
+                any(not isinstance(r.get(k),str) or len(r[k])!=64 or
+                    any(c not in '0123456789abcdef' for c in r[k]) for k in identity_fields[1:])):
+            raise ValueError('Missing or invalid workload identity')
         groups.setdefault(str(r['case'])+'/'+r['profile'],[]).append(r)
     if len(groups)!=28:raise ValueError('Expected all 28 workload/profile groups')
     for key,group in groups.items():
         if len(group)<5:raise ValueError('At least five measured repetitions required: '+key)
+        if len({r['run'] for r in group})!=len(group):raise ValueError('Duplicate repetition: '+key)
+        fields=('prompt_tokens',)+identity_fields if identified else ('prompt_tokens',)
+        if any(len({r[k] for r in group})!=1 for k in fields):
+            raise ValueError('Mixed workload identity: '+key)
         if len({tuple(r['tokens']) for r in group})!=1:raise ValueError('Non-deterministic generation: '+key)
     return groups
 
@@ -42,6 +62,9 @@ def compare(before,after,latency_tolerance=.10,decode_tolerance=.05):
         other=candidate[key]
         if group[0]['tokens']!=other[0]['tokens'] or group[0]['prompt_tokens']!=other[0]['prompt_tokens']:
             raise ValueError('Output/prompt token regression: '+key)
+        for field in ('workload_revision','input_sha256','config_sha256'):
+            if field in group[0] and field in other[0] and group[0][field]!=other[0][field]:
+                raise ValueError('Workload/configuration mismatch: '+key)
         a,b=summary(group),summary(other);checks={}
         for metric in a:
             ratio=b[metric]['median']/a[metric]['median']

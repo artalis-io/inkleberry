@@ -62,16 +62,42 @@ with tempfile.TemporaryDirectory(prefix='ifn-release-failure-') as tmp:
     (model / FILES[0]).write_bytes(b'changed input')
     rejected([], 'identity mismatch')
     (model / FILES[0]).write_bytes(b'synthetic public test bytes')
-    rejected(['--source-revision', 'not-a-revision'], 'Supply exact')
+    rejected(['--source-revision', 'not-a-revision'], 'requires a Git checkout')
 
-    # A real child build failure, with synthetic preflight assets, cannot retain success.
-    # Stub make only; do not run real build commands or access a GPU.
-    commands = base / 'commands'
-    commands.mkdir()
-    make = commands / 'make'
-    make.write_text('#!/bin/sh\nexit 23\n')
-    make.chmod(0o755)
-    env = dict(os.environ, PATH=str(commands) + os.pathsep + os.environ['PATH'])
-    current = rejected([], 'CalledProcessError', env)
-    assert current['checks'] == {'preflight': True}, current
-print('GPU/baseline/model/revision preflight and child build failures replace stale success atomically')
+    # Exercise real receipt publication with mocked read-only provenance and a
+    # failed child build. No GPU, toolchain or Git repository is required.
+    import importlib.util
+    from unittest.mock import patch
+    sys.path.insert(0, str(tree/'tools'))
+    spec = importlib.util.spec_from_file_location('ifn_release_runner', tree/'tools/run_model_release.py')
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    (tree/'config').mkdir()
+    (tree/'config/package.json').write_text(json.dumps({'source_files':['VERSION']}))
+    revision='a'*40
+    contract='\n'.join('IFN_RELEASE_'+k+'='+v for k,v in {
+        'BUILD_DIR':'.build', 'EXE':'', 'PROVIDER':'backend.so', 'CC':'cc',
+        'NVCC':'nvcc', 'CUDA_RUNTIME_PATH':'/not-used'}.items())
+    def queries(command):
+        if command[:3]==['git','rev-parse','HEAD']:return revision
+        if command[:3]==['git','rev-parse','--show-toplevel']:return str(tree)
+        if command[:2]==['git','status']:return ''
+        if command[0]=='make':return contract
+        return 'synthetic tool identity'
+    def invoke(query_fn, error):
+        report.write_text(json.dumps(old))
+        with patch.object(sys,'argv',args[1:]), patch.object(runner,'query',side_effect=query_fn), patch.object(runner.subprocess,'run',side_effect=subprocess.CalledProcessError(23,['make'])):
+            try:runner.main();raise AssertionError('failed release accepted')
+            except (SystemExit,subprocess.CalledProcessError):pass
+        current=json.loads(report.read_text())
+        assert not current['passed'] and error in current['failure'],current
+        return current
+    current=invoke(queries,'CalledProcessError')
+    assert current['checks']=={'preflight':True},current
+    def wrong_revision(command):
+        return 'b'*40 if command[:3]==['git','rev-parse','HEAD'] else queries(command)
+    invoke(wrong_revision,'differs from checked-out HEAD')
+    def dirty(command):
+        return ' M VERSION' if command[:2]==['git','status'] else queries(command)
+    invoke(dirty,'clean source checkout')
+print('GPU/baseline/model/source preflight and child build failures invalidate stale success atomically')

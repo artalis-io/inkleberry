@@ -37,7 +37,8 @@ CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -l
 include config/sources.mk
 OBJ = $(HOST:src/%.c=$(BUILD_DIR)/%.o)
 PIC = $(HOST:src/%.c=$(BUILD_DIR)/%.pic.o)
-CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh src/cuda/*.h src/cuda/*.hpp)
+IFN_HEADER_DEPS = $(wildcard include/*.h src/*.h)
+CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh src/cuda/*.h src/cuda/*.hpp) src/inkling_geometry.h
 CUDA_MATH = kernels_gemv kernels_inkling kernels_dspark kernels_prefill
 CUDA_OBJECTS = $(addprefix $(BUILD_DIR)/,$(addsuffix .cuda.o,$(CUDA_MATH)))
 ifeq ($(shell uname -s),Darwin)
@@ -545,11 +546,11 @@ $(BUILD_DIR)/cuda-profile.json: tools/cuda_profile.py $(BUILD_DIR)/config
 	$(PYTHON) tools/cuda_profile.py --arch '$(CUDA_ARCH)' $(if $(filter 1,$(EXPERIMENTAL_AMPERE)),--experimental,) --out $@
 $(GPU_STATIC) $(CUDA_STATIC) $(PROVIDER): | $(BUILD_DIR)/cuda-profile.json
 
-$(BUILD_DIR)/cuda-policy-120$(EXE): test/cuda_policy.cpp test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
+$(BUILD_DIR)/cuda-policy-120$(EXE): test/cuda_policy.cpp src/cuda/geometry_contract.hpp src/inkling_geometry.h test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
 	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) $(filter -fsanitize% -fno-sanitize% -fno-omit-frame-pointer -g,$(CFLAGS)) -Itest/cuda-stubs -Icuda -DIFN_CUDA_TARGET_SM=120,$<,$(THREAD_LIBS) $(LDFLAGS),$@)
-$(BUILD_DIR)/cuda-policy-121$(EXE): test/cuda_policy.cpp test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
+$(BUILD_DIR)/cuda-policy-121$(EXE): test/cuda_policy.cpp src/cuda/geometry_contract.hpp src/inkling_geometry.h test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
 	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) $(filter -fsanitize% -fno-sanitize% -fno-omit-frame-pointer -g,$(CFLAGS)) -Itest/cuda-stubs -Icuda -DIFN_CUDA_TARGET_SM=121,$<,$(THREAD_LIBS) $(LDFLAGS),$@)
-$(BUILD_DIR)/cuda-policy-86$(EXE): test/cuda_policy.cpp test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
+$(BUILD_DIR)/cuda-policy-86$(EXE): test/cuda_policy.cpp src/cuda/geometry_contract.hpp src/inkling_geometry.h test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
 	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) $(filter -fsanitize% -fno-sanitize% -fno-omit-frame-pointer -g,$(CFLAGS)) -Itest/cuda-stubs -Icuda -DIFN_CUDA_TARGET_SM=86 -DIFN_CUDA_ENABLE_EXPERIMENTAL_AMPERE=1,$<,$(THREAD_LIBS) $(LDFLAGS),$@)
 .PHONY: cuda-policy-check
 cuda-policy-check: $(BUILD_DIR)/cuda-policy-120$(EXE) $(BUILD_DIR)/cuda-policy-121$(EXE) $(BUILD_DIR)/cuda-policy-86$(EXE)
@@ -572,3 +573,24 @@ $(BUILD_DIR)/conversion-oracles$(EXE): $(BUILD_DIR)/conversion-oracles.o
 .PHONY: conversion-oracle-check
 conversion-oracle-check: generated-check $(BUILD_DIR)/conversion-oracles$(EXE)
 	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/conversion-oracles$(EXE)
+
+.PHONY: release-build-info
+release-build-info:
+	@$(info IFN_RELEASE_BUILD_DIR=$(BUILD_DIR))
+	@$(info IFN_RELEASE_EXE=$(EXE))
+	@$(info IFN_RELEASE_PROVIDER=$(abspath $(PROVIDER)))
+	@$(info IFN_RELEASE_CC=$(CC))
+	@$(info IFN_RELEASE_NVCC=$(NVCC))
+	@$(info IFN_RELEASE_CUDA_RUNTIME_PATH=$(CUDA_RUNTIME_PATH))
+	@:
+
+$(BUILD_DIR)/linear-shapes.o: test/linear_shapes.cu $(CUDA_HEADERS) src/checked_prefill.h $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
+$(BUILD_DIR)/linear-shapes$(EXE): $(BUILD_DIR)/linear-shapes.o $(CUDA_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+.PHONY: linear-shape-check
+linear-shape-check: generated-check $(BUILD_DIR)/linear-shapes$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/linear-shapes$(EXE)
+
+# Compile both benchmark clients in CPU CI; linking/execution remains GPU-only.
+check: $(BUILD_DIR)/native-benchmark.o $(BUILD_DIR)/facade-benchmark.o

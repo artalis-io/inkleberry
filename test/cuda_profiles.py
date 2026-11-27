@@ -33,6 +33,19 @@ with tempfile.TemporaryDirectory(prefix='ifn-target-') as tmp:
         if not expected:
             assert any(x in result.stdout + result.stderr for x in ['experimental', 'unsupported CUDA', 'disagrees', 'must be 0 or 1']), result.stderr
 
+# Exercise the C/CUDA agreement contract, including an intentionally drifted C shape.
+with tempfile.TemporaryDirectory(prefix='ifn-geometry-') as tmp:
+    source = Path(tmp) / 'geometry.cpp'
+    for drift in [False, True]:
+        source.write_text('#include "config.hpp"\n#include "' + (ROOT/'src/inkling_geometry.h').as_posix() + '"\n' +
+                          ('#undef IFN_INKLING_HIDDEN\n#define IFN_INKLING_HIDDEN 2305\n' if drift else '') +
+                          '#include "' + (ROOT/'src/cuda/geometry_contract.hpp').as_posix() + '"\n')
+        result = subprocess.run([x for x in base if x != '-I' + str(ROOT)] + ['-I' + str(ROOT/'test/cuda-stubs'),
+                                        '-I' + str(ROOT/'cuda'), str(source)], capture_output=True, text=True)
+        assert (result.returncode != 0) == drift, (result.stdout, result.stderr)
+        if drift:
+            assert 'Inkling hidden mismatch' in result.stdout + result.stderr
+
 def dry(arguments, success=True):
     result = subprocess.run(['make', '--no-print-directory', '-n', *arguments], cwd=ROOT, capture_output=True, text=True)
     assert (result.returncode == 0) == success, (arguments, result.stdout, result.stderr)
@@ -43,6 +56,11 @@ for arguments in [['CUDA_ARCH=86'], ['CUDA_ARCH=80'], ['CUDA_ARCH='], ['CUDA_ARC
     dry([*arguments, 'gpu-build'], False)
 for arch, opt in [('120a', False), ('121a', False), ('86', True)]:
     args = ['CUDA_ARCH=' + arch] + (['EXPERIMENTAL_AMPERE=1'] if opt else [])
+    contract = dry([*args, 'release-build-info'])
+    assert 'IFN_RELEASE_BUILD_DIR=' in contract and 'IFN_RELEASE_PROVIDER=' in contract
+    assert 'IFN_RELEASE_NVCC=' in contract and 'IFN_RELEASE_CUDA_RUNTIME_PATH=' in contract
+    if opt:
+        assert 'sm86-experimental' in contract or 'cuda86' in contract
     output = dry([*args, 'gpu-build'])
     assert '-DIFN_CUDA_TARGET_SM=' + arch.removesuffix('a') in output
     assert 'arch=compute_' + arch + ',code=sm_' + arch in output

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "application_source_revision": "4cf8966",
+  "test": "native NVFP4 singleton/batched diagnostic",
+  "source_sha256": {
+    "Makefile": "3984bafc98af2a2469df2ab555c5d6d0de985106fee684900cc35b97ef8acaed",
+    "test/linear_shapes.cu": "bf3f5239770ca4cb2a966aa2f357f48856f49902e6b3f5a7b0ea2c93320780db",
+    "src/inkling_geometry.h": "956a67c1ca0285a5e599df4988f132b011fb97b3d5bf8ed333e9783bff9a4eb4",
+    "src/cuda/geometry_contract.hpp": "9abf4b7618a9071757c1dea58bc4780b5efd1edf4b4dd1e75ee1dab460e1470d",
+    "src/cuda/checked_prefill.cu": "67db1a44588e9d6a405f758734f39766b4be3a139cfd6981691040d3bf7be9af",
+    "src/cuda/prefill_resources.hpp": "d16983f70f36f91854a24de43b56fa98af9e5cc0e5520e9ce3664057f4c6c11a",
+    "src/cuda/resource_policy.hpp": "8926d5ed68c979249cc379593ae414f3236f6c1c532ffda9fd95361f50b56028",
+    "src/cuda/checked_weights.cu": "1f9d42ead2cd170ee055453c1ff320add7b1bcc6e64ea8d0e7f4e03fa3db71bf",
+    "src/cuda/launch_policy.hpp": "151a292b61fe744acbbdbecfe873814a96af700889db3557a3a3e37600f3a5ce",
+    "src/cuda/target_profile.h": "5079b62bc82b8c8419d99818c5527c5815f99d438dc51dde1b84f3e747fdb6c1",
+    "config/native-platform-adaptations.json": "c189e54badf61daf2937942fd28e70e8a3fe11be054baba98a843938a9a7b4ed",
+    "cuda/config.hpp": "3d842a016a63b144b5ddaca53308e29338282e8094c8abf2e1caca104cc3765a",
+    "cuda/kernels_gemv.cu": "9ec66121ee758117c0941e1ec483c1689ace634ab4b461f569ac8b1edd6b97d1",
+    "cuda/kernels_prefill.cu": "083d3ed59632f0be5d5359205a7263d10c4a503ded98d43c5cb87446c974f8e9"
+  },
+  "binary_sha256": "66da76deceafee977d4f0a3e6d71edd1da28c84b59d3fd77a1aae558a07824a2",
+  "compiler": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Mon_Oct_12_19:25:48_PDT_2026\nCuda compilation tools, release 13.5, V13.5.37\nBuild cuda_13.5.r13.5/compiler.39125733_0\n",
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition, GPU-5a215cb3-57b0-0a6e-d511-e90bb05c0e05, 595.104.02, 12.0, 2 MiB, 0 %",
+  "build_flags": "cc g++ ar -Iinclude -Isrc -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=3 -O2 -fstack-protector-strong -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Werror -Wl,-z,relro,-z,now,-z,noexecstack\n/usr/local/cuda -O3 --use_fast_math -std=c++20 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -Icuda -DIFN_CUDA_TARGET_SM=120 -DIFN_CUDA_ENABLE_EXPERIMENTAL_AMPERE=0 -Xcompiler=-fPIC,-fvisibility=hidden -std=c++11 -Wall -Wextra -Werror -L/usr/local/cuda/lib64 -lcudart -lcublas -L/usr/local/cuda/lib64/stubs -lcuda -lstdc++ -lm -lpthread  -shared -Wl,-soname,libinkleberry_backend.so.1 -Wl,--version-script=src/infer.exports -Wl,-z,defs 0.2.0-dev 1 -fPIE -pie\n",
+  "results": [
+    {
+      "cols": 2304,
+      "rows": 32,
+      "batch": 1,
+      "max_reference_error": 0.1455078125,
+      "max_singleton_difference": 0,
+      "different_elements": 0,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 2304,
+      "rows": 32,
+      "batch": 2,
+      "max_reference_error": 0,
+      "max_singleton_difference": 0.1455078125,
+      "different_elements": 64,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 2304,
+      "rows": 32,
+      "batch": 4,
+      "max_reference_error": 0,
+      "max_singleton_difference": 0.1455078125,
+      "different_elements": 128,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 2304,
+      "rows": 32,
+      "batch": 8,
+      "max_reference_error": 0,
+      "max_singleton_difference": 0.1455078125,
+      "different_elements": 256,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 3072,
+      "rows": 32,
+      "batch": 1,
+      "max_reference_error": 0.18994140625,
+      "max_singleton_difference": 0,
+      "different_elements": 0,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 3072,
+      "rows": 32,
+      "batch": 2,
+      "max_reference_error": 0,
+      "max_singleton_difference": 0.18994140625,
+      "different_elements": 64,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 3072,
+      "rows": 32,
+      "batch": 4,
+      "max_reference_error": 0,
+      "max_singleton_difference": 0.18994140625,
+      "different_elements": 128,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    },
+    {
+      "cols": 3072,
+      "rows": 32,
+      "batch": 8,
+      "max_reference_error": 0,
+      "max_singleton_difference": 0.18994140625,
+      "different_elements": 256,
+      "repetitions_per_mode": 5,
+      "eager_graph_equal": true
+    }
+  ],
+  "checked_prefill_preparation_contexts": 2,
+  "model_backed": false,
+  "cross_device_equivalence_established": false
+}

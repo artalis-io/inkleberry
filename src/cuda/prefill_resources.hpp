@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #ifndef IFN_CUDA_PREFILL_RESOURCES_HPP
 #define IFN_CUDA_PREFILL_RESOURCES_HPP
-#include "target_profile.h"
 #include "resource_policy.hpp"
 #define IFN_CUDA_PREFILL_RESOURCE_TRY(call)                                                        \
     do {                                                                                           \
@@ -9,7 +8,7 @@
         if (ifn_error__ != cudaSuccess)                                                            \
             return (int)ifn_error__;                                                               \
     } while (0)
-#if !IFN_CUDA_USE_PDL
+
 template <int FMT, ifn_cuda::ifn_cuda_wgemm_mode MODE, int K, int TM>
 inline cudaError_t ifn_cuda_prepare_wgemm() {
     return ifn_cuda_prepare_shared(ifn_cuda::ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>,
@@ -44,7 +43,6 @@ inline int ifn_cuda_prepare_prefill_resources() {
                                 ifn_cuda::IFN_CUDA_INTERMEDIATE, 128>()));
     return 0;
 }
-#endif
 
 #undef IFN_CUDA_PREFILL_RESOURCE_TRY
 #endif

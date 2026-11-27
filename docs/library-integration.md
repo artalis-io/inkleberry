@@ -102,7 +102,14 @@ atomically replaces the current receipt with a new run ID and `passed: false`
 before preflight; all validation/build failures publish failed evidence. Consumers
 must check that current receipt and the command exit status, rather than trusting
 leftover logs from earlier runs. Supply
-`--source-revision` when running an exact extracted source tree without `.git`.
+`--source-revision` to assert the current checkout revision. Release evidence now
+requires a clean Git checkout and rejects a supplied revision that differs from
+HEAD; an extracted tree cannot establish commit provenance from a string alone.
+Extracted-package checks remain available separately. Make resolves native build,
+compiler and CUDA paths for the selected platform. New benchmark campaigns record
+SHA-256 fingerprints of canonical little-endian input token IDs and request
+settings; historical v1 records remain readable, but are not equivalent evidence
+of exact input identity.
 Never label modified sources with an unrelated commit.
 
 Maintain comparable baselines on the same reserved device/toolchain with the same
