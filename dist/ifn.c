@@ -5256,8 +5256,8 @@ void ifn_ar_layout(ifn_session *s, size_t groups) {
     s->exp_groups = ifn_am_engine_layout_ifn_engine_layout_local_take(s, groups, 1);
     IFN_ENGINE_LAYOUT_LOCAL_H(moe_act_h, 8 * 8 * IFN_INKLING_INTERMEDIATE);
     IFN_ENGINE_LAYOUT_LOCAL_F(moe_down, 8 * IFN_INKLING_HIDDEN);
-    IFN_ENGINE_LAYOUT_LOCAL_F(lm_blk_val, 8 * IFN_INKLING_KV);
-    IFN_ENGINE_LAYOUT_LOCAL_F(lm_blk_idx, 8 * IFN_INKLING_KV);
+    IFN_ENGINE_LAYOUT_LOCAL_F(lm_blk_val, 8 * 1024);
+    IFN_ENGINE_LAYOUT_LOCAL_F(lm_blk_idx, 8 * 1024);
     IFN_ENGINE_LAYOUT_LOCAL_F(lm_logits, 8 * IFN_INKLING_VOCAB);
     s->d_sample_cfg = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 1, sizeof(ifn_cuda_c_sample_config));
     s->d_loopcd_cfg = ifn_am_engine_layout_ifn_engine_layout_local_take(s, 1, sizeof(ifn_cuda_c_loop_cd_config));
@@ -5293,7 +5293,7 @@ void ifn_ar_layout(ifn_session *s, size_t groups) {
     IFN_ENGINE_LAYOUT_LOCAL_F(p_router_logits, P * 128);
     IFN_ENGINE_LAYOUT_LOCAL_F(p_route_ids, P * 8);
     IFN_ENGINE_LAYOUT_LOCAL_F(p_route_w, P * 8);
-    IFN_ENGINE_LAYOUT_LOCAL_F(p_exp_offsets, IFN_INKLING_KV);
+    IFN_ENGINE_LAYOUT_LOCAL_F(p_exp_offsets, 1024);
     IFN_ENGINE_LAYOUT_LOCAL_F(p_sorted_tok, P * 8);
     IFN_ENGINE_LAYOUT_LOCAL_F(p_sorted_slot, P * 8);
     IFN_ENGINE_LAYOUT_LOCAL_F(p_sorted_w, P * 8);
