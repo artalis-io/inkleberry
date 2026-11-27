@@ -181,6 +181,7 @@
     "test/install_contract.py",
     "test/installed_consumer.c",
     "test/installed_gpu_consumer.c",
+    "test/linear_shapes.cu",
     "test/lint_boundaries.py",
     "test/lookup.c",
     "test/mmap.c",

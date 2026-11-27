@@ -8,6 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include "host_clock.h"
+#include "sha256.h"
 
 static uint64_t ifn_benchmark_now(void) {
     return ifn_host_now_ns();
@@ -107,6 +108,21 @@ int main(int argc, char **argv) {
     IFN_BENCH_TRY(api->session_create(model, &sc, &facade, &error));
     IFN_BENCH_TRY(api->session_prepare(facade, &error));
 #endif
+    char representation[128];
+#ifndef IFN_BENCH_FACADE
+    int representation_bytes =
+        snprintf(representation, sizeof representation, "engine/%u/%u/%u/%u/%u", wc.mode,
+                 wc.with_mtp, wc.mtp_bf16, sc.kv_format, sc.use_graphs);
+#else
+    int representation_bytes =
+        snprintf(representation, sizeof representation, "facade/%.*s/%.*s",
+                 (int)mc.weight_profile.bytes, (const char *)mc.weight_profile.data,
+                 (int)sc.execution_profile.bytes, (const char *)sc.execution_profile.data);
+#endif
+    if (representation_bytes < 0 || (size_t)representation_bytes >= sizeof representation) {
+        rc = IFN_LIMIT;
+        goto done;
+    }
     static const char *const ifn_benchmark_prompts[] = {
         "What is 9 + 8? Answer with the number only.",
         "Explain briefly why a delivery truck must obey a gross vehicle weight limit.",
@@ -139,6 +155,34 @@ int main(int argc, char **argv) {
             options.adaptive = options.prompt_lookup = profile == 2;
             options.temperature = profile == 3 ? 0.7f : 0;
             options.seed = 42;
+            ifn_sha256 input_hash;
+            unsigned char hash[32];
+            char input_sha[65], config_sha[65], settings[512];
+            ifn_sha256_init(&input_hash);
+            for (size_t i = 0; i < count; i++) {
+                uint32_t token = (uint32_t)ids[i];
+                unsigned char le[4] = {(unsigned char)token, (unsigned char)(token >> 8),
+                                       (unsigned char)(token >> 16), (unsigned char)(token >> 24)};
+                if (!ifn_sha256_update(&input_hash, le, sizeof le)) {
+                    rc = IFN_LIMIT;
+                    goto done;
+                }
+            }
+            ifn_sha256_final(&input_hash, hash);
+            ifn_sha256_hex(hash, input_sha);
+            int length =
+                snprintf(settings, sizeof settings,
+                         "native-benchmark-v2/%s/%llu/96/%a/%a/%d/%llu/%u/%u/%u/%a", representation,
+                         (unsigned long long)sc.context_tokens, (double)options.temperature,
+                         (double)options.top_p, options.top_k, (unsigned long long)options.seed,
+                         options.draft_tokens, options.adaptive, options.prompt_lookup,
+                         (double)options.spec_threshold);
+            if (length < 0 || (size_t)length >= sizeof settings ||
+                !ifn_sha256_hash(settings, (size_t)length, hash)) {
+                rc = IFN_LIMIT;
+                goto done;
+            }
+            ifn_sha256_hex(hash, config_sha);
             for (unsigned run = 0; run < 6; run++) {
 #ifndef IFN_BENCH_FACADE
                 IFN_BENCH_TRY(ifn_session_reset(session));
@@ -188,11 +232,13 @@ int main(int argc, char **argv) {
                 IFN_BENCH_TRY(api->request_close(&request, &error));
 #endif
                 uint64_t end = ifn_benchmark_now();
-                printf("{\"case\":%u,\"profile\":\"%s\",\"run\":%u,\"warmup\":%s,\"prompt_tokens\":"
+                printf("{\"workload_revision\":\"native-benchmark-v2\","
+                       "\"input_sha256\":\"%s\",\"config_sha256\":\"%s\",\"case\":%u,\"profile\":"
+                       "\"%s\",\"run\":%u,\"warmup\":%s,\"prompt_tokens\":"
                        "%zu,\"elapsed_ns\":%llu,\"first_token_ns\":%llu,\"generated\":%u,"
                        "\"drafts\":%u,\"accepted\":%u,\"tokens\":[",
-                       c, ifn_benchmark_profiles[profile], run, run ? "false" : "true", count,
-                       (unsigned long long)(end - start),
+                       input_sha, config_sha, c, ifn_benchmark_profiles[profile], run,
+                       run ? "false" : "true", count, (unsigned long long)(end - start),
                        (unsigned long long)(clock.first ? clock.first - start : 0),
                        stats.generation.generated_tokens, stats.total_drafts,
                        stats.accepted_drafts);

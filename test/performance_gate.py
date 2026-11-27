@@ -19,3 +19,20 @@ with tempfile.TemporaryDirectory() as tmp:
     try:m.records(b);raise AssertionError('incomplete repetitions accepted')
     except ValueError:pass
 print('Performance/quality gate rejects slower, changed-output and incomplete campaigns')
+
+# Non-first repetitions must have the same inputs/settings, not only output.
+with tempfile.TemporaryDirectory() as tmp:
+    path=Path(tmp)/'records.jsonl'
+    def rejected(changed):
+        path.write_text('\n'.join(json.dumps(r) for r in changed))
+        try:m.records(path);raise AssertionError('invalid campaign accepted')
+        except ValueError:pass
+    for field,value in [('prompt_tokens',33),('run',0),('case',7),('elapsed_ns',0)]:
+        bad=copy.deepcopy(rows);bad[1][field]=value;rejected(bad)
+    identified=copy.deepcopy(rows)
+    for r in identified:r.update(workload_revision='native-benchmark-v2',input_sha256='a'*64,config_sha256='b'*64)
+    path.write_text('\n'.join(json.dumps(r) for r in identified));m.records(path,require_identity=True)
+    for field,value in [('input_sha256','c'*64),('config_sha256','c'*64),('workload_revision','other')]:
+        bad=copy.deepcopy(identified);bad[1][field]=value;rejected(bad)
+    bad=copy.deepcopy(identified);del bad[1]['config_sha256'];rejected(bad)
+print('Mixed prompts/settings, duplicate repetitions and malformed identities rejected')

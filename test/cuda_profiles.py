@@ -56,6 +56,11 @@ for arguments in [['CUDA_ARCH=86'], ['CUDA_ARCH=80'], ['CUDA_ARCH='], ['CUDA_ARC
     dry([*arguments, 'gpu-build'], False)
 for arch, opt in [('120a', False), ('121a', False), ('86', True)]:
     args = ['CUDA_ARCH=' + arch] + (['EXPERIMENTAL_AMPERE=1'] if opt else [])
+    contract = dry([*args, 'release-build-info'])
+    assert 'IFN_RELEASE_BUILD_DIR=' in contract and 'IFN_RELEASE_PROVIDER=' in contract
+    assert 'IFN_RELEASE_NVCC=' in contract and 'IFN_RELEASE_CUDA_RUNTIME_PATH=' in contract
+    if opt:
+        assert 'sm86-experimental' in contract or 'cuda86' in contract
     output = dry([*args, 'gpu-build'])
     assert '-DIFN_CUDA_TARGET_SM=' + arch.removesuffix('a') in output
     assert 'arch=compute_' + arch + ',code=sm_' + arch in output
