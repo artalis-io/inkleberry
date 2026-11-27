@@ -44,7 +44,11 @@ def validate(records):
             raise ValueError('Unpaired result')
         if result.get('valid') is not True or result.get('disposition') != 'next-request':
             raise ValueError('Invalid result/disposition')
+        if result['tokens'] != len(result['output']):
+            raise ValueError('Token accounting mismatch')
         if step == 2:
+            if (result['tokens'] > 0) != (mode == 0):
+                raise ValueError('Cancellation occurred in the wrong output phase')
             modes.add(mode)
             if result['status'] != 11:  # IFN_CANCELLED, frozen public status
                 raise ValueError('Injected cancellation did not cancel')
@@ -63,7 +67,13 @@ def validate(records):
         metrics = {}
         for field in ('rss_bytes', 'ttft_ns', 'run_ns', 'decode_ns'):
             samples = [v[field] for v in values]
-            metrics[field] = dict(min=min(samples), median=statistics.median(samples), max=max(samples))
+            metrics[field] = dict(min=min(samples), median=statistics.median(samples), max=max(samples),
+                                  stdev=statistics.pstdev(samples))
+        rates = [(v['tokens'] - 1) * 1e9 / v['decode_ns'] for v in values
+                 if v['tokens'] > 1 and v['decode_ns'] > 0]
+        metrics['decode_tokens_per_second'] = (dict(min=min(rates), median=statistics.median(rates),
+                                                   max=max(rates), stdev=statistics.pstdev(rates))
+                                               if rates else None)
         summaries[key] = dict(samples=len(values), metrics=metrics)
     return dict(passed=True, seed=start['seed'], cycles=cycles, requests=cycles * 5,
                 cancellation_modes=sorted(modes), all_modes_exercised=modes == {0, 1, 2},

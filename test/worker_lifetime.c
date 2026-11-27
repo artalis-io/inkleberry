@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
     ifn_infer_model *model = NULL;
     ifn_infer_session *session = NULL;
     ifn_infer_request *request = NULL;
-    ifn_worker_output baseline[2] = {{0}};
+    ifn_worker_output baseline[2] = {0};
     ifn_infer_model_config_v1 mc;
     ifn_infer_session_config_v1 sc;
     ifn_infer_request_config_v1 rc;
@@ -247,10 +247,10 @@ int main(int argc, char **argv) {
             printf("{\"kind\":\"result\",\"cycle\":%" PRIu64
                    ",\"step\":%u,\"mode\":%u,\"status\":%d,"
                    "\"valid\":%s,\"reuse\":%" PRIu64 ",\"tokens\":%zu,\"rss_bytes\":%" PRIu64
-                   ",\"run_ns\":%" PRIu64 ",\"ttft_ns\":%" PRIu64 ",\"decode_ns\":%" PRIu64
-                   ",\"disposition\":\"next-request\",\"output\":[",
+                   ",\"started_ns\":%" PRIu64 ",\"run_ns\":%" PRIu64 ",\"ttft_ns\":%" PRIu64
+                   ",\"decode_ns\":%" PRIu64 ",\"disposition\":\"next-request\",\"output\":[",
                    cycle, step, mode, (int)status, valid ? "true" : "false",
-                   result.prefix_reused_tokens, out.count, ifn_worker_rss(), result.run_ns,
+                   result.prefix_reused_tokens, out.count, ifn_worker_rss(), started, result.run_ns,
                    out.first_ns ? out.first_ns - started : 0,
                    out.first_ns ? out.last_ns - out.first_ns : 0);
             for (size_t i = 0; i < out.count; i++)

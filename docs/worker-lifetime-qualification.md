@@ -117,7 +117,11 @@ identity here is same-device regression evidence, not cross-device quality evide
 
 ## Execution record
 
-Implemented CPU adversarial tests pass. Native GPU and overnight qualification have
+Eight CPU adversarial/supervisor tests pass on both the controller and core-1.
+The real sm_120a provider builds and installs into an isolated core-1 prefix, and
+the client compiles/links using only that installed SDK; `ldd` resolves the installed
+provider and CUDA 13 runtime. Full controller `make check` and lint pass.
+Native GPU inference and overnight qualification have
 **not run**: discovery found both core-1 RTX PRO 6000 GPUs occupied by a two-GPU vLLM
 worker (~55 GB each). No workload was stopped. Proven mid-prefill cancellation,
 poisoned-session recovery and device-loss recovery remain unqualified in this client.
