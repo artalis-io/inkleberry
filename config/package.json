@@ -193,6 +193,7 @@
     "test/native_namespace.py",
     "test/native_release.py",
     "test/native_symbols.py",
+    "test/numerical.c",
     "test/package_policy.py",
     "test/packing.cu",
     "test/performance_gate.py",

@@ -5319,12 +5319,21 @@ void ifn_ar_layout(ifn_session *s, size_t groups) {
  * Target-forward translation of pinned Engine.record_target_forward. Optional
  * DSpark commit/verification; ablation and LoopCD remain disabled. */
 
+#ifdef IFN_TEST_NUMERICS
+void ifn_test_numeric_trace(ifn_session *, int32_t, unsigned, const char *, const float *, size_t);
+#define IFN_NUMERIC_TAP(visit, stage, data, width)                                                 \
+    ifn_test_numeric_trace(s, batch, visit, stage, data, width)
+#else
+#define IFN_NUMERIC_TAP(visit, stage, data, width) ((void)0)
+#endif
+
 void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
     const ifn_ar_model *w = &s->model;
     void *stream = s->stream;
     int32_t blocks = 0;
     bool prior = false, pending = false;
     ifn_launch_embed_norm(w->embed, w->embed_norm, s->d_tokens, s->hidden, batch, stream);
+    IFN_NUMERIC_TAP(0, "embedding", s->hidden, 2304);
     for (unsigned vi = 0; vi < 48; vi++) {
         ifn_visit v = s->schedule[vi];
         unsigned l = v.layer;
@@ -5410,6 +5419,7 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
                                                     outs, half ? out_h : NULL, 3, s->ctrl_msg,
                                                     s->ctrl_cat, s->ctrl_d, batch, stream);
         }
+        IFN_NUMERIC_TAP(vi, "attention_input", s->attn_in[0], 2304);
         float *in_q = s->attn_in[0], *in_k = s->attn_in[distinct ? 1 : 0],
               *in_v = s->attn_in[distinct ? 2 : 0];
         if (half)
@@ -5421,6 +5431,8 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             ifn_launch_linear(&lw->w_k, in_k, s->k_proj, batch, 0, stream);
             ifn_launch_linear(&lw->w_v, in_v, s->v_proj, batch, 0, stream);
         }
+        IFN_NUMERIC_TAP(vi, "qrgs", s->qrgs, 6552);
+        IFN_NUMERIC_TAP(vi, "key_projection", s->k_proj, 1024);
         if (v.global)
             ifn_launch_mega_global_sconv_prep_store(
                 s->qrgs, s->k_proj, s->v_proj, in_k, in_v, lw->k_sconv_w, lw->v_sconv_w,
@@ -5441,6 +5453,7 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             ifn_launch_linear_h(&lw->w_o, s->attn_gated_h, s->o_proj, batch, 0, stream);
         else
             ifn_launch_linear(&lw->w_o, s->attn_gated, s->o_proj, batch, 0, stream);
+        IFN_NUMERIC_TAP(vi, "attention_output_projection", s->o_proj, 2304);
         bool boundary = l % 6 == 0;
         ifn_launch_mega_attn_post_mlp_in(
             s->o_proj, lw->attn_sconv_w, s->attn_ring[vi], s->hidden, s->partial, s->blocks, blocks,
@@ -5470,10 +5483,13 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
         else
             ifn_launch_route_topk(s->mlp_normed, lw->router_w, lw->router_bias, s->router_logits,
                                   s->route_ids, s->route_w, NULL, batch, stream);
+        IFN_NUMERIC_TAP(vi, "router_logits", s->router_logits, 128);
+        IFN_NUMERIC_TAP(vi, "router_weights", s->route_w, 8);
         ifn_launch_moe_gate_up_h(&lw->w13, s->mlp_normed_h, s->route_ids, s->exp_groups,
                                  s->moe_act_h, batch, stream);
         ifn_launch_moe_down_h(&lw->w2, s->moe_act_h, s->route_ids, s->route_w, s->exp_groups,
                               s->moe_down, batch, stream);
+        IFN_NUMERIC_TAP(vi, "moe_output", s->moe_down, 2304);
         if (vi == 17 || vi == 29) {
             ifn_launch_mega_mlp_post_res(
                 s->moe_down, 0, lw->mlp_sconv_w, s->mlp_ring[vi], s->residual, s->hidden,
@@ -5490,6 +5506,7 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
         blocks, w->output_query, w->final_norm, NULL, NULL, s->mlp_normed, NULL, NULL, NULL, NULL,
         NULL, 1, batch, s->d_pos, NULL, NULL, NULL, NULL, NULL, NULL, stream);
     ifn_spec_commit(s, s->taps, batch, s->d_pos);
+    IFN_NUMERIC_TAP(48, "final_norm", s->mlp_normed, 2304);
     if (lm)
         ifn_launch_lm_head_argmax(
             &w->unembed, s->mlp_normed, s->d_next_tokens, s->lm_logits, s->lm_blk_val,
@@ -5498,8 +5515,15 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
             s->verifying ? s->d_draft_is_delta : NULL,
             s->verifying ? w->dspark.inv_draft_vocab_ids : NULL, w->dspark.draft_vocab_size, batch,
             stream);
+    if (lm) {
+        IFN_NUMERIC_TAP(48, "logits", s->lm_logits, 200058);
+    }
 }
 
+#undef IFN_NUMERIC_TAP
+
+#undef IFN_NUMERIC_TAP
+#undef IFN_NUMERIC_TAP
 
 /* Module: src/engine_spec.c */
 /* SPDX-License-Identifier: Apache-2.0

@@ -594,3 +594,12 @@ linear-shape-check: generated-check $(BUILD_DIR)/linear-shapes$(EXE)
 
 # Compile both benchmark clients in CPU CI; linking/execution remains GPU-only.
 check: $(BUILD_DIR)/native-benchmark.o $(BUILD_DIR)/facade-benchmark.o
+
+# Test instrumentation replaces only this archive member; production builds do not enable taps.
+$(BUILD_DIR)/numerical-forward.o: src/engine_forward.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_TEST_NUMERICS,$<,$@)
+$(BUILD_DIR)/numerical.o: test/numerical.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/numerical$(EXE): $(BUILD_DIR)/numerical.o $(BUILD_DIR)/numerical-forward.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+check: $(BUILD_DIR)/numerical.o $(BUILD_DIR)/numerical-forward.o
