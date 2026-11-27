@@ -16,7 +16,8 @@ Every response must finish with EOS and contain one complete final-answer
 channel. The validator rejects incomplete/truncated responses, malformed text,
 duplicate JSON keys, incorrect answers, and obvious repeated eight-word loops
 in either reasoning or final text. A prose pass checks word count, paragraph
-structure, topic words and lexical diversity. **These are structural smoke
+structure and lexical diversity. Topic and meaning require manual review;
+valid descriptions need not literally repeat the words in the prompt. **These are structural smoke
 checks, not proof of general coherence or semantic quality.** Review the saved
 prose manually; do not turn those heuristics into a broad quality claim.
 

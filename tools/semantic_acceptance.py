@@ -83,9 +83,8 @@ def check_answer(case, text):
     elif case == 'prose':
         words = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", text)
         if (not 40 <= len(words) <= 70 or '\n' in text or text[-1] not in '.!?' or
-                len(set(w.lower() for w in words)) / len(words) < .45 or
-                not {'autumn', 'morning'} <= {w.lower() for w in words}):
-            raise ValueError('Paragraph length, structure, topic or lexical-diversity failure')
+                len(set(w.lower() for w in words)) / len(words) < .45):
+            raise ValueError('Paragraph length, structure or lexical-diversity failure')
     elif case == 'code':
         match = re.fullmatch(r'```(?:c|C)?\s*\n(.*?)\n```', text, re.S)
         return match[1] if match else text
@@ -105,8 +104,10 @@ int main(void) {
     const int b[] = {INT_MIN};
     const int c[] = {2, INT_MAX, 2, -1};
     const int d[] = {5, 5, 5};
+    const int e[] = {2, -9, 11};
     if (max_int_array(a, 3) != -3 || max_int_array(b, 1) != INT_MIN ||
         max_int_array(c, 4) != INT_MAX || max_int_array(d, 3) != 5 ||
+        max_int_array(e, 3) != 11 ||
         a[0] != -9 || a[1] != -3 || a[2] != -7) return 1;
     return 0;
 }
@@ -176,6 +177,8 @@ def assess(a):
         raise ValueError('Missing or duplicated case/profile')
     image = subprocess.check_output(['docker','image','inspect',a.code_image,'--format={{.Id}}'], text=True, timeout=30).strip()
     report = {'suite': 'semantic-v1', 'passed': False, 'code_image_id': image,
+              'validator_sha256': digest(Path(__file__)),
+              'manual_review_required': ['prose'],
               'coherence_claim': 'Structural/topic smoke checks only; prose needs human review', 'cases': []}
     for row in rows:
         case, profile = row['case'], row['profile'];name = case+'-'+profile

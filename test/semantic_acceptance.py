@@ -34,12 +34,13 @@ class Acceptance(unittest.TestCase):
         raw=framed('455').replace('Check the task.','one two three four five six seven eight '*8)
         with self.assertRaises(ValueError):s.final_answer(raw,META)
         with self.assertRaises(ValueError):s.final_answer(framed('\ufffd'),META)
-    def test_prose_structure_and_topic(self):
+    def test_prose_structure_without_literal_topic_requirement(self):
         text=('On a quiet autumn morning, pale sunlight settles across the garden while leaves drift onto the damp path. '
               'A small bird calls from the hedge, and a breeze carries the scent of earth toward the open window. '
               'The street remains still as the day begins.')
         s.check_answer('prose',text)
-        for bad in ['Too short.',text+'\nAnother paragraph.',text[:-1],text.replace('autumn','summer')]:
+        s.check_answer('prose',text.replace('autumn','fall'))
+        for bad in ['Too short.',text+'\nAnother paragraph.',text[:-1]]:
             with self.assertRaises(ValueError):s.check_answer('prose',bad)
     def test_code_fence_and_container_failure_cleanup(self):
         self.assertEqual(s.check_answer('code','```c\nint f(void){return 0;}\n```'),'int f(void){return 0;}')
@@ -55,6 +56,27 @@ class Acceptance(unittest.TestCase):
         with patch.object(s.subprocess,'run',side_effect=[subprocess.TimeoutExpired('docker',30),subprocess.CompletedProcess([],0)]) as run:
             with self.assertRaises(subprocess.TimeoutExpired):s.compile_and_test('x','gcc:14.2.0')
             self.assertEqual(run.call_count,2)
+    def test_complete_campaign_cannot_hide_wrong_answer(self):
+        import argparse
+        answers={'arithmetic':'999','negative':'-53','copy':'aB7-041_xZ','retrieval':'COBALT-7319',
+                 'json':'{"name":"Acme","quantity":17,"urgent":false}',
+                 'code':'int max_int_array(const int*a,size_t n){return a[n-1];}',
+                 'prose':('On a quiet autumn morning, pale sunlight settles across the garden while leaves drift onto the damp path. '
+                          'A small bird calls from the hedge, and a breeze carries the scent of earth toward the open window. '
+                          'The street remains still as the day begins.')}
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);rows=[]
+            for case,prompt in s.CASES.items():
+                rows.append({'case':case,'profile':'ar','returncode':0,'prompt_sha256':s.hashlib.sha256(prompt.encode()).hexdigest()})
+                (root/(case+'-ar.raw.txt')).write_text('Idle GPU preflight: fixture\n'+framed(answers[case]))
+                (root/(case+'-ar.stderr.txt')).write_text(json.dumps(dict(META,profile=0)))
+            (root/'run.json').write_text(json.dumps({'suite':'semantic-v1','complete':True,'profiles':['ar'],'runs':rows}))
+            args=argparse.Namespace(input=root,out=root/'report.json',code_image='gcc:14.2.0')
+            with patch.object(s.subprocess,'check_output',return_value='image-id'),patch.object(s,'compile_and_test'),patch('builtins.print'):
+                self.assertEqual(s.assess(args),1)
+            report=json.loads(args.out.read_text());self.assertFalse(report['passed'])
+            self.assertFalse(report['cases'][0]['passed']);self.assertEqual(len(report['cases']),7)
+
     def test_incomplete_or_duplicate_campaign_rejected(self):
         import argparse
         with tempfile.TemporaryDirectory() as tmp:
