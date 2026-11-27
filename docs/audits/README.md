@@ -45,3 +45,6 @@ It does not introduce a C parser, orchestration framework or strict-math mode.
 For a full `/c-audit`, follow the local skill and produce a findings report.
 GPU runs remain explicit, guarded operations. Do not repeat expensive hardware
 campaigns for documentation-only audit migration or present old runs as new ones.
+
+See [maturity comparison](maturity-comparison.md) for remaining quality, coverage
+and architecture priorities after the audit findings are resolved.

@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2026 tensorfish; Copyright (c) 2026 Artalis
  * Original kernels, additive error-returning dispatch with session-owned cuBLAS.
- * Compile this instead of a second kernels_prefill object. Original entrypoints
- * remain available to the Zig oracle but are never used by the C session. */
+ * Compile this instead of a second kernels_prefill object. Retained private
+ * entrypoints preserve source compatibility; the C session uses checked adapters. */
 #include "../../cuda/kernels_prefill.cu"
 #include "geometry_contract.hpp"
 #include "../checked_prefill.h"

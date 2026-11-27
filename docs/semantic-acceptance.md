@@ -47,8 +47,10 @@ python3 tools/semantic_acceptance.py run \
   --profiles ar fixed adaptive sampled --out /external/new-semantic-run
 ```
 
-Record a clean exact source revision when building. The receipt records that
-revision, executable/model checksums, prompt hashes and selected profiles.
+A checkout run verifies the exact HEAD, clean status and allowlisted source hashes
+before model access and again before collection completion. The receipt records
+the verification mode, executable/model checksums, prompt hashes and profiles.
+Executable identity is recorded separately; this is not a signed build attestation.
 Raw special-token output and termination statistics are retained per case. A
 failed GPU process stops the campaign; it cannot become a successful assessment.
 Run completion means collection finished, **not** that answers passed.
@@ -68,3 +70,26 @@ and text outputs between machines without copying the model. Do not claim a GPU
 passed based on CPU CI: `make check` compiles the client and tests validator
 failure paths without running inference or generated code. Separate task success
 from existing numerical, performance and distribution-preservation gates.
+
+## Isolated source archives
+
+From a clean controller checkout, capture a manifest outside the source tree
+before transferring the matching source archive:
+
+```sh
+python3 tools/semantic_acceptance.py source-manifest --out /external/source-manifest.json
+```
+
+In the extracted tree, add `--source-manifest /external/source-manifest.json` to
+the `run` command. The revision and every allowlisted file hash must match. This
+mode is explicitly labeled an operator-attested archive: file contents are
+verified, but an unsigned manifest does not independently prove a Git commit or
+that an arbitrary executable was built from it. A missing/mismatched manifest
+fails closed. Historical receipts keep their original provenance labels.
+
+The collector owns a POSIX process group or Windows Job Object, with a startup
+handshake before the real command launches. Timeout, catchable interruption and
+normal wrapper exit clean up owned descendants; other host processes are never
+targeted. Windows Job assignment failure stops before GPU execution. POSIX
+uncatchable supervisor death or a deliberately detached descendant requires
+external supervision; this helper is not a host watchdog.

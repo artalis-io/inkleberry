@@ -77,7 +77,6 @@ void ifn_ar_forward(ifn_session *s, int32_t batch, bool lm) {
                 o[0], o[1], o[2], oh[0], oh[1], oh[2], count, batch, s->d_pos, NULL, NULL, NULL,
                 vi == 42 ? s->loopcd_h1 : NULL, vi == 42 ? s->loopcd_h2 : NULL,
                 vi == 42 ? s->d_loopcd_cfg : NULL, stream);
-            pending = false;
         } else
             ifn_launch_fused_depth_norm(s->hidden, partial, s->blocks, blocks,
                                         l ? w->attn_queries[l - 1] : NULL, n[0], n[1], n[2], o[0],

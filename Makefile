@@ -630,3 +630,8 @@ audit-boundary-check:
 check: audit-boundary-check
 audit-check: generated-check audit-boundary-check
 	$(PYTHON) tools/lint.py
+
+.PHONY: qualification-safety-check
+qualification-safety-check:
+	$(PYTHON) test/qualification_safety.py
+check: qualification-safety-check

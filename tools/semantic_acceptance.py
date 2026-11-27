@@ -13,6 +13,8 @@ import sys
 import tempfile
 import time
 from model_release import FILES, digest
+from process_tree import run as run_owned
+from qualification_source import verify as verify_source, capture as capture_source
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ('ar', 'fixed', 'adaptive', 'sampled')
@@ -142,8 +144,10 @@ def run(a):
         raise ValueError('Exact source revision required')
     if len(set(a.profiles)) != len(a.profiles):
         raise ValueError('Duplicate execution profile')
+    source=verify_source(ROOT,a.source_revision,getattr(a,'source_manifest',None))
     a.out.mkdir(parents=True, exist_ok=False)
     manifest = {'suite': 'semantic-v1', 'source_revision': a.source_revision,
+                'source_verification':source,
                 'gpu_uuid': a.gpu, 'cuda_runtime': a.cuda_runtime, 'platform': platform.platform(),
                 'binary_sha256': digest(a.binary), 'model': {n: digest(a.model/n) for n in FILES},
                 'profiles': a.profiles, 'started_at': time.time(), 'complete': False, 'runs': []}
@@ -158,13 +162,15 @@ def run(a):
                        str(a.binary.resolve()), str(a.model.resolve()), str(prompt_file.resolve()),
                        str(PROFILES.index(profile))]
             with (a.out/(name+'.raw.txt')).open('wb') as out, (a.out/(name+'.stderr.txt')).open('wb') as err:
-                result = subprocess.run(command, stdout=out, stderr=err, env=env, timeout=650)
+                result = run_owned(command, stdout=out, stderr=err, env=env, timeout=650)
             manifest['runs'].append({'case': case, 'profile': profile, 'returncode': result.returncode,
                                       'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest()})
             report.write_text(json.dumps(manifest, indent=2))
             if result.returncode:
                 raise ValueError('GPU run failed; see ' + name + '.stderr.txt')
             print('Completed', name, flush=True)
+    if verify_source(ROOT,a.source_revision,getattr(a,'source_manifest',None))!=source:
+        raise ValueError('Source changed during qualification')
     manifest['complete'] = True
     report.write_text(json.dumps(manifest, indent=2))
 
@@ -220,11 +226,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__);sub = parser.add_subparsers(dest='command', required=True)
     p = sub.add_parser('run');p.add_argument('--binary',type=Path,required=True);p.add_argument('--model',type=Path,required=True)
     p.add_argument('--gpu',required=True);p.add_argument('--cuda-runtime',required=True);p.add_argument('--source-revision',required=True)
+    p.add_argument('--source-manifest',type=Path,help='Explicit source-archive manifest captured from a clean checkout');
     p.add_argument('--profiles',nargs='+',choices=PROFILES,default=['ar','adaptive']);p.add_argument('--out',type=Path,required=True)
     p = sub.add_parser('assess');p.add_argument('--input',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
     p.add_argument('--code-image',default='gcc:14.2.0')
+    p = sub.add_parser('source-manifest');p.add_argument('--out',type=Path,required=True)
     a = parser.parse_args()
-    try:return run(a) if a.command == 'run' else assess(a)
+    try:
+        if a.command=='source-manifest':return capture_source(ROOT,a.out)
+        return run(a) if a.command == 'run' else assess(a)
     except (ValueError,OSError,subprocess.SubprocessError) as error:parser.exit(1,str(error)+'\n')
 
 if __name__ == '__main__':sys.exit(main())
