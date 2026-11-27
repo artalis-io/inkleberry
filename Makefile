@@ -560,3 +560,6 @@ check: cuda-policy-check
 .PHONY: print-build-dir
 print-build-dir:
 	@printf '%s\n' '$(BUILD_DIR)'
+
+# Compile the real native acceptance fixture in CPU CI; execution stays GPU-only.
+check: $(BUILD_DIR)/infer-native.o
