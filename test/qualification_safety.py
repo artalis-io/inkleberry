@@ -36,7 +36,7 @@ class Safety(unittest.TestCase):
         path=root/'worker.py';pidfile=root/'pids.json'
         path.write_text('import subprocess,sys,os,json,time\nfrom pathlib import Path\n'
                         'p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(60)"])\n'
-                        'Path(sys.argv[1]).write_text(json.dumps([os.getpid(),p.pid]))\n'+
+                        'q=Path(sys.argv[1]);t=q.with_suffix(".tmp");t.write_text(json.dumps([os.getpid(),p.pid]));t.replace(q)\n'+
                         ('' if finish else 'time.sleep(60)\n'))
         return [sys.executable,str(path),str(pidfile)],pidfile
     def assert_gone(self,pidfile):
