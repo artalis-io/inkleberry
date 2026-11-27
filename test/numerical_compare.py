@@ -42,16 +42,30 @@ class NumericComparison(unittest.TestCase):
             left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()
             for root,token in [(left,1),(right,2)]:
                 (root/'run.json').write_text(json.dumps({'tokens':[7],'generated_token':token}))
-                (root/'first-gemm.json').write_text(json.dumps({'fp16_weights_sha256':'a'*64,'fp16_input_sha256':'b'*64}))
+                (root/'first-gemm.json').write_text(json.dumps({'rows':6552,'cols':2304,'batch':32,'kind':2,'alpha_bits':956600905,'fp16_weights_sha256':'a'*64,'fp16_input_sha256':'b'*64}))
                 (root/'spans.jsonl').write_text('')
             tensors={(0,0,'embedding'):struct.pack('<f',1)}
             with patch.object(m,'load',side_effect=[tensors,tensors]):report=m.compare(left,right)
             self.assertTrue(report['first_gemm_operands_equal'])
             self.assertEqual(report['generated_tokens'],{'left':1,'right':2})
-            (right/'first-gemm.json').write_text(json.dumps({'fp16_weights_sha256':'c'*64,'fp16_input_sha256':'b'*64}))
+            (right/'first-gemm.json').write_text(json.dumps({'rows':6552,'cols':2304,'batch':32,'kind':2,'alpha_bits':956600905,'fp16_weights_sha256':'c'*64,'fp16_input_sha256':'b'*64}))
             with patch.object(m,'load',side_effect=[tensors,tensors]):report=m.compare(left,right)
             self.assertFalse(report['first_gemm_operands_equal'])
             self.assertFalse(report['numerical_acceptance_established'])
+
+    def test_prefill_execution_order_before_tail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()
+            for root in (left,right):
+                (root/'run.json').write_text(json.dumps({'generation_probe':1,'token_count':36,'trace_from':0}))
+                (root/'spans.jsonl').write_text('')
+            a={k:struct.pack('<f',1) for k in [(0,1,'qrgs'),(1,0,'qrgs'),(33,0,'qrgs')]}
+            b={k:struct.pack('<f',2) for k in a}
+            with patch.object(m,'load',side_effect=[a,b]):r=m.compare(left,right,0,0)
+            self.assertEqual((r['first_difference']['position'],r['first_difference']['visit']),(1,0))
+            b[1,0,'qrgs']=a[1,0,'qrgs']
+            with patch.object(m,'load',side_effect=[a,b]):r=m.compare(left,right,0,0)
+            self.assertEqual((r['first_difference']['position'],r['first_difference']['visit']),(0,1))
 
     def test_changed_input_identity(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -89,7 +89,14 @@ def compare(left, right, left_batch=1, right_batch=1):
     fields=('rows','cols','batch','kind','alpha_bits','fp16_weights_sha256','fp16_input_sha256')
     if gemm_a.exists() and gemm_b.exists():
         ga,gb=json.loads(gemm_a.read_text()),json.loads(gemm_b.read_text())
-        gemm_equal={k:ga.get(k) for k in fields}=={k:gb.get(k) for k in fields}
+        for value in (ga,gb):
+            if any(k not in value for k in fields):raise ValueError('Incomplete GEMM identity')
+            for key in ('fp16_weights_sha256','fp16_input_sha256'):
+                sha=value[key]
+                if not isinstance(sha,str) or len(sha)!=64 or any(c not in '0123456789abcdef' for c in sha):raise ValueError('Invalid GEMM digest')
+            if any(type(value[k]) is not int for k in fields[:5]) or not all(value[k]>0 for k in ('rows','cols','batch')):
+                raise ValueError('Invalid GEMM dimensions')
+        gemm_equal={k:ga[k] for k in fields}=={k:gb[k] for k in fields}
     else:gemm_equal=None
     generated={k:json.loads(path.read_text()).get('generated_token') if path.exists() else None
                for k,path in [('left',left_run),('right',right_run)]}
