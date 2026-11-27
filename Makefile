@@ -591,3 +591,6 @@ $(BUILD_DIR)/linear-shapes$(EXE): $(BUILD_DIR)/linear-shapes.o $(CUDA_STATIC)
 .PHONY: linear-shape-check
 linear-shape-check: generated-check $(BUILD_DIR)/linear-shapes$(EXE)
 	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/linear-shapes$(EXE)
+
+# Compile both benchmark clients in CPU CI; linking/execution remains GPU-only.
+check: $(BUILD_DIR)/native-benchmark.o $(BUILD_DIR)/facade-benchmark.o
