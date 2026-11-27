@@ -603,3 +603,8 @@ $(BUILD_DIR)/numerical.o: test/numerical.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/confi
 $(BUILD_DIR)/numerical$(EXE): $(BUILD_DIR)/numerical.o $(BUILD_DIR)/numerical-forward.o $(GPU_STATIC) $(HOST_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 check: $(BUILD_DIR)/numerical.o $(BUILD_DIR)/numerical-forward.o
+
+.PHONY: numerical-compare-check
+numerical-compare-check:
+	$(PYTHON) test/numerical_compare.py
+check: numerical-compare-check

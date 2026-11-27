@@ -2,17 +2,18 @@
  * Test-only eager teacher forcing and packed payload identity. No kernel edits. */
 #include "engine_internal.h"
 #include "sha256.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char *ifn_numeric_directory;
-static unsigned ifn_numeric_batch;
+static unsigned ifn_numeric_batch, ifn_numeric_trace_from;
 static FILE *ifn_numeric_index;
 
 void ifn_test_numeric_trace(ifn_session *s, int32_t batch, unsigned visit, const char *stage,
                             const float *data, size_t width) {
-    if (s->status != IFN_OK)
+    if (s->status != IFN_OK || (unsigned)(s->position + batch) <= ifn_numeric_trace_from)
         return;
     size_t bytes = width * (size_t)batch * sizeof(float);
     float *host = malloc(bytes);
@@ -22,6 +23,8 @@ void ifn_test_numeric_trace(ifn_session *s, int32_t batch, unsigned visit, const
         return;
     }
     for (int32_t b = 0; b < batch; b++) {
+        if ((unsigned)(s->position + b) < ifn_numeric_trace_from)
+            continue;
         char path[2048];
         int n = snprintf(path, sizeof path, "%s/b%u-p%d-v%u-%s.bin", ifn_numeric_directory,
                          ifn_numeric_batch, s->position + b, visit, stage);
@@ -58,11 +61,11 @@ static int ifn_numeric_spans(ifn_gpu_weights *weights) {
     }
     ifn_weight_plan plan;
     if (ifn_gpu_weights_get_plan(weights, &plan))
-        return 1;
+        goto failed;
     for (size_t i = 0; i < plan.allocations; i++) {
         ifn_weight_span span;
         if (ifn_gpu_weights_get_span(weights, i, &span))
-            return 1;
+            goto failed;
         ifn_sha256 hash;
         ifn_sha256_init(&hash);
         for (uint64_t offset = 0; offset < span.bytes;) {
@@ -70,7 +73,7 @@ static int ifn_numeric_spans(ifn_gpu_weights *weights) {
                                                                  : (size_t)(span.bytes - offset);
             if (ifn_gpu_weights_read(weights, i, offset, buffer, bytes) ||
                 !ifn_sha256_update(&hash, buffer, bytes))
-                return 1;
+                goto failed;
             offset += bytes;
         }
         unsigned char sum[32];
@@ -80,13 +83,13 @@ static int ifn_numeric_spans(ifn_gpu_weights *weights) {
         if (fprintf(file, "{\"label\":\"%s\",\"offset\":%llu,\"bytes\":%llu,\"sha256\":\"%s\"}\n",
                     span.label, (unsigned long long)span.offset, (unsigned long long)span.bytes,
                     hex) < 0)
-            return 1;
+            goto failed;
     }
     for (size_t i = 0; i < plan.views; i++) {
         ifn_weight_view view;
         uint32_t scale_bits;
         if (ifn_gpu_weights_get_view(weights, i, &view))
-            return 1;
+            goto failed;
         memcpy(&scale_bits, &view.global_scale, sizeof scale_bits);
         if (fprintf(file,
                     "{\"view\":\"%s\",\"type\":%u,\"precision\":%u,\"rows\":%u,\"cols\":%u,"
@@ -96,16 +99,57 @@ static int ifn_numeric_spans(ifn_gpu_weights *weights) {
                     (unsigned long long)view.data, (unsigned long long)view.scales,
                     (unsigned long long)view.row_scales, (unsigned long long)view.expert_scale,
                     scale_bits) < 0)
-            return 1;
+            goto failed;
     }
     free(buffer);
     return fclose(file) != 0;
+failed:
+    free(buffer);
+    fclose(file);
+    return 1;
+}
+
+static int ifn_numeric_read_token(FILE *input, unsigned *value) {
+    char word[32], *end;
+    if (fscanf(input, "%31s", word) != 1)
+        return feof(input) && !ferror(input) ? 0 : -1;
+    errno = 0;
+    unsigned long number = strtoul(word, &end, 10);
+    if (strlen(word) == 31 || errno || *end || word[0] == '-' || number >= 200058)
+        return -1;
+    *value = (unsigned)number;
+    return 1;
 }
 
 int main(int argc, char **argv) {
-    if (argc != 4 || strlen(argv[1]) > 1500 || strlen(argv[2]) > 1500 || strlen(argv[3]) != 1 ||
-        argv[3][0] < '0' || argv[3][0] > '2')
+    if ((argc != 4 && argc != 5) || strlen(argv[1]) > 1500 || strlen(argv[2]) > 1500 ||
+        strlen(argv[3]) != 1 || argv[3][0] < '0' || argv[3][0] > '2')
         return 2;
+    int32_t tokens[128] = {40, 12, 309, 17, 8, 232, 111, 25};
+    unsigned token_count = 8, common = 0;
+    if (argc == 5) {
+        FILE *input = fopen(argv[4], "rb");
+        if (!input)
+            return 2;
+        unsigned value;
+        int read;
+        token_count = 0;
+        if (ifn_numeric_read_token(input, &common) != 1 || common >= 128) {
+            fclose(input);
+            return 2;
+        }
+        while ((read = ifn_numeric_read_token(input, &value)) == 1) {
+            if (token_count == 128) {
+                fclose(input);
+                return 2;
+            }
+            tokens[token_count++] = (int32_t)value;
+        }
+        fclose(input);
+        if (read < 0 || common >= token_count)
+            return 2;
+    }
+    ifn_numeric_trace_from = common;
     unsigned mode = (unsigned)(argv[3][0] - '0');
     ifn_numeric_directory = argv[2];
     char path[2048], mtp[2048];
@@ -134,15 +178,18 @@ int main(int argc, char **argv) {
     ifn_numeric_index = fopen(path, "wb");
     if (!ifn_numeric_index)
         status = IFN_IO;
-    const int32_t tokens[8] = {40, 12, 309, 17, 8, 232, 111, 25};
     float *logits = malloc(200058 * sizeof(float));
     if (!logits)
         status = IFN_OUT_OF_MEMORY;
     for (unsigned batch = 1; !status && batch <= 8; batch *= 2) {
         ifn_numeric_batch = batch;
-        for (unsigned offset = 0; !status && offset < 8; offset += batch)
+        for (unsigned offset = 0; !status && offset < common; offset++)
+            status = ifn_session_logits(session, tokens + offset, 1, offset == 0, logits, 200058);
+        for (unsigned offset = common; !status && offset < token_count; offset += batch) {
+            unsigned count = token_count - offset < batch ? token_count - offset : batch;
             status =
-                ifn_session_logits(session, tokens + offset, batch, offset == 0, logits, 200058);
+                ifn_session_logits(session, tokens + offset, count, offset == 0, logits, 200058);
+        }
     }
     free(logits);
     if (ifn_numeric_index && fclose(ifn_numeric_index))
@@ -153,5 +200,21 @@ int main(int argc, char **argv) {
         status = IFN_GPU_ERROR;
     if (ifn_gpu_weights_destroy(&weights))
         status = IFN_GPU_ERROR;
+    if (!status) {
+        snprintf(path, sizeof path, "%s/run.json", argv[2]);
+        FILE *run = fopen(path, "wb");
+        if (!run)
+            return 1;
+        int written = fprintf(
+            run, "{\"token_count\":%u,\"trace_from\":%u,\"mode\":%u,\"kv_format\":1,\"tokens\":[",
+            token_count, common, mode);
+        for (unsigned i = 0; i < token_count; i++)
+            if (fprintf(run, "%s%d", i ? "," : "", tokens[i]) < 0)
+                written = -1;
+        if (fputs("]}\n", run) < 0)
+            written = -1;
+        if (fclose(run) || written < 0)
+            return 1;
+    }
     return status != IFN_OK;
 }
