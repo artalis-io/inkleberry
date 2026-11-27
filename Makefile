@@ -32,6 +32,7 @@ CUDA_ROOT ?= $(if $(CUDA_PATH),$(subst \,/,$(CUDA_PATH)),/usr/local/cuda)
 NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
+CUDA_RUNTIME_PATH ?= $(CUDA_ROOT)/lib64
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
 include config/sources.mk
 OBJ = $(HOST:src/%.c=$(BUILD_DIR)/%.o)
@@ -195,7 +196,7 @@ $(BUILD_DIR)/cuda-smoke.o: test/cuda_smoke.c src/cuda_abi.h $(BUILD_DIR)/config
 $(BUILD_DIR)/cuda-smoke$(EXE): $(BUILD_DIR)/cuda-smoke.o $(BUILD_DIR)/cuda_abi.cuda.o $(CUDA_OBJECTS)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 cuda-check: cuda-abi-check $(BUILD_DIR)/cuda-smoke$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/cuda-smoke$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/cuda-smoke$(EXE)
 clean:
 	rm -rf $(BUILD_DIR) $(SHARED_REAL) $(SHARED_ABI) $(CLI) $(HOST_STATIC) $(SHARED) $(GPU_STATIC) $(INFER_STATIC) $(PROVIDER) $(CUDA_STATIC) $(WEIGHTS_CLI) $(GENERATE)
 -include $(wildcard $(BUILD_DIR)/*.d)
@@ -223,7 +224,7 @@ $(BUILD_DIR)/packing$(EXE): $(BUILD_DIR)/packing.o $(GPU_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: gpu-packing-check install-gpu
 gpu-packing-check: generated-check $(BUILD_DIR)/packing$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/packing$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/packing$(EXE)
 install-gpu: install gpu
 ifneq ($(IFN_WINDOWS),1)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' -e 's|@CUDA_ROOT@|$(CUDA_ROOT)|g' inkleberry-static-infer.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-static-infer.pc
@@ -264,7 +265,7 @@ $(BUILD_DIR)/sampling-kernels$(EXE): $(BUILD_DIR)/sampling-kernels.o
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: sampling-kernel-check
 sampling-kernel-check: generated-check $(BUILD_DIR)/sampling-kernels$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/sampling-kernels$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/sampling-kernels$(EXE)
 
 $(BUILD_DIR)/sampling-test$(EXE): test/sampling.c $(HOST_STATIC) $(BUILD_DIR)/config
 	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
@@ -570,4 +571,4 @@ $(BUILD_DIR)/conversion-oracles$(EXE): $(BUILD_DIR)/conversion-oracles.o
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: conversion-oracle-check
 conversion-oracle-check: generated-check $(BUILD_DIR)/conversion-oracles$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/conversion-oracles$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/conversion-oracles$(EXE)

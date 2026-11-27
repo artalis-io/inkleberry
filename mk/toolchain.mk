@@ -104,6 +104,7 @@ CLI_HOST = $(OBJ)
 PROVIDER_HOST = $(OBJ)
 CUDA_ROOT ?= $(subst \,/,$(CUDA_PATH))
 NVCC = "$(CUDA_ROOT)/bin/nvcc.exe"
+CUDA_RUNTIME_PATH = $(CUDA_ROOT)/bin
 # CUDA 13.3 cuda.lib contains UUID helper objects requesting LIBCMT. All
 # owned C/CUDA objects use /MD; resolve those helpers against the same CRT.
 CUDA_LIBS = /LIBPATH:"$(CUDA_ROOT)/lib/x64" cudart.lib cublas.lib cuda.lib /NODEFAULTLIB:LIBCMT

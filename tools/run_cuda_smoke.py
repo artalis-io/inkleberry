@@ -13,7 +13,7 @@ def windows_process_starts(pids):
     if not pids or any(type(pid) is not int or pid <= 0 for pid in pids):
         raise SystemExit('Invalid Windows process identity')
     ids = ','.join(str(pid) for pid in sorted(pids))
-    script = ("$ErrorActionPreference='Stop'; $ids=@(" + ids + "); "
+    script = ("$ProgressPreference='SilentlyContinue'; $ErrorActionPreference='Stop'; $ids=@(" + ids + "); "
               "@(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -in $ids } | "
               "ForEach-Object { @{pid=[int]$_.ProcessId; "
               "created=$_.CreationDate.ToUniversalTime().ToString('o')} }) | ConvertTo-Json -Compress")
@@ -126,11 +126,12 @@ def main():
             raise SystemExit('GPU VRAM measurement unavailable; refusing to run')
         if memory < 0 or memory > 256:
             raise SystemExit('GPU idle VRAM preflight failed')
-    processes = subprocess.check_output([
-        'nvidia-smi', '--query-compute-apps=gpu_uuid,pid',
-        '--format=csv,noheader,nounits'], text=True)
-    if not reservation and any(line.split(',')[0].strip() == uuid for line in processes.splitlines()):
-        raise SystemExit('GPU has a compute workload; refusing to run')
+    if not reservation:
+        processes = subprocess.check_output([
+            'nvidia-smi', '--query-compute-apps=gpu_uuid,pid',
+            '--format=csv,noheader,nounits'], text=True)
+        if any(line.split(',')[0].strip() == uuid for line in processes.splitlines()):
+            raise SystemExit('GPU has a compute workload; refusing to run')
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=uuid, LD_LIBRARY_PATH=sys.argv[1])
     if os.name == 'nt':
         env['PATH'] = sys.argv[1] + os.pathsep + env.get('PATH', '')

@@ -105,7 +105,10 @@ GPU resource safety, output quality or speed. Report executed and pending checks
 separately, including toolchain/model/device/configuration used.
 
 GPU tests require `INKLEBERRY_TEST_GPU_UUID` identifying an explicitly approved
-idle GPU and `tools/run_cuda_smoke.py`'s guard. Never stop unrelated workloads,
+idle GPU and `tools/run_cuda_smoke.py`'s guard. Native Windows desktop tests may
+use only an operator-reviewed, expiring `INKLEBERRY_TEST_WINDOWS_RESERVATION`
+process snapshot; never auto-admit unknown processes or disable the default guard.
+See `docs/experimental-ampere.md`. Never stop unrelated workloads,
 change clocks/power limits, install global toolchains or modify inference services.
 Use isolated workspaces and external model inputs. If no idle device is available,
 complete independent checks and report native verification pending.

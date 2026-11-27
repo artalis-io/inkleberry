@@ -1,15 +1,17 @@
 # Experimental Ampere compatibility layer
 
-Implementation status: **native Windows CUDA compilation/linking and ABI/package
-checks passed under MSVC and clang-cl** on `edge`'s RTX 3090 Ti target. GPU kernel
-execution, model correctness and performance remain unqualified. See the
-[2026-11-27 validation report](validation/ampere-windows-2026-11-27.md).
+Implementation status: native Windows build/ABI checks, real inference,
+conditional graphs, recovery and the 168-run benchmark completed on `edge`'s
+RTX 3090 Ti. **Cross-device numerical equivalence did not pass**: 11/28 complete
+benchmark token sequences matched the Blackwell goldens, despite deterministic
+Ampere repetitions. Keep this experimental. See the
+[validation report](validation/ampere-windows-2026-11-27.md) for exact scope,
+measurements, differences and remaining gates.
 
-The owner released `edge` for testing after the implementation-only phase.
-Its active Windows desktop exceeds the existing dedicated-GPU idle guard; the
-guard was exercised and correctly refused to launch a child. A reviewed Windows
-reservation contract is required before running tests on this desktop baseline.
-No desktop apps, services, drivers, power settings or watchdogs were changed.
+The user approved a Windows desktop reservation after the dedicated-device guard
+correctly refused the desktop baseline. Tests used the explicit, expiring process
+snapshot described below. No unrelated apps, services, drivers, power settings
+or watchdogs were changed.
 
 ## Behavior
 
@@ -89,15 +91,55 @@ These tests are part of ordinary host CI, including hosted Windows MSVC/clang-cl
 They do not contact `edge` or use a CUDA driver. Existing public ABI, allocator,
 concurrency, cancellation, parser and distribution regressions remain in place.
 
-## Deferred acceptance gates
+## Remaining acceptance gates
 
-The Windows compile/link, image/export and native layout checks have passed.
-Before enabling this for actual use, qualify primitives, eager/graph AR,
-fixed/adaptive speculation, prefix reuse,
-real cancellation and cleanup on a reserved device. Verify conditional SWITCH
-graph support and resource opt-in through real execution. Keep Blackwell goldens
-and performance gates intact; report any numerical drift explicitly.
+Windows primitives, eager/graph AR, fixed/adaptive speculation, conditional graphs,
+prefix reuse, cancellation and recovery have executed successfully. That is not
+complete numerical/quality qualification. Investigate cross-device and within-device
+AR/speculative differences with logits and independent references; preserve the
+existing goldens. Qualify broader semantic behavior, longer contexts, additional
+failure injection, Linux Ampere and extracted native SDK consumers. Run fresh
+Blackwell performance regression checks before a broader release.
 
-Do not bypass the existing idle-GPU guard, change the desktop's driver/watchdog
-settings or interrupt gaming to satisfy these gates. Real inference, benchmarks,
-maximum context and performance claims remain unqualified until these tests run.
+Do not bypass the guard, alter driver/watchdog settings or interrupt gaming to
+satisfy these gates. Build identity never means runtime qualification.
+
+## Explicit Windows desktop reservation
+
+The default dedicated-GPU guard is unchanged. An operator-approved Windows
+maintenance window can instead set `INKLEBERRY_TEST_WINDOWS_RESERVATION` to an
+external JSON snapshot, alongside `INKLEBERRY_TEST_GPU_UUID`. This mode is native
+Windows only. The operator must inspect every listed process before authorizing
+it; never capture an unknown or inference workload as a desktop baseline.
+
+The snapshot contains `format_version: 1`, `uuid`, Unix `issued_at`/`expires_at`,
+`max_vram_mib`, and a `processes` map keyed by decimal PID. Each process records
+its exact NVIDIA `process_name` as `name` and CIM UTC creation timestamp as
+`created`. Creation timestamps use
+`CreationDate.ToUniversalTime().ToString('o')`. Keep snapshots outside the repo;
+they contain local process identities and expire after at most two hours.
+
+The memory ceiling must be greater than 256 and at most 4096 MiB; use the observed
+desktop baseline plus a small explicit allowance. Tests still require 0% GPU
+activity in two samples, known memory use, only approved live process identities,
+and a fresh process/memory recheck after sampling. New processes, recycled PIDs,
+identity changes, expired reservations and unobservable counters fail closed.
+The guard adds the supplied CUDA binary directory to the Windows child PATH.
+It does not close desktop applications, disable the watchdog or alter GPU settings.
+
+This is a maintenance-window preflight, not a GPU scheduler or exclusivity lock.
+The operator must keep the device reserved throughout the run. Another process
+can still race the final check; do not claim isolation from this guard alone.
+
+With a freshly reviewed reservation and approved GPU UUID exported, execute GPU
+targets sequentially (MSYS2 shell with `scripts/msvc-env.sh` sourced):
+
+```sh
+make -j1 CC=cl PYTHON=python CUDA_ARCH=86 EXPERIMENTAL_AMPERE=1 \
+  conversion-oracle-check gpu-packing-check sampling-kernel-check
+```
+
+The guard is mandatory; avoid parallel GPU targets. Runtime DLL discovery uses
+`CUDA_RUNTIME_PATH` (`bin` on Windows, `lib64` on POSIX). Creating a reservation
+requires a new review of the live desktop process identities; do not reuse the
+expired or revoked snapshot from a previous test campaign.
