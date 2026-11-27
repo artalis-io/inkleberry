@@ -563,3 +563,11 @@ print-build-dir:
 
 # Compile the real native acceptance fixture in CPU CI; execution stays GPU-only.
 check: $(BUILD_DIR)/infer-native.o
+
+$(BUILD_DIR)/conversion-oracles.o: test/conversion_oracles.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
+$(BUILD_DIR)/conversion-oracles$(EXE): $(BUILD_DIR)/conversion-oracles.o
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
+.PHONY: conversion-oracle-check
+conversion-oracle-check: generated-check $(BUILD_DIR)/conversion-oracles$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/conversion-oracles$(EXE)

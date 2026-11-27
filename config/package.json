@@ -139,6 +139,7 @@
     "test/chat_fixtures.py",
     "test/chat_native.c",
     "test/concurrency.c",
+    "test/conversion_oracles.cu",
     "test/cuda-stubs/cuda_runtime.h",
     "test/cuda_abi_c.c",
     "test/cuda_abi_negative.py",
