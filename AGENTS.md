@@ -113,6 +113,13 @@ change clocks/power limits, install global toolchains or modify inference servic
 Use isolated workspaces and external model inputs. If no idle device is available,
 complete independent checks and report native verification pending.
 
+## Audits
+
+Use the repository-local `.claude/skills/c-audit/SKILL.md` for `/c-audit`.
+`make audit-check` runs the applicable Jev Bush-style source guards; see
+`docs/audits/README.md` for the migration map and limits. Keep runtime findings
+separate from tooling changes and do not auto-fix numerical policy or goldens.
+
 ## Style and distribution
 
 Use C11, four-space indentation, snake_case and explicit bounds/error handling.
