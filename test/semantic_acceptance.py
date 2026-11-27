@@ -26,7 +26,7 @@ class Acceptance(unittest.TestCase):
                      '```json\n{"name":"Acme","quantity":17,"urgent":false}\n```']:
             with self.assertRaises(ValueError):s.check_answer('json',text)
     def test_truncated_cancelled_or_missing_final(self):
-        for finish in [0,2,3]:
+        for finish in [0,2,3,True]:
             with self.assertRaises(ValueError):s.final_answer(framed('455'),dict(META,finish_reason=finish))
         for raw in [framed('455')[:-10],'<|content_thinking|>455',framed(''),framed('455')+'junk',framed('455')+framed('455')]:
             with self.assertRaises(ValueError):s.final_answer(raw,META)
@@ -84,6 +84,8 @@ class Acceptance(unittest.TestCase):
             args=argparse.Namespace(input=root,out=root/'report.json',code_image='gcc:14.2.0')
             receipt.write_text(json.dumps({'suite':'semantic-v1','complete':False}))
             with self.assertRaises(ValueError):s.assess(args)
+            self.assertFalse(json.loads(args.out.read_text())['passed'])
+            self.assertFalse(json.loads(args.out.read_text())['assessment_complete'])
             rows=[{'case':c,'profile':'ar'} for c in s.CASES];rows[-1]=rows[0]
             receipt.write_text(json.dumps({'suite':'semantic-v1','complete':True,'profiles':['ar'],'runs':rows}))
             with self.assertRaises(ValueError):s.assess(args)

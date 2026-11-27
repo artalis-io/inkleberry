@@ -5,6 +5,7 @@ import collections
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import subprocess
@@ -35,7 +36,8 @@ CASES = {
 
 
 def final_answer(raw, meta):
-    if (meta.get('semantic_version') != 1 or meta.get('finish_reason') != 1 or
+    if (any(type(meta.get(k)) is not int for k in ('semantic_version', 'finish_reason', 'max_output_tokens')) or
+            meta.get('semantic_version') != 1 or meta.get('finish_reason') != 1 or
             type(meta.get('generated_tokens')) is not int or
             not 0 < meta['generated_tokens'] <= 2048 or meta.get('max_output_tokens') != 2048):
         raise ValueError('Incomplete generation, non-EOS termination or invalid receipt')
@@ -134,12 +136,15 @@ int main(void) {
 
 
 def run(a):
+    if not a.gpu.startswith('GPU-'):
+        raise ValueError('Explicit GPU UUID required')
     if not re.fullmatch('[0-9a-f]{40}', a.source_revision):
         raise ValueError('Exact source revision required')
     if len(set(a.profiles)) != len(a.profiles):
         raise ValueError('Duplicate execution profile')
     a.out.mkdir(parents=True, exist_ok=False)
     manifest = {'suite': 'semantic-v1', 'source_revision': a.source_revision,
+                'gpu_uuid': a.gpu, 'cuda_runtime': a.cuda_runtime, 'platform': platform.platform(),
                 'binary_sha256': digest(a.binary), 'model': {n: digest(a.model/n) for n in FILES},
                 'profiles': a.profiles, 'started_at': time.time(), 'complete': False, 'runs': []}
     report = a.out/'run.json'
@@ -165,6 +170,9 @@ def run(a):
 
 
 def assess(a):
+    if a.out.resolve() == (a.input/'run.json').resolve():
+        raise ValueError('Assessment must not overwrite the collection receipt')
+    a.out.write_text(json.dumps({'suite': 'semantic-v1', 'passed': False, 'assessment_complete': False})+'\n')
     manifest = json.loads((a.input/'run.json').read_text())
     if manifest.get('suite') != 'semantic-v1' or manifest.get('complete') is not True:
         raise ValueError('Incomplete or unknown semantic campaign')
@@ -191,7 +199,7 @@ def assess(a):
             begin = raw.find('<|message_model|>')
             if begin < 0:raise ValueError('Missing model response')
             metadata = [json.loads(s) for s in (a.input/(name+'.stderr.txt')).read_text().splitlines() if s.startswith('{')]
-            if len(metadata) != 1 or metadata[0].get('profile') != PROFILES.index(profile):
+            if len(metadata) != 1 or type(metadata[0].get('profile')) is not int or metadata[0]['profile'] != PROFILES.index(profile):
                 raise ValueError('Missing/ambiguous generation metadata')
             answer = final_answer(raw[begin:], metadata[0]);receipt['answer'] = answer
             code = check_answer(case, answer)
@@ -200,6 +208,7 @@ def assess(a):
         except (ValueError, OSError, subprocess.SubprocessError) as error:
             receipt['error'] = str(error)
         report['cases'].append(receipt)
+    report['assessment_complete'] = True
     report['passed'] = all(r['passed'] for r in report['cases'])
     a.out.write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps({'passed': report['passed'], 'cases': len(rows),
