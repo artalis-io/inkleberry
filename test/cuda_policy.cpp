@@ -10,7 +10,6 @@ namespace ifn_cuda {
 #include "../src/cuda/launch_policy.hpp"
 }
 
-#if !IFN_CUDA_USE_PDL
 // Resource-size oracles from the audited dispatched specializations, not the
 // production sizing formula. No numerical or device implementation is copied.
 namespace ifn_cuda {
@@ -28,7 +27,6 @@ template <int FMT, ifn_cuda_wgemm_mode MODE, int K, int TM> void ifn_cuda_p_wgem
 }
 } // namespace ifn_cuda
 
-#endif
 #include "../src/cuda/prefill_resources.hpp"
 #define IFN_POLICY_CHECK(x)                                                                        \
     do {                                                                                           \
@@ -108,7 +106,6 @@ int main(int argc, char **argv) {
         IFN_POLICY_CHECK(ifn_cuda_prepare_shared(ifn_policy_kernel, 4096, 256) == 700 + stage);
         IFN_POLICY_CHECK(ifn_cuda_stub.sets == (stage == 3 ? 1 : 0));
     }
-#if !IFN_CUDA_USE_PDL
     ifn_cuda_stub = {};
     IFN_POLICY_CHECK(ifn_cuda_prepare_prefill_resources() == 0 && ifn_cuda_stub.sets == 8);
     const int sizes[] = {92160, 98304, 82944, 89088, 93184, 99328, 88576, 94720};
@@ -147,7 +144,6 @@ int main(int argc, char **argv) {
         IFN_POLICY_CHECK(ifn_cuda_prepare_prefill_resources() == 703 &&
                          ifn_cuda_stub.sets == failure);
     }
-#endif
     std::puts("target admission, launch arguments/order policy, first errors and resource/context "
               "failures passed (CPU stubs)");
     return 0;

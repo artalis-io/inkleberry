@@ -34,9 +34,7 @@ static int ifn_checked_prefill_local_blas_status(cublasStatus_t s) {
 
 extern "C" int ifn_blas_create(void **out, void *stream) {
     *out = nullptr;
-#if !IFN_CUDA_USE_PDL
     IFN_CHECKED_PREFILL_LOCAL_CALL_TRY(ifn_cuda_prepare_prefill_resources());
-#endif
     cublasHandle_t handle = nullptr;
     cublasStatus_t status = cublasCreate(&handle);
     *out = handle;
