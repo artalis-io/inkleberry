@@ -28,10 +28,16 @@ def load(root, batch):
         data = (root/f"b{batch}-p{key[0]}-v{key[1]}-{key[2]}.bin").read_bytes()
         if len(data) != 4*row['width']: raise ValueError('Incomplete tensor payload')
         index[key] = data
-    expected={(p,v,stage) for p in range(start,count) for v in range(48)
+    prefill=((count-1)//8)*8 if run.get('generation_probe') else 0
+    expected={(p,v,stage) for p in range(max(start,prefill),count) for v in range(48)
               for stage in STAGES if stage not in ('embedding','final_norm','logits')}
     expected.update((p,0,'embedding') for p in range(start,count))
-    expected.update((p,48,stage) for p in range(start,count) for stage in ('final_norm','logits'))
+    expected.update((p,48,'final_norm') for p in range(start,count))
+    if prefill:
+        expected.update((p,v,stage) for p in range(prefill) for v in range(48)
+                        for stage in STAGES if stage not in ('embedding','final_norm','logits','moe_output'))
+    else:
+        expected.update((p,48,'logits') for p in range(start,count))
     if index.keys()!=expected: raise ValueError('Incomplete trace coverage')
     return index
 
@@ -42,6 +48,12 @@ def floats(data):
     return values
 
 def compare(left, right, left_batch=1, right_batch=1):
+    left_run,right_run=left/'run.json',right/'run.json'
+    if left_run.exists()!=right_run.exists():raise ValueError('Run identity availability mismatch')
+    if left_run.exists():
+        x,y=json.loads(left_run.read_text()),json.loads(right_run.read_text())
+        x.pop('generated_token',None);y.pop('generated_token',None)
+        if x!=y:raise ValueError('Input/configuration identity mismatch')
     a,b=load(left,left_batch),load(right,right_batch)
     if a.keys()!=b.keys():raise ValueError('Trace identity mismatch')
     order={stage:i for i,stage in enumerate(STAGES)}
@@ -71,8 +83,8 @@ def compare(left, right, left_batch=1, right_batch=1):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('left',type=Path);p.add_argument('right',type=Path)
-    p.add_argument('--left-batch',type=int,choices=[1,2,4,8],default=1)
-    p.add_argument('--right-batch',type=int,choices=[1,2,4,8],default=1)
+    p.add_argument('--left-batch',type=int,choices=[0,1,2,4,8],default=1)
+    p.add_argument('--right-batch',type=int,choices=[0,1,2,4,8],default=1)
     p.add_argument('--out',type=Path,required=True);a=p.parse_args()
     report=compare(a.left,a.right,a.left_batch,a.right_batch)
     a.out.write_text(json.dumps(report,indent=2)+'\n')

@@ -37,6 +37,13 @@ class NumericComparison(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'coverage'):m.load(root,1)
             (root/'trace.jsonl').write_text((json.dumps(row)+'\n')*2)
             with self.assertRaisesRegex(ValueError,'Duplicate'):m.load(root,1)
+    def test_changed_input_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            left,right=Path(tmp)/'left',Path(tmp)/'right';left.mkdir();right.mkdir()
+            (left/'run.json').write_text(json.dumps({'tokens':[1]}))
+            (right/'run.json').write_text(json.dumps({'tokens':[2]}))
+            with self.assertRaisesRegex(ValueError,'identity mismatch'):m.compare(left,right)
+
     def test_unknown_stage(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'trace.jsonl').write_text(json.dumps({'batch':1,'position':0,'visit':0,'stage':'../unsafe','width':1}))

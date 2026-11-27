@@ -5979,6 +5979,13 @@ void ifn_prefix_finish(ifn_session *s, bool cancelled) {
  * Pinned Engine.prefill_chunk_batched with optional DSpark tap commits. */
 
 
+#ifdef IFN_TEST_NUMERICS
+void ifn_test_numeric_trace(ifn_session *, int32_t, unsigned, const char *, const float *, size_t);
+#define IFN_PREFILL_NUMERIC_TAP(visit, stage, data, width)                                         \
+    ifn_test_numeric_trace(s, n, visit, stage, data, width)
+#else
+#define IFN_PREFILL_NUMERIC_TAP(visit, stage, data, width) ((void)0)
+#endif
 #define IFN_ENGINE_PREFILL_LOCAL_CHECK(call)                                                       \
     do {                                                                                           \
         ifn_ar_check(s, (call), "batched prefill");                                                \
@@ -6022,6 +6029,7 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
     void *stream = s->stream;
     const ifn_ar_model *w = &s->model;
     ifn_launch_embed_norm(w->embed, w->embed_norm, s->p_tokens, s->p_hidden, n, stream);
+    IFN_PREFILL_NUMERIC_TAP(0, "embedding", s->p_hidden, 2304);
     int32_t blocks = 0;
     bool prior = false, pending = false;
     for (unsigned vi = 0; vi < 48; vi++) {
@@ -6097,12 +6105,15 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
                                                     q[j], &lw->ctrl[j], norms[j], s->p_attn_in[j],
                                                     s->p_attn_in_h[j], n);
         }
+        IFN_PREFILL_NUMERIC_TAP(vi, "attention_input", s->p_attn_in[0], 2304);
         void *ik = s->p_attn_in_h[distinct ? 1 : 0], *iv = s->p_attn_in_h[distinct ? 2 : 0];
         ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_qrgs, s->p_attn_in_h[0], s->p_qrgs, n);
+        IFN_PREFILL_NUMERIC_TAP(vi, "qrgs", s->p_qrgs, 6552);
         ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_k, ik, s->p_k_proj, n);
         ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_v, iv, s->p_v_proj, n);
         if (s->status != IFN_OK)
             return;
+        IFN_PREFILL_NUMERIC_TAP(vi, "key_projection", s->p_k_proj, 1024);
         if (v.global) {
             IFN_ENGINE_PREFILL_LOCAL_CHECK(ifn_prefill_global_sconv_prep_store(
                 s->blas, s->p_qrgs, s->p_k_proj, s->p_v_proj, ik, iv, lw->k_sconv_w, lw->v_sconv_w,
@@ -6133,6 +6144,7 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
         ifn_am_engine_prefill_ifn_engine_prefill_local_gemm(s, &lw->w_o, s->p_attn_gated_h, s->p_o_proj, n);
         if (s->status != IFN_OK)
             return;
+        IFN_PREFILL_NUMERIC_TAP(vi, "attention_output_projection", s->p_o_proj, 2304);
         ifn_launch_prefill_sconv_post_res(s->p_o_proj, 0, lw->attn_sconv_w, s->attn_ring[vi],
                                           s->p_hidden, s->p_residual, NULL, s->p_blocks,
                                           s->p_partial, blocks, boundary ? 1 : 0, n, s->p_pos_vec,
@@ -6157,6 +6169,8 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
         ifn_launch_prefill_route_and_sort(s->p_router_logits, lw->router_bias, s->p_route_ids,
                                           s->p_route_w, s->p_exp_offsets, s->p_sorted_tok,
                                           s->p_sorted_slot, s->p_sorted_w, n, stream);
+        IFN_PREFILL_NUMERIC_TAP(vi, "router_logits", s->p_router_logits, 128);
+        IFN_PREFILL_NUMERIC_TAP(vi, "router_weights", s->p_route_w, 8);
         ifn_launch_prefill_moe_gate_up_h(&lw->w13, s->p_mlp_normed_h, s->p_exp_offsets,
                                          s->p_sorted_tok, s->p_sorted_slot, s->p_moe_act_h, n,
                                          stream);
@@ -6178,6 +6192,7 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
     ifn_launch_fused_depth_norm(s->p_hidden, NULL, s->p_blocks, blocks, w->output_query,
                                 w->final_norm, NULL, NULL, s->p_mlp_normed, NULL, NULL, NULL, NULL,
                                 NULL, 1, n, stream);
+    IFN_PREFILL_NUMERIC_TAP(48, "final_norm", s->p_mlp_normed, 2304);
     if (s->use_mtp) {
         ifn_launch_prefill_copy_taps(s->p_mlp_normed, s->p_taps, 3, n, stream);
         for (int32_t i = 0; i < n / 8; i++)
@@ -6188,6 +6203,10 @@ void ifn_ar_prefill(ifn_session *s, const int32_t *tokens, int32_t n) {
     s->position += n;
 }
 
+#undef IFN_PREFILL_NUMERIC_TAP
+
+#undef IFN_PREFILL_NUMERIC_TAP
+#undef IFN_PREFILL_NUMERIC_TAP
 #undef IFN_ENGINE_PREFILL_LOCAL_CHECK
 
 /* Module: src/engine_runtime.c */

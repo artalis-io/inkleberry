@@ -8,11 +8,45 @@
 #include <string.h>
 
 static const char *ifn_numeric_directory;
-static unsigned ifn_numeric_batch, ifn_numeric_trace_from;
+static unsigned ifn_numeric_batch, ifn_numeric_trace_from, ifn_numeric_generation;
 static FILE *ifn_numeric_index;
+
+static int ifn_numeric_device_hash(const void *device, size_t bytes, char hex[65]) {
+    unsigned char *host = malloc(bytes), sum[32];
+    if (!host)
+        return 1;
+    int failed = ifn_cuda_memcpy_d2h(host, device, bytes) || !ifn_sha256_hash(host, bytes, sum);
+    if (!failed)
+        ifn_sha256_hex(sum, hex);
+    free(host);
+    return failed;
+}
+
+static int ifn_numeric_first_gemm(ifn_session *s, int32_t batch) {
+    const ifn_cuda_c_linear_weight *weight = &s->model.layers[0].w_qrgs;
+    char weights[65], input[65], path[2048];
+    if (ifn_numeric_device_hash(s->p_w_f16, (size_t)weight->rows * (size_t)weight->cols * 2,
+                                weights) ||
+        ifn_numeric_device_hash(s->p_attn_in_h[0], (size_t)batch * (size_t)weight->cols * 2, input))
+        return 1;
+    uint32_t alpha;
+    memcpy(&alpha, &weight->global_scale, sizeof alpha);
+    snprintf(path, sizeof path, "%s/first-gemm.json", ifn_numeric_directory);
+    FILE *file = fopen(path, "wb");
+    if (!file)
+        return 1;
+    int result =
+        fprintf(file,
+                "{\"rows\":%d,\"cols\":%d,\"batch\":%d,\"kind\":%u,\"alpha_bits\":%u,\"fp16_"
+                "weights_sha256\":\"%s\",\"fp16_input_sha256\":\"%s\"}\n",
+                weight->rows, weight->cols, batch, (unsigned)weight->kind, alpha, weights, input);
+    return fclose(file) || result < 0;
+}
 
 void ifn_test_numeric_trace(ifn_session *s, int32_t batch, unsigned visit, const char *stage,
                             const float *data, size_t width) {
+    if (ifn_numeric_generation && !strcmp(stage, "logits"))
+        return;
     if (s->status != IFN_OK || (unsigned)(s->position + batch) <= ifn_numeric_trace_from)
         return;
     size_t bytes = width * (size_t)batch * sizeof(float);
@@ -20,6 +54,12 @@ void ifn_test_numeric_trace(ifn_session *s, int32_t batch, unsigned visit, const
     if (!host || ifn_cuda_stream_sync(s->stream) || ifn_cuda_memcpy_d2h(host, data, bytes)) {
         free(host);
         s->status = IFN_GPU_ERROR;
+        return;
+    }
+    if (ifn_numeric_generation && batch > 8 && visit == 0 && !strcmp(stage, "qrgs") &&
+        ifn_numeric_first_gemm(s, batch)) {
+        free(host);
+        s->status = IFN_IO;
         return;
     }
     for (int32_t b = 0; b < batch; b++) {
@@ -122,12 +162,12 @@ static int ifn_numeric_read_token(FILE *input, unsigned *value) {
 }
 
 int main(int argc, char **argv) {
-    if ((argc != 4 && argc != 5) || strlen(argv[1]) > 1500 || strlen(argv[2]) > 1500 ||
+    if ((argc != 4 && argc != 5 && argc != 6) || strlen(argv[1]) > 1500 || strlen(argv[2]) > 1500 ||
         strlen(argv[3]) != 1 || argv[3][0] < '0' || argv[3][0] > '2')
         return 2;
     int32_t tokens[128] = {40, 12, 309, 17, 8, 232, 111, 25};
     unsigned token_count = 8, common = 0;
-    if (argc == 5) {
+    if (argc >= 5) {
         FILE *input = fopen(argv[4], "rb");
         if (!input)
             return 2;
@@ -149,6 +189,9 @@ int main(int argc, char **argv) {
         if (read < 0 || common >= token_count)
             return 2;
     }
+    ifn_numeric_generation = argc == 6;
+    if (ifn_numeric_generation && (strcmp(argv[5], "generation") || common || token_count <= 32))
+        return 2;
     ifn_numeric_trace_from = common;
     unsigned mode = (unsigned)(argv[3][0] - '0');
     ifn_numeric_directory = argv[2];
@@ -169,7 +212,7 @@ int main(int argc, char **argv) {
     if (!status && ifn_numeric_spans(weights))
         status = IFN_IO;
     ifn_session_config sc = IFN_SESSION_CONFIG_INIT;
-    sc.context_tokens = 128;
+    sc.context_tokens = ifn_numeric_generation ? 32768 : 128;
     sc.kv_format = 1;
     sc.use_graphs = 0;
     if (!status)
@@ -181,7 +224,16 @@ int main(int argc, char **argv) {
     float *logits = malloc(200058 * sizeof(float));
     if (!logits)
         status = IFN_OUT_OF_MEMORY;
-    for (unsigned batch = 1; !status && batch <= 8; batch *= 2) {
+    int32_t generated = -1;
+    if (ifn_numeric_generation && !status) {
+        ifn_decode_options options = IFN_DECODE_OPTIONS_INIT;
+        options.seed = 42;
+        ifn_decode_stats stats;
+        ifn_numeric_batch = 0;
+        status = ifn_session_generate_ex(session, tokens, token_count, 1, &options, &generated, 1,
+                                         NULL, NULL, &stats);
+    }
+    for (unsigned batch = 1; !ifn_numeric_generation && !status && batch <= 8; batch *= 2) {
         ifn_numeric_batch = batch;
         for (unsigned offset = 0; !status && offset < common; offset++)
             status = ifn_session_logits(session, tokens + offset, 1, offset == 0, logits, 200058);
@@ -205,9 +257,10 @@ int main(int argc, char **argv) {
         FILE *run = fopen(path, "wb");
         if (!run)
             return 1;
-        int written = fprintf(
-            run, "{\"token_count\":%u,\"trace_from\":%u,\"mode\":%u,\"kv_format\":1,\"tokens\":[",
-            token_count, common, mode);
+        int written = fprintf(run,
+                              "{\"generation_probe\":%u,\"generated_token\":%d,\"token_count\":%u,"
+                              "\"trace_from\":%u,\"mode\":%u,\"kv_format\":1,\"tokens\":[",
+                              ifn_numeric_generation, generated, token_count, common, mode);
         for (unsigned i = 0; i < token_count; i++)
             if (fprintf(run, "%s%d", i ? "," : "", tokens[i]) < 0)
                 written = -1;
