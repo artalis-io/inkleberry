@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='ifn-release-failure-') as tmp:
     tree = base / 'source'
     (tree / 'tools').mkdir(parents=True)
     (tree / 'test/fixtures').mkdir(parents=True)
-    for name in ['run_model_release.py', 'model_release.py']:
+    for name in ['run_model_release.py', 'model_release.py', 'process_tree.py']:
         shutil.copy2(ROOT / 'tools' / name, tree / 'tools' / name)
     (tree / 'VERSION').write_text('0.2.0-dev\n')
     model = base / 'model'
