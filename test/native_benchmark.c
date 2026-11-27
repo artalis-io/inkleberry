@@ -182,7 +182,8 @@ int main(int argc, char **argv) {
                 snprintf(settings, sizeof settings,
                          "native-benchmark-v2/%s/%llu/96/%08x/%08x/%d/%llu/%u/%u/%u/%08x",
                          representation, (unsigned long long)sc.context_tokens,
-                         (double)options.temperature, (double)options.top_p, options.top_k,
+                         ifn_benchmark_float_bits(options.temperature),
+                         ifn_benchmark_float_bits(options.top_p), options.top_k,
                          (unsigned long long)options.seed, options.draft_tokens, options.adaptive,
                          options.prompt_lookup, ifn_benchmark_float_bits(options.spec_threshold));
             if (length < 0 || (size_t)length >= sizeof settings ||
