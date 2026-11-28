@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Compare external diagnostic traces without declaring numerical tolerances."""
+import argparse
+import array
+import json
+import math
+from pathlib import Path
+import sys
+
+STAGES = {'embedding':2304, 'attention_input':2304, 'qrgs':6552,
+          'key_projection':1024, 'attention_output_projection':2304,
+          'router_logits':128, 'router_weights':8, 'moe_output':2304,
+          'final_norm':2304, 'logits':200058}
+
+def load(root, batch):
+    run=json.loads((root/'run.json').read_text()) if (root/'run.json').exists() else {'token_count':8,'trace_from':0}
+    count,start=run['token_count'],run['trace_from']
+    if type(count) is not int or type(start) is not int or not 0<=start<count<=128:raise ValueError('Invalid trace range')
+    rows = [json.loads(s) for s in (root/'trace.jsonl').read_text().splitlines()]
+    index = {}
+    for row in rows:
+        if row['batch'] != batch: continue
+        if row['stage'] not in STAGES or row['width'] != STAGES[row['stage']]:
+            raise ValueError('Unknown stage/shape')
+        key = (row['position'], row['visit'], row['stage'])
+        if key in index: raise ValueError('Duplicate trace stage')
+        if not start<=key[0]<count or not 0<=key[1]<=48: raise ValueError('Invalid trace position/visit')
+        data = (root/f"b{batch}-p{key[0]}-v{key[1]}-{key[2]}.bin").read_bytes()
+        if len(data) != 4*row['width']: raise ValueError('Incomplete tensor payload')
+        index[key] = data
+    prefill=((count-1)//8)*8 if run.get('generation_probe') else 0
+    expected={(p,v,stage) for p in range(max(start,prefill),count) for v in range(48)
+              for stage in STAGES if stage not in ('embedding','final_norm','logits')}
+    expected.update((p,0,'embedding') for p in range(start,count))
+    expected.update((p,48,'final_norm') for p in range(start,count))
+    if prefill:
+        expected.update((p,v,stage) for p in range(prefill) for v in range(48)
+                        for stage in STAGES if stage not in ('embedding','final_norm','logits','moe_output'))
+    else:
+        expected.update((p,48,'logits') for p in range(start,count))
+    if index.keys()!=expected: raise ValueError('Incomplete trace coverage')
+    return index
+
+def floats(data):
+    values=array.array('f'); values.frombytes(data)
+    if sys.byteorder!='little':values.byteswap()
+    if not all(math.isfinite(x) for x in values): raise ValueError('Non-finite trace')
+    return values
+
+def compare(left, right, left_batch=1, right_batch=1):
+    left_run,right_run=left/'run.json',right/'run.json'
+    if left_run.exists()!=right_run.exists():raise ValueError('Run identity availability mismatch')
+    if left_run.exists():
+        x,y=json.loads(left_run.read_text()),json.loads(right_run.read_text())
+        x.pop('generated_token',None);y.pop('generated_token',None)
+        # Older completed short probes predate the explicit generation-mode flag.
+        x.setdefault('generation_probe',0);y.setdefault('generation_probe',0)
+        if x!=y:raise ValueError('Input/configuration identity mismatch')
+    a,b=load(left,left_batch),load(right,right_batch)
+    if a.keys()!=b.keys():raise ValueError('Trace identity mismatch')
+    order={stage:i for i,stage in enumerate(STAGES)}
+    run=json.loads(left_run.read_text()) if left_run.exists() else {}
+    if run.get('generation_probe'):
+        prefill=((run['token_count']-1)//8)*8
+        def trace_order(k):return (int(k[0]>=prefill),k[1],order[k[2]],k[0])
+    elif left_batch==right_batch:
+        start=run.get('trace_from',0)
+        def trace_order(k):return ((k[0]-start)//left_batch,k[1],order[k[2]],k[0])
+    else:
+        # Different shapes have different execution schedules: compare by logical token.
+        def trace_order(k):return (k[0],k[1],order[k[2]])
+    results=[]
+    for key in sorted(a,key=trace_order):
+        x,y=floats(a[key]),floats(b[key])
+        if a[key]==b[key]:continue
+        delta=[abs(u-v) for u,v in zip(x,y)]
+        worst=max(range(len(delta)),key=delta.__getitem__)
+        row=dict(zip(('position','visit','stage'),key))
+        row.update(max_abs=delta[worst],rms=math.sqrt(sum(v*v for v in delta)/len(delta)),
+                   different_values=sum(u!=v for u,v in zip(x,y)),worst_index=worst,
+                   left=x[worst],right=y[worst])
+        if key[2]=='logits':
+            ia=max(range(len(x)),key=x.__getitem__);ib=max(range(len(y)),key=y.__getitem__)
+            row.update(left_top1=ia,right_top1=ib,top1_equal=ia==ib)
+        results.append(row)
+    span_a=[json.loads(s) for s in (left/'spans.jsonl').read_text().splitlines()]
+    span_b=[json.loads(s) for s in (right/'spans.jsonl').read_text().splitlines()]
+    if len(span_a)!=len(span_b):raise ValueError('Packed span/view count mismatch')
+    packing=[{'left':x,'right':y} for x,y in zip(span_a,span_b) if x!=y]
+    gemm_a,gemm_b=left/'first-gemm.json',right/'first-gemm.json'
+    fields=('rows','cols','batch','kind','alpha_bits','fp16_weights_sha256','fp16_input_sha256')
+    if gemm_a.exists() and gemm_b.exists():
+        ga,gb=json.loads(gemm_a.read_text()),json.loads(gemm_b.read_text())
+        for value in (ga,gb):
+            if any(k not in value for k in fields):raise ValueError('Incomplete GEMM identity')
+            for key in ('fp16_weights_sha256','fp16_input_sha256'):
+                sha=value[key]
+                if not isinstance(sha,str) or len(sha)!=64 or any(c not in '0123456789abcdef' for c in sha):raise ValueError('Invalid GEMM digest')
+            if any(type(value[k]) is not int for k in fields[:5]) or not all(value[k]>0 for k in ('rows','cols','batch')):
+                raise ValueError('Invalid GEMM dimensions')
+        gemm_equal={k:ga[k] for k in fields}=={k:gb[k] for k in fields}
+    else:gemm_equal=None
+    generated={k:json.loads(path.read_text()).get('generated_token') if path.exists() else None
+               for k,path in [('left',left_run),('right',right_run)]}
+    return {'first_gemm_operands_equal':gemm_equal,'generated_tokens':generated,'left_batch':left_batch,'right_batch':right_batch,'packed_records':len(span_a),
+            'packing_difference_count':len(packing),'packing_differences':packing,'compared_tensors':len(a),'different_tensors':len(results),
+            'first_difference':results[0] if results else None,'differences':results,
+            'numerical_acceptance_established':False}
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('left',type=Path);p.add_argument('right',type=Path)
+    p.add_argument('--left-batch',type=int,choices=[0,1,2,4,8],default=1)
+    p.add_argument('--right-batch',type=int,choices=[0,1,2,4,8],default=1)
+    p.add_argument('--out',type=Path,required=True);a=p.parse_args()
+    report=compare(a.left,a.right,a.left_batch,a.right_batch)
+    a.out.write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='differences' and k!='packing_differences'}))
+if __name__=='__main__':main()
