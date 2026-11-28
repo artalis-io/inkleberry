@@ -121,8 +121,25 @@ Eight CPU adversarial/supervisor tests pass on both the controller and core-1.
 The real sm_120a provider builds and installs into an isolated core-1 prefix, and
 the client compiles/links using only that installed SDK; `ldd` resolves the installed
 provider and CUDA 13 runtime. Full controller `make check` and lint pass.
-Native GPU inference and overnight qualification have
-**not run**: discovery found both core-1 RTX PRO 6000 GPUs occupied by a two-GPU vLLM
-worker (~55 GB each). No workload was stopped. Proven mid-prefill cancellation,
+Native GPU inference and the eight-hour campaign subsequently passed on the idle
+RTX PRO 6000 at source `a90ee03e3424db3e81f2a449b5ecd11165ea1dbe`:
+
+- Short run: 12 cycles, 60 stress requests, all three cancellation modes.
+- Overnight: 38,167 cycles, 190,835 stress requests, all three modes.
+- Every uninterrupted request matched its clean-session token baseline; expected
+  cache hits/misses and recovery checks passed. The model was loaded once.
+- Comparable warm-probe RSS stayed at 1,346,633,728 bytes (about 1.25 GiB).
+  Group median TTFT was 38.46–38.58 ms. These three-token probes do not establish
+  sustained long-output decode performance or broad task quality.
+- Overnight telemetry spans 2026-11-27 22:09:22 UTC to 2026-11-28 06:09:23 UTC.
+  Device-wide allocation reached 16,662 MiB; the sampled minimum includes startup.
+
+Machine-readable summaries, exact artifact hashes and model/client/provider
+identities are in [the execution record](validation/worker-lifetime-2026-11-28.json).
+Full histories remain outside Git in
+`/Users/mark/artalis.io/data/inkleberry-worker-2026-11-28/` and the original
+`/data/scratch/ifn-worker-{short,overnight}-a90ee03-side-01` directories on core-1.
+No services were stopped. This qualifies the tested profile and workload, not
+all contexts or device-loss handling. Proven mid-prefill cancellation,
 poisoned-session recovery and device-loss recovery remain unqualified in this client.
 Spark first-divergent-token/logit analysis is a separate next milestone.

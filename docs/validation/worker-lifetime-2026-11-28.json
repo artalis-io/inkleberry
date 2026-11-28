@@ -1,0 +1,379 @@
+{
+  "format_version": 1,
+  "source_revision": "a90ee03e3424db3e81f2a449b5ecd11165ea1dbe",
+  "device": "RTX PRO 6000 Blackwell Max-Q",
+  "gpu_uuid": "GPU-5a215cb3-57b0-0a6e-d511-e90bb05c0e05",
+  "controller_artifacts": "/Users/mark/artalis.io/data/inkleberry-worker-2026-11-28",
+  "runs": {
+    "short": {
+      "summary": {
+        "passed": true,
+        "seed": 42,
+        "cycles": 12,
+        "requests": 60,
+        "cancellation_modes": [
+          0,
+          1,
+          2
+        ],
+        "all_modes_exercised": true,
+        "comparable_warm_probes": {
+          "scope-0/suffix-0": {
+            "samples": 3,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346768896,
+                "median": 1346768896,
+                "max": 1346768896,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38351430,
+                "median": 38749178,
+                "max": 38758993,
+                "stdev": 189855.91165056374
+              },
+              "run_ns": {
+                "min": 64148070,
+                "median": 64762038,
+                "max": 64775569,
+                "stdev": 292668.71449283557
+              },
+              "decode_ns": {
+                "min": 12801337,
+                "median": 12804832,
+                "max": 12816439,
+                "stdev": 6455.040046351378
+              },
+              "decode_tokens_per_second": {
+                "min": 156.04958600434958,
+                "median": 156.1910378831991,
+                "max": 156.23368090379935,
+                "stdev": 0.07868219708238144
+              }
+            }
+          },
+          "scope-1/suffix-0": {
+            "samples": 3,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346768896,
+                "median": 1346768896,
+                "max": 1346768896,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38492256,
+                "median": 38502020,
+                "max": 38766975,
+                "stdev": 127264.82305369731
+              },
+              "run_ns": {
+                "min": 64262735,
+                "median": 64500678,
+                "max": 64743139,
+                "stdev": 196127.00278306063
+              },
+              "decode_ns": {
+                "min": 12779163,
+                "median": 12782898,
+                "max": 12783619,
+                "stdev": 1952.9465487366065
+              },
+              "decode_tokens_per_second": {
+                "min": 156.45021961308453,
+                "median": 156.45904395075357,
+                "max": 156.5047726521682,
+                "stdev": 0.0239095916170181
+              }
+            }
+          },
+          "scope-0/suffix-1": {
+            "samples": 2,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346768896,
+                "median": 1346768896.0,
+                "max": 1346768896,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38316167,
+                "median": 38447898.0,
+                "max": 38579629,
+                "stdev": 131731.0
+              },
+              "run_ns": {
+                "min": 63948786,
+                "median": 64234362.0,
+                "max": 64519938,
+                "stdev": 285576.0
+              },
+              "decode_ns": {
+                "min": 12653361,
+                "median": 12656941.0,
+                "max": 12660521,
+                "stdev": 3580.0
+              },
+              "decode_tokens_per_second": {
+                "min": 157.97138206239697,
+                "median": 158.01607671291578,
+                "max": 158.06077136343458,
+                "stdev": 0.04469465051880661
+              }
+            }
+          },
+          "scope-1/suffix-1": {
+            "samples": 2,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346768896,
+                "median": 1346768896.0,
+                "max": 1346768896,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38547860,
+                "median": 38580940.5,
+                "max": 38614021,
+                "stdev": 33080.5
+              },
+              "run_ns": {
+                "min": 64429480,
+                "median": 64463777.0,
+                "max": 64498074,
+                "stdev": 34297.0
+              },
+              "decode_ns": {
+                "min": 12647221,
+                "median": 12649059.0,
+                "max": 12650897,
+                "stdev": 1838.0
+              },
+              "decode_tokens_per_second": {
+                "min": 158.09155666985512,
+                "median": 158.1145318579347,
+                "max": 158.1375070460143,
+                "stdev": 0.02297518807958454
+              }
+            }
+          }
+        }
+      },
+      "executable_sha256": "d4533c913fdd24111a2529bcc0f52b513c6a4a877da51eb790a617cea88acf40",
+      "provider_sha256": "d92b5052a08d9debb0aee5055dd75be59faf4b1b24492b6929c621bc333b4c1d",
+      "model_sha256": {
+        "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+        "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+        "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+      },
+      "telemetry_first_utc": "2026-11-27T22:08:41.672345+00:00",
+      "telemetry_last_utc": "2026-11-27T22:08:51.757386+00:00",
+      "device_memory_mib_min": 2.0,
+      "device_memory_mib_max": 16662.0,
+      "artifacts": {
+        "manifest.json": {
+          "bytes": 27035,
+          "sha256": "7935b0d17dec880c9ee5125655a415384d19fdce577722255b7914f0012bbf2d"
+        },
+        "history.jsonl": {
+          "bytes": 18962,
+          "sha256": "3cae94d2e2cb299f31e9a118f164a2d27b07fbd40442a3cd90cfd2e99013988c"
+        },
+        "device.jsonl": {
+          "bytes": 516,
+          "sha256": "5e7c42a2d78a25881bdd0289c7ed7e603d674638b2a9a6452666cb3761f7af48"
+        },
+        "summary.json": {
+          "bytes": 3693,
+          "sha256": "391b2895ea73b03f94fd432bf85a395a8b26829d9f3be824c13660341ded0e20"
+        }
+      }
+    },
+    "overnight": {
+      "summary": {
+        "passed": true,
+        "seed": 42,
+        "cycles": 38167,
+        "requests": 190835,
+        "cancellation_modes": [
+          0,
+          1,
+          2
+        ],
+        "all_modes_exercised": true,
+        "comparable_warm_probes": {
+          "scope-0/suffix-0": {
+            "samples": 9636,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346633728,
+                "median": 1346633728.0,
+                "max": 1346633728,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38089936,
+                "median": 38582752.0,
+                "max": 39432228,
+                "stdev": 154057.12045035078
+              },
+              "run_ns": {
+                "min": 63918128,
+                "median": 64365923.5,
+                "max": 65499974,
+                "stdev": 201534.7094803076
+              },
+              "decode_ns": {
+                "min": 12718338,
+                "median": 12765637.5,
+                "max": 12818163,
+                "stdev": 11720.975593986914
+              },
+              "decode_tokens_per_second": {
+                "min": 156.02859785758693,
+                "median": 156.6705932234115,
+                "max": 157.25325117165465,
+                "stdev": 0.1438372339918874
+              }
+            }
+          },
+          "scope-1/suffix-0": {
+            "samples": 9453,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346633728,
+                "median": 1346633728,
+                "max": 1346633728,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38125879,
+                "median": 38583195,
+                "max": 39322085,
+                "stdev": 152992.9074434123
+              },
+              "run_ns": {
+                "min": 63889855,
+                "median": 64361886,
+                "max": 65390294,
+                "stdev": 200183.06514739603
+              },
+              "decode_ns": {
+                "min": 12726993,
+                "median": 12765731,
+                "max": 12816129,
+                "stdev": 11620.088801729267
+              },
+              "decode_tokens_per_second": {
+                "min": 156.05336057400797,
+                "median": 156.66944572151803,
+                "max": 157.14631099427805,
+                "stdev": 0.14259951926750103
+              }
+            }
+          },
+          "scope-0/suffix-1": {
+            "samples": 9447,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346633728,
+                "median": 1346633728,
+                "max": 1346633728,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 38024294,
+                "median": 38461669,
+                "max": 39335199,
+                "stdev": 152791.5339505146
+              },
+              "run_ns": {
+                "min": 63617278,
+                "median": 64103092,
+                "max": 65215764,
+                "stdev": 200769.64571563742
+              },
+              "decode_ns": {
+                "min": 12571796,
+                "median": 12626761,
+                "max": 12686128,
+                "stdev": 11673.579988878415
+              },
+              "decode_tokens_per_second": {
+                "min": 157.6525161972195,
+                "median": 158.3937480086936,
+                "max": 159.08625943341747,
+                "stdev": 0.14646717658003777
+              }
+            }
+          },
+          "scope-1/suffix-1": {
+            "samples": 9629,
+            "metrics": {
+              "rss_bytes": {
+                "min": 1346633728,
+                "median": 1346633728,
+                "max": 1346633728,
+                "stdev": 0.0
+              },
+              "ttft_ns": {
+                "min": 37986258,
+                "median": 38464524,
+                "max": 39175203,
+                "stdev": 154155.76092538764
+              },
+              "run_ns": {
+                "min": 63621696,
+                "median": 64105922,
+                "max": 65158847,
+                "stdev": 202098.74677156765
+              },
+              "decode_ns": {
+                "min": 12579217,
+                "median": 12626429,
+                "max": 12667631,
+                "stdev": 11500.50017584036
+              },
+              "decode_tokens_per_second": {
+                "min": 157.88271698157297,
+                "median": 158.39791282238232,
+                "max": 158.9924078740354,
+                "stdev": 0.144295340244134
+              }
+            }
+          }
+        }
+      },
+      "executable_sha256": "d4533c913fdd24111a2529bcc0f52b513c6a4a877da51eb790a617cea88acf40",
+      "provider_sha256": "d92b5052a08d9debb0aee5055dd75be59faf4b1b24492b6929c621bc333b4c1d",
+      "model_sha256": {
+        "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+        "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+        "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+      },
+      "telemetry_first_utc": "2026-11-27T22:09:22.976583+00:00",
+      "telemetry_last_utc": "2026-11-28T06:09:23.439781+00:00",
+      "device_memory_mib_min": 2.0,
+      "device_memory_mib_max": 16662.0,
+      "artifacts": {
+        "manifest.json": {
+          "bytes": 27045,
+          "sha256": "8c7dcdc4c97bfdd7f0dc86137a99019ca414a480a2184a8cfdd84acb33af4f61"
+        },
+        "history.jsonl": {
+          "bytes": 60932382,
+          "sha256": "7b083f5aef7dc642e6137a96305d4a0cd7a559eb3890bba6ace9f0a6774da943"
+        },
+        "device.jsonl": {
+          "bytes": 994581,
+          "sha256": "8ef642df295364cac74395a132de7452b00f8c9f9655679ba0df8edcbf66b999"
+        },
+        "summary.json": {
+          "bytes": 3765,
+          "sha256": "d1fb341ec089bb914e994ee648367aa1a8213ae5b4bce637ce0699992f5d7262"
+        }
+      }
+    }
+  }
+}
