@@ -1,0 +1,115 @@
+{
+  "format_version": 1,
+  "status": "audit-and-design-only",
+  "audited_revision": "e0341c8a030e35481c34d50bdef025e9bc1b3c27",
+  "retained_cuda_revision": "d10c0abb2c8990be81c08ba84c66a8333a691b33",
+  "host": "edge",
+  "compile_command": "source scripts/msvc-env.sh && make -j2 CC=cl PYTHON=python gpu infer-shared CUDA_ARCH=86",
+  "compiler": "MSVC 19.44.35229 / NVCC 13.3.73",
+  "cuda_flags": "-O3 --use_fast_math -std=c++20 -gencode arch=compute_86,code=sm_86 --expt-relaxed-constexpr -Icuda -Xcompiler=/MD",
+  "compile_and_link_passed": true,
+  "source_inputs_matched": 72,
+  "source_manifest_sha256": "b4d81b11c0ff9e6e0ecacd440b6e7f93366aa2654b72f337b88efdd695ad505a",
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 3090 Ti",
+    "compute_capability": "8.6",
+    "driver": "621.01",
+    "memory_total_mib": 24564,
+    "memory_used_mib_at_query": 1697,
+    "memory_free_mib_at_query": 22613,
+    "utilization_percent_at_query": 0
+  },
+  "binary_images": {
+    "sm_86": 5
+  },
+  "kernel_resources": {
+    "specializations": 423,
+    "max_registers_per_thread": 176,
+    "max_static_shared_bytes": 42820,
+    "max_stack_bytes": 512,
+    "functions_with_nonzero_stack": 29,
+    "max_reported_local_bytes": 0
+  },
+  "runtime_gpu_tests_executed": false,
+  "capability_gate_changed": false,
+  "source_code_changed": false,
+  "weights_memory_plans": [
+    {
+      "mode": "nvfp4",
+      "variant": "ar",
+      "arena_bytes": 15332636160,
+      "staging_bytes": 921867264,
+      "amax_bytes": 4,
+      "fold_temporary_bytes": 0,
+      "peak_device_bytes": 16254503428,
+      "allocations": 935,
+      "views": 646
+    },
+    {
+      "mode": "nvfp4",
+      "variant": "mtp",
+      "arena_bytes": 15621585664,
+      "staging_bytes": 921867264,
+      "amax_bytes": 4,
+      "fold_temporary_bytes": 102429696,
+      "peak_device_bytes": 16645882628,
+      "allocations": 997,
+      "views": 693
+    },
+    {
+      "mode": "fp8",
+      "variant": "ar",
+      "arena_bytes": 17780409344,
+      "staging_bytes": 921867264,
+      "amax_bytes": 4,
+      "fold_temporary_bytes": 0,
+      "peak_device_bytes": 18702276612,
+      "allocations": 759,
+      "views": 646
+    },
+    {
+      "mode": "fp8",
+      "variant": "mtp",
+      "arena_bytes": 18069358848,
+      "staging_bytes": 921867264,
+      "amax_bytes": 4,
+      "fold_temporary_bytes": 102429696,
+      "peak_device_bytes": 19093655812,
+      "allocations": 821,
+      "views": 693
+    },
+    {
+      "mode": "exact",
+      "variant": "ar",
+      "arena_bytes": 18884907008,
+      "staging_bytes": 921867264,
+      "amax_bytes": 4,
+      "fold_temporary_bytes": 0,
+      "peak_device_bytes": 19806774276,
+      "allocations": 686,
+      "views": 646
+    },
+    {
+      "mode": "exact",
+      "variant": "mtp",
+      "arena_bytes": 19623932928,
+      "staging_bytes": 921867264,
+      "amax_bytes": 4,
+      "fold_temporary_bytes": 102429696,
+      "peak_device_bytes": 20648229892,
+      "allocations": 732,
+      "views": 693
+    }
+  ],
+  "external_evidence_directory": "/Users/mark/artalis.io/data/inkleberry-ampere-audit-2026-11-26",
+  "not_verified": [
+    "inference correctness",
+    "PDL behavior on Ampere",
+    "dynamic shared-memory opt-in",
+    "conditional graph runtime support",
+    "model loading on Ampere",
+    "throughput",
+    "maximum usable context"
+  ],
+  "recorded_at_utc": "2026-11-26T21:41:24.447111+00:00"
+}
