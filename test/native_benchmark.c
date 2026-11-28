@@ -1,3 +1,4 @@
+#include "benchmark_prompts.h"
 /* SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis */
 #define _POSIX_C_SOURCE 200809L
 #include "ifn_engine.h"
@@ -131,29 +132,13 @@ int main(int argc, char **argv) {
         rc = IFN_LIMIT;
         goto done;
     }
-    static const char *const ifn_benchmark_prompts[] = {
-        "What is 9 + 8? Answer with the number only.",
-        "Explain briefly why a delivery truck must obey a gross vehicle weight limit.",
-        "Write one short paragraph describing a quiet autumn morning.",
-        "Write a C function that computes the maximum of an integer array. Return only code.",
-        "Fix this Python function to avoid a mutable default argument: def add(x, items=[]): "
-        "items.append(x); return items. Return code.",
-        "Extract JSON with name and quantity: The customer is Acme and the quantity is 17. Return "
-        "only JSON.",
-        "What is the access code for record NEEDLE? Copy just the code."};
     static const char *const ifn_benchmark_profiles[] = {"ar", "fixed", "adaptive", "sampled"};
     for (unsigned profile = 0; profile < 4; profile++) {
         for (unsigned c = 0; c < 7; c++) {
-            text[0] = 0;
-            if (c == 6) {
-                const char *pad = "Record cedar contains ordinary inventory and no access code. ";
-                for (unsigned i = 0; i < 400; i++)
-                    strcat(text, pad);
-                strcat(text, "Record NEEDLE has access code COBALT-7319.\n");
-                for (unsigned i = 0; i < 400; i++)
-                    strcat(text, pad);
+            if (ifn_benchmark_prompt(c, text, sizeof text)) {
+                rc = IFN_LIMIT;
+                goto done;
             }
-            strcat(text, ifn_benchmark_prompts[c]);
             size_t bytes = 0, count = 0;
             IFN_BENCH_TRY(ifn_render_user_prompt(text, strlen(text), IFN_THINK_NONE, rendered,
                                                  sizeof rendered, &bytes));

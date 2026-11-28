@@ -470,7 +470,7 @@ identity-check: $(BUILD_DIR)/hash-test$(EXE) $(BUILD_DIR)/infer-test$(EXE) $(BUI
 	$(PYTHON) test/hashes.py $(BUILD_DIR)/hash-test$(EXE)
 	$(PYTHON) test/identity_admission.py $(BUILD_DIR)/infer-test$(EXE) $(BUILD_DIR)/chat-fixture.json
 check: identity-check
-$(BUILD_DIR)/native-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+$(BUILD_DIR)/native-benchmark.o: test/native_benchmark.c test/benchmark_prompts.h $(PUBLIC_HEADERS) $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
 $(BUILD_DIR)/native-benchmark$(EXE): $(BUILD_DIR)/native-benchmark.o $(GPU_STATIC) $(HOST_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
@@ -502,7 +502,7 @@ harden-check: all
 performance-gate-check:
 	$(PYTHON) test/performance_gate.py
 check: abi-contract-check performance-gate-check release-gate-check
-$(BUILD_DIR)/facade-benchmark.o: test/native_benchmark.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+$(BUILD_DIR)/facade-benchmark.o: test/native_benchmark.c test/benchmark_prompts.h $(PUBLIC_HEADERS) $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_BENCH_FACADE,$<,$@)
 $(BUILD_DIR)/facade-benchmark$(EXE): $(BUILD_DIR)/facade-benchmark.o $(INFER_STATIC) $(GPU_STATIC) $(HOST_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
@@ -607,6 +607,8 @@ check: $(BUILD_DIR)/numerical.o $(BUILD_DIR)/numerical-forward.o
 .PHONY: numerical-compare-check
 numerical-compare-check:
 	$(PYTHON) test/numerical_compare.py
+	$(PYTHON) test/first_divergence.py
+	$(PYTHON) test/boundary_logits.py
 check: numerical-compare-check
 
 $(BUILD_DIR)/numerical-prefill.o: src/engine_prefill.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
@@ -649,3 +651,10 @@ worker-lifetime-check: $(BUILD_DIR)/worker-lifetime-mock$(EXE)
 ifeq ($(shell uname -s),Linux)
 check: worker-lifetime-check
 endif
+
+# Test-only observation of unchanged generation and isolated final-head replay.
+$(BUILD_DIR)/logit-boundary.o: test/logit_boundary.c test/benchmark_prompts.h $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/logit-boundary$(EXE): $(BUILD_DIR)/logit-boundary.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+check: $(BUILD_DIR)/logit-boundary.o
