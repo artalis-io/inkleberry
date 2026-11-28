@@ -1,0 +1,472 @@
+{
+  "format_version": 1,
+  "comparison_validation_passed": true,
+  "cases": [
+    {
+      "case": 4,
+      "prompt_tokens": 47,
+      "preceding_output_tokens": 5,
+      "reference_top10": [
+        {
+          "token": 151644,
+          "logit": 27.573627471923828,
+          "probability": 0.3175725914995864
+        },
+        {
+          "token": 149878,
+          "logit": 27.494815826416016,
+          "probability": 0.293505031240149
+        },
+        {
+          "token": 152088,
+          "logit": 26.667043685913086,
+          "probability": 0.12826810463513116
+        },
+        {
+          "token": 149882,
+          "logit": 26.450864791870117,
+          "probability": 0.10333165293820164
+        },
+        {
+          "token": 150406,
+          "logit": 26.337909698486328,
+          "probability": 0.09229487859026515
+        },
+        {
+          "token": 149876,
+          "logit": 25.233688354492188,
+          "probability": 0.030592880222315783
+        },
+        {
+          "token": 194036,
+          "logit": 24.27903175354004,
+          "probability": 0.01177655520996448
+        },
+        {
+          "token": 152743,
+          "logit": 24.19219207763672,
+          "probability": 0.010797029311649909
+        },
+        {
+          "token": 149991,
+          "logit": 24.014972686767578,
+          "probability": 0.009043548600555363
+        },
+        {
+          "token": 150572,
+          "logit": 22.361698150634766,
+          "probability": 0.0017311347278668207
+        }
+      ],
+      "reference_margin": 0.0788116455078125,
+      "configurations": {
+        "production_rtx": {
+          "top1": 151644,
+          "top1_matches_reference": true,
+          "metrics": {
+            "max_abs_logit": 4.305313587188721,
+            "rms_logit": 0.7491057349172004,
+            "softmax_temperature": 1,
+            "total_variation": 0.07130853810647102,
+            "kl_left_right": 0.026647563386627337,
+            "kl_right_left": 0.028362222381288146
+          }
+        },
+        "production_gb10": {
+          "top1": 149878,
+          "top1_matches_reference": false,
+          "metrics": {
+            "max_abs_logit": 4.042045712471008,
+            "rms_logit": 0.7645302567566189,
+            "softmax_temperature": 1,
+            "total_variation": 0.07253643828361644,
+            "kl_left_right": 0.02267652257714581,
+            "kl_right_left": 0.027393178277908808
+          }
+        },
+        "source_weight_bf16kv_rtx": {
+          "top1": 151644,
+          "top1_matches_reference": true,
+          "metrics": {
+            "max_abs_logit": 1.9247660636901855,
+            "rms_logit": 0.4924870050524169,
+            "softmax_temperature": 1,
+            "total_variation": 0.07535954291519377,
+            "kl_left_right": 0.012707838869838058,
+            "kl_right_left": 0.013045229514053043
+          }
+        }
+      }
+    },
+    {
+      "case": 5,
+      "prompt_tokens": 36,
+      "preceding_output_tokens": 36,
+      "reference_top10": [
+        {
+          "token": 151791,
+          "logit": 27.831157684326172,
+          "probability": 0.41997334564609134
+        },
+        {
+          "token": 153667,
+          "logit": 27.243450164794922,
+          "probability": 0.23333699217093148
+        },
+        {
+          "token": 154573,
+          "logit": 27.154447555541992,
+          "probability": 0.21346675744926427
+        },
+        {
+          "token": 151608,
+          "logit": 26.221599578857422,
+          "probability": 0.08398457416172578
+        },
+        {
+          "token": 152651,
+          "logit": 24.532625198364258,
+          "probability": 0.015512695614223316
+        },
+        {
+          "token": 149895,
+          "logit": 24.10417366027832,
+          "probability": 0.01010678744571619
+        },
+        {
+          "token": 150874,
+          "logit": 23.832958221435547,
+          "probability": 0.00770594249358524
+        },
+        {
+          "token": 151967,
+          "logit": 23.59856414794922,
+          "probability": 0.006095785983894567
+        },
+        {
+          "token": 150634,
+          "logit": 22.526798248291016,
+          "probability": 0.002087217439965982
+        },
+        {
+          "token": 149923,
+          "logit": 22.361698150634766,
+          "probability": 0.0017695613885966726
+        }
+      ],
+      "reference_margin": 0.58770751953125,
+      "configurations": {
+        "production_rtx": {
+          "top1": 154573,
+          "top1_matches_reference": false,
+          "metrics": {
+            "max_abs_logit": 3.880561113357544,
+            "rms_logit": 0.8137363841859708,
+            "softmax_temperature": 1,
+            "total_variation": 0.27860580111225497,
+            "kl_left_right": 0.18102668088380922,
+            "kl_right_left": 0.20914612179012726
+          }
+        },
+        "production_gb10": {
+          "top1": 153667,
+          "top1_matches_reference": false,
+          "metrics": {
+            "max_abs_logit": 3.580674171447754,
+            "rms_logit": 0.7441178162686796,
+            "softmax_temperature": 1,
+            "total_variation": 0.18691936370400167,
+            "kl_left_right": 0.0779630544071863,
+            "kl_right_left": 0.08431015264501135
+          }
+        },
+        "source_weight_bf16kv_rtx": {
+          "top1": 151791,
+          "top1_matches_reference": true,
+          "metrics": {
+            "max_abs_logit": 1.0302314758300781,
+            "rms_logit": 0.26371683484009645,
+            "softmax_temperature": 1,
+            "total_variation": 0.02024535416390045,
+            "kl_left_right": 0.002466065882064337,
+            "kl_right_left": 0.002372189659218464
+          }
+        }
+      }
+    },
+    {
+      "case": 6,
+      "prompt_tokens": 8844,
+      "preceding_output_tokens": 42,
+      "reference_top10": [
+        {
+          "token": 149917,
+          "logit": 27.243450164794922,
+          "probability": 0.2192413065373468
+        },
+        {
+          "token": 150397,
+          "logit": 26.7191219329834,
+          "probability": 0.1297805241239124
+        },
+        {
+          "token": 150860,
+          "logit": 26.560550689697266,
+          "probability": 0.11074978908018972
+        },
+        {
+          "token": 150078,
+          "logit": 26.39480209350586,
+          "probability": 0.09383377898197508
+        },
+        {
+          "token": 154001,
+          "logit": 26.337909698486328,
+          "probability": 0.08864436919505797
+        },
+        {
+          "token": 151646,
+          "logit": 26.101848602294922,
+          "probability": 0.07000533245337136
+        },
+        {
+          "token": 150793,
+          "logit": 25.978578567504883,
+          "probability": 0.06188645792078929
+        },
+        {
+          "token": 150967,
+          "logit": 25.915592193603516,
+          "probability": 0.05810867756363967
+        },
+        {
+          "token": 151787,
+          "logit": 25.65441131591797,
+          "probability": 0.04475191023727657
+        },
+        {
+          "token": 175739,
+          "logit": 24.93285369873047,
+          "probability": 0.02174918995708703
+        }
+      ],
+      "reference_margin": 0.5243282318115234,
+      "configurations": {
+        "production_rtx": {
+          "top1": 149917,
+          "top1_matches_reference": true,
+          "metrics": {
+            "max_abs_logit": 6.679474294185638,
+            "rms_logit": 0.9634135209400575,
+            "softmax_temperature": 1,
+            "total_variation": 0.1635004906307082,
+            "kl_left_right": 0.1003939647473351,
+            "kl_right_left": 0.11262045251689334
+          }
+        },
+        "production_gb10": {
+          "top1": 150397,
+          "top1_matches_reference": false,
+          "metrics": {
+            "max_abs_logit": 7.651380002498627,
+            "rms_logit": 0.9898363159507382,
+            "softmax_temperature": 1,
+            "total_variation": 0.19265465025498682,
+            "kl_left_right": 0.12780401238697978,
+            "kl_right_left": 0.1379233089228643
+          }
+        },
+        "source_weight_bf16kv_rtx": {
+          "top1": 149917,
+          "top1_matches_reference": true,
+          "metrics": {
+            "max_abs_logit": 2.9439233541488647,
+            "rms_logit": 0.532745437571963,
+            "softmax_temperature": 1,
+            "total_variation": 0.09320057539333404,
+            "kl_left_right": 0.032181048637851,
+            "kl_right_left": 0.03504445446780759
+          }
+        }
+      }
+    }
+  ],
+  "reference_revision": "b62646bbda836d467060b7e3d64028202079b77d",
+  "boundary": "Three preselected divergent AR prefixes; not a held-out quality benchmark. Reference dequantized BF16, production additionally quantized/FP8 KV. Control changes both linears and KV; expert arithmetic remains different. Do not infer exact equivalence, isolated cause or overall device accuracy ranking.",
+  "reference_manifest": {
+    "reference_revision": "b62646bbda836d467060b7e3d64028202079b77d",
+    "transformers": "5.25.0.dev0",
+    "torch": "2.13.0+cu130",
+    "source_files": {
+      "src/transformers/models/inkling2_loop/modeling_inkling2_loop.py": "9f586af663de2a6a5466fb065cfdadf717ab4318dded25b4b91dbd87003bfe0c",
+      "src/transformers/core_model_loading.py": "bc6889c76ac9826f8f509a4b896312e1fa1774876636cc6d2eba4aa87811f209",
+      "src/transformers/conversion_mapping.py": "b9b2f13f2d13986cc32f77a3f9260620e5c8885cd8efb65a2b448f165a509fc0"
+    },
+    "collector_sha256": "5fc2e9d4dc63db664cd5907acfc03f0caec902b1d61985da64b9943ed81b7e40",
+    "representation": "Original checkpoint dequantized to BF16 by official conversion; BF16 cache. NOT quantization-matched to Inkleberry default NVFP4/FP8-KV.",
+    "model_sha256": {
+      "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+      "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+      "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+    },
+    "ignored_quantizer_envelope": {
+      "quant_method": "modelopt",
+      "quant_algo": "NVFP4"
+    }
+  },
+  "inputs": [
+    {
+      "case": 4,
+      "prompt_tokens": 47,
+      "preceding_output_tokens": 5,
+      "prompt_sha256": "7ac8e3a9c98d46ecd1bbb161f054602c1d0e60f8eca52d156abf1c7132a7a8ac"
+    },
+    {
+      "case": 5,
+      "prompt_tokens": 36,
+      "preceding_output_tokens": 36,
+      "prompt_sha256": "df5e993467820f57900a2a0dc8f7353e3b582c319156e1e3894180d1ac4923c8"
+    },
+    {
+      "case": 6,
+      "prompt_tokens": 8844,
+      "preceding_output_tokens": 42,
+      "prompt_sha256": "a3b9524422ef6d81d613a81dfeb22f5c54cb686109db6d290eb4d4345ed5be15"
+    }
+  ],
+  "reference_runs": {
+    "passed": true,
+    "runs": [
+      {
+        "case": 4,
+        "run": 0,
+        "seconds": 17.555769957005396,
+        "top1": 151644,
+        "sha256": "376b4cdd538cc1e95fae75e537696def3a0d109828a867d324776e5e87eea680",
+        "max_allocated_bytes": 52919174144
+      },
+      {
+        "case": 4,
+        "run": 1,
+        "seconds": 1.3117886079999153,
+        "top1": 151644,
+        "sha256": "376b4cdd538cc1e95fae75e537696def3a0d109828a867d324776e5e87eea680",
+        "max_allocated_bytes": 52919174144
+      },
+      {
+        "case": 5,
+        "run": 0,
+        "seconds": 4.659441339004843,
+        "top1": 151791,
+        "sha256": "693d5ff6bb136421d157b5ed2c25b25f98b19d2541775c5e9fa1ddf9f0ba1bc9",
+        "max_allocated_bytes": 52919174144
+      },
+      {
+        "case": 5,
+        "run": 1,
+        "seconds": 4.688433466006245,
+        "top1": 151791,
+        "sha256": "693d5ff6bb136421d157b5ed2c25b25f98b19d2541775c5e9fa1ddf9f0ba1bc9",
+        "max_allocated_bytes": 52919174144
+      },
+      {
+        "case": 6,
+        "run": 0,
+        "seconds": 10.011560600003577,
+        "top1": 149917,
+        "sha256": "c45055ed68fe160494f720aa2fd2996a81e72dfc4453b20c5eb458d262bb9b0f",
+        "max_allocated_bytes": 59930209792
+      },
+      {
+        "case": 6,
+        "run": 1,
+        "seconds": 10.384456776999286,
+        "top1": 149917,
+        "sha256": "c45055ed68fe160494f720aa2fd2996a81e72dfc4453b20c5eb458d262bb9b0f",
+        "max_allocated_bytes": 59930209792
+      }
+    ]
+  },
+  "loading": {
+    "missing_keys": "set()",
+    "unexpected_keys": "set()",
+    "mismatched_keys": "set()",
+    "error_msgs": []
+  },
+  "verification": {
+    "model_hashes_verified_after": true,
+    "reference_source_clean_after": true,
+    "control_source_sha256": "c0b748a041c73487050ed7a83f0b51ba87206da9e9247ac2a810e16baa2ee34f",
+    "control_executable_sha256": "75463e37c55416c04cfa2d31fd7027b53cc13e4ad2e1bc0a8dada0da324af536",
+    "control_input_sha256": "d771f493988db57e24810b1c947b4b3f26e45dd3ce68c79ae8a5026c7af53e77",
+    "linked_native_libraries": {
+      "libinkleberry-gpu.a": "a2035d3f6e316d8503bba9349dfa7658d090cc7b25ac13d5a714dc62ca8ec439",
+      "libinkleberry.a": "4f8c8fc2a78c8d6104bc307b1b9028965e5e575a3568f1474d0bedeeb3caea5e"
+    },
+    "linked_engine_source_archive_sha256": "ff21fd662ae6d6c4675b47269c63f984dcab69d3e86e0119c226d6c24c2557d9",
+    "gpu_after": "GPU-5a215cb3-57b0-0a6e-d511-e90bb05c0e05, NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition, 620.70.10, 2, 0\nGPU-e5f713d1-46ae-9f99-c16d-65de9e9df32a, NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition, 620.70.10, 26, 0\n"
+  },
+  "raw_artifacts": "/Users/mark/artalis.io/data/inkleberry-reference-2026-11-28",
+  "artifacts": {
+    "bf16-reference": {
+      "case-4-run-0.logits.f32": {
+        "bytes": 800232,
+        "sha256": "376b4cdd538cc1e95fae75e537696def3a0d109828a867d324776e5e87eea680"
+      },
+      "case-4-run-1.logits.f32": {
+        "bytes": 800232,
+        "sha256": "376b4cdd538cc1e95fae75e537696def3a0d109828a867d324776e5e87eea680"
+      },
+      "case-5-run-0.logits.f32": {
+        "bytes": 800232,
+        "sha256": "693d5ff6bb136421d157b5ed2c25b25f98b19d2541775c5e9fa1ddf9f0ba1bc9"
+      },
+      "case-5-run-1.logits.f32": {
+        "bytes": 800232,
+        "sha256": "693d5ff6bb136421d157b5ed2c25b25f98b19d2541775c5e9fa1ddf9f0ba1bc9"
+      },
+      "case-6-run-0.logits.f32": {
+        "bytes": 800232,
+        "sha256": "c45055ed68fe160494f720aa2fd2996a81e72dfc4453b20c5eb458d262bb9b0f"
+      },
+      "case-6-run-1.logits.f32": {
+        "bytes": 800232,
+        "sha256": "c45055ed68fe160494f720aa2fd2996a81e72dfc4453b20c5eb458d262bb9b0f"
+      },
+      "loading.json": {
+        "bytes": 110,
+        "sha256": "512b2f8ed83e403753fbc9dc7e4c4b91c730e67af02735d9d90fcc01cf33766c"
+      },
+      "manifest.json": {
+        "bytes": 139240,
+        "sha256": "f4953267e79a71ccd59cdb99ab3ac49d1a4440cab947a4765b12655de11f27cc"
+      },
+      "summary.json": {
+        "bytes": 1415,
+        "sha256": "96cf90635cd7bb6bdd77df450afc9a2f408e618afa05961efb5b4d36342b0b55"
+      }
+    },
+    "native-control-v2": {
+      "case-4.logits.f32": {
+        "bytes": 800232,
+        "sha256": "ea951435a5f99ecf530d3c85c94b1cd285098128f244d40a55cc3bc5eb916d03"
+      },
+      "case-5.logits.f32": {
+        "bytes": 800232,
+        "sha256": "d8bab8d169d2c587b8e48464ef0024109697868125838ac06e9a8c58dca89194"
+      },
+      "case-6.logits.f32": {
+        "bytes": 800232,
+        "sha256": "41eac67285c2c18c747d8d1915f64494e149d5b527ddb7e77855829de8ff193a"
+      },
+      "control.jsonl": {
+        "bytes": 1041,
+        "sha256": "41f6add3d92f491d9765fd1f3dca2d54cbfed39c221162ed099289c57815cff3"
+      },
+      "stderr.log": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  }
+}
