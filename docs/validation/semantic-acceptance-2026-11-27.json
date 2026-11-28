@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-27",
+  "client_source_revision": "a421d780967a2bd22e804214c80a3e09a5f80852",
+  "suite": "semantic-v1",
+  "kernels_changed": false,
+  "production_sources_changed": false,
+  "goldens_changed": false,
+  "profiles": [
+    "ar",
+    "fixed",
+    "adaptive",
+    "sampled"
+  ],
+  "cases_per_profile": 7,
+  "samples_per_case_profile": 1,
+  "max_output_tokens": 2048,
+  "model_backed_validation_complete": true,
+  "devices": {
+    "gb202": {
+      "passed": true,
+      "cases": 28,
+      "client_binary_sha256": "ab3540b6a7f159a833a73bd7c7bbbe0fd516ffd616705c6bc16eaaa724cf7894",
+      "model_files": {
+        "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+        "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+        "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+      },
+      "validator_sha256": "f4495b9fec301b2d1170e3b949e34c3b750a6b262f33625010b931b010e40bfd",
+      "compiler_image_id": "sha256:95eefe2d1903ea666a12a7679908eed4d887e55ab0284376a30c9355b5e681c8",
+      "manual_prose_review": "All four final paragraphs reviewed: coherent, complete and on topic; no obvious repetition loops",
+      "all_finish_eos": true,
+      "maximum_generated_tokens": 535,
+      "maximum_prompt_tokens": 4543
+    },
+    "ampere": {
+      "passed": true,
+      "cases": 28,
+      "client_binary_sha256": "92af93129deedf38616762eb2d91c08ce15a85b887066949ac5a068026fe477d",
+      "model_files": {
+        "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+        "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+        "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+      },
+      "validator_sha256": "f4495b9fec301b2d1170e3b949e34c3b750a6b262f33625010b931b010e40bfd",
+      "compiler_image_id": "sha256:95eefe2d1903ea666a12a7679908eed4d887e55ab0284376a30c9355b5e681c8",
+      "manual_prose_review": "All four final paragraphs reviewed: coherent, complete and on topic; no obvious repetition loops",
+      "all_finish_eos": true,
+      "maximum_generated_tokens": 728,
+      "maximum_prompt_tokens": 4543
+    },
+    "gb10": {
+      "passed": true,
+      "cases": 28,
+      "client_binary_sha256": "edb1f0a7c320c44c632ab04431734e7eae1c18a659e0c7ddce900c901eabc09c",
+      "model_files": {
+        "tokenizer.json": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6",
+        "model-00001-of-00001.safetensors": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1",
+        "mtp.safetensors": "7c3b651317f01f73bcf4e1dceba66ef8b7e1a1eac6bc171e882e690a4b10a1d2"
+      },
+      "validator_sha256": "f4495b9fec301b2d1170e3b949e34c3b750a6b262f33625010b931b010e40bfd",
+      "compiler_image_id": "sha256:95eefe2d1903ea666a12a7679908eed4d887e55ab0284376a30c9355b5e681c8",
+      "manual_prose_review": "All four final paragraphs reviewed: coherent, complete and on topic; no obvious repetition loops",
+      "all_finish_eos": true,
+      "maximum_generated_tokens": 678,
+      "maximum_prompt_tokens": 4543
+    }
+  },
+  "ampere_postflight": {
+    "reservation_closed_at": 1795797521.755512,
+    "gpu": "GPU-5784d04b-bfbd-7b3d-922a-34cec3f3ce92, 1919, 0",
+    "services_stopped": false,
+    "global_configuration_changed": false
+  },
+  "infrastructure_interruptions": [
+    {
+      "device": "ampere",
+      "campaign": "semantic-results",
+      "reason": "Idle guard detected desktop GPU activity before json-fixed; no semantic result claimed for the incomplete campaign",
+      "retry": "Fresh semantic-results-retry collection completed all 28 cases"
+    }
+  ],
+  "validator_correction": "Removed an invalid literal autumn/morning keyword requirement. The prompt requested a description, not those literal words. Raw generations and task prompts unchanged.",
+  "model_files_identical_on_three_devices": true,
+  "total_cases_passed": 84,
+  "manual_prose_paragraphs_reviewed": 12,
+  "gb10_restoration_status": "restored healthy; API and expected model verified",
+  "gb10_lifecycle": {
+    "restored_healthy": true,
+    "containers_unchanged": true,
+    "service_enablement_unchanged": true,
+    "cursus_containers_compared": 8,
+    "window_seconds": 1942.52,
+    "collection_seconds": 1682.73
+  }
+}

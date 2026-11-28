@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='ifn-release-failure-') as tmp:
     tree = base / 'source'
     (tree / 'tools').mkdir(parents=True)
     (tree / 'test/fixtures').mkdir(parents=True)
-    for name in ['run_model_release.py', 'model_release.py']:
+    for name in ['run_model_release.py', 'model_release.py', 'process_tree.py']:
         shutil.copy2(ROOT / 'tools' / name, tree / 'tools' / name)
     (tree / 'VERSION').write_text('0.2.0-dev\n')
     model = base / 'model'
@@ -86,7 +86,7 @@ with tempfile.TemporaryDirectory(prefix='ifn-release-failure-') as tmp:
         return 'synthetic tool identity'
     def invoke(query_fn, error):
         report.write_text(json.dumps(old))
-        with patch.object(sys,'argv',args[1:]), patch.object(runner,'query',side_effect=query_fn), patch.object(runner.subprocess,'run',side_effect=subprocess.CalledProcessError(23,['make'])):
+        with patch.object(sys,'argv',args[1:]), patch.object(runner,'query',side_effect=query_fn), patch.object(runner,'run_owned',side_effect=subprocess.CalledProcessError(23,['make'])):
             try:runner.main();raise AssertionError('failed release accepted')
             except (SystemExit,subprocess.CalledProcessError):pass
         current=json.loads(report.read_text())

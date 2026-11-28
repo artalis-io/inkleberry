@@ -612,3 +612,26 @@ check: numerical-compare-check
 $(BUILD_DIR)/numerical-prefill.o: src/engine_prefill.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) -DIFN_TEST_NUMERICS,$<,$@)
 check: $(BUILD_DIR)/numerical-prefill.o
+
+# Semantic acceptance is separate from timed/golden generation benchmarks.
+$(BUILD_DIR)/semantic.o: test/semantic.c $(PUBLIC_HEADERS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/semantic$(EXE): $(BUILD_DIR)/semantic.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+.PHONY: semantic-validator-check
+semantic-validator-check:
+	$(PYTHON) test/semantic_acceptance.py
+check: $(BUILD_DIR)/semantic.o semantic-validator-check
+
+.PHONY: audit-boundary-check audit-check
+audit-boundary-check:
+	$(PYTHON) tools/check_audit_boundaries.py
+	$(PYTHON) test/audit_boundaries.py
+check: audit-boundary-check
+audit-check: generated-check audit-boundary-check
+	$(PYTHON) tools/lint.py
+
+.PHONY: qualification-safety-check
+qualification-safety-check:
+	$(PYTHON) test/qualification_safety.py
+check: qualification-safety-check

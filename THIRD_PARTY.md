@@ -43,3 +43,12 @@ Jev Bush's 0BSD grant for copied formatting/adapted build conventions:
 `scripts/msvc-env.sh` is adapted from `artalis-io/keel` at
 `ff25928069ee1822c3529479f840a248999f644d`, copyright 2026 Artalis, MIT.
 The complete MIT notice is retained in that script.
+
+## Development audit material
+
+The repository-local `.claude/skills/c-audit/SKILL.md` adapts the C-audit checklist
+from `artalis-io/bitnet.c` commit `ab9e8e8661371ee33fb086980b675aae88246de5`.
+Its MIT notice is retained in `.claude/skills/c-audit/LICENSE.bitnet`.
+The call-graph/lexical audit method in `tools/check_audit_boundaries.py` adapts
+Jev Bush's BSD-0-Clause tools at `85fd51f8c99b1b8b7ea26d33e02413e681a9271d`.
+These are developer audits, not imported model algorithms or runtime dependencies.
