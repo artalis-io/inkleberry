@@ -609,6 +609,8 @@ numerical-compare-check:
 	$(PYTHON) test/numerical_compare.py
 	$(PYTHON) test/first_divergence.py
 	$(PYTHON) test/boundary_logits.py
+	$(PYTHON) test/reference_logits.py
+	$(PYTHON) test/reference_comparison.py
 check: numerical-compare-check
 
 $(BUILD_DIR)/numerical-prefill.o: src/engine_prefill.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
@@ -658,3 +660,10 @@ $(BUILD_DIR)/logit-boundary.o: test/logit_boundary.c test/benchmark_prompts.h $(
 $(BUILD_DIR)/logit-boundary$(EXE): $(BUILD_DIR)/logit-boundary.o $(GPU_STATIC) $(HOST_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 check: $(BUILD_DIR)/logit-boundary.o
+
+# Explicit precision control, separate from the qualified production configuration.
+$(BUILD_DIR)/reference-control.o: test/reference_control.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
+	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
+$(BUILD_DIR)/reference-control$(EXE): $(BUILD_DIR)/reference-control.o $(GPU_STATIC) $(HOST_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+check: $(BUILD_DIR)/reference-control.o
