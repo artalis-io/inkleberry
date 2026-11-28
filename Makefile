@@ -607,6 +607,7 @@ check: $(BUILD_DIR)/numerical.o $(BUILD_DIR)/numerical-forward.o
 .PHONY: numerical-compare-check
 numerical-compare-check:
 	$(PYTHON) test/numerical_compare.py
+	$(PYTHON) test/first_divergence.py
 check: numerical-compare-check
 
 $(BUILD_DIR)/numerical-prefill.o: src/engine_prefill.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
