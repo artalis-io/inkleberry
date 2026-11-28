@@ -58,12 +58,13 @@ capture/reproduction is a prerequisite for interpreting such diagnostic outputs.
 
 ## Current availability and scope
 
-The qualification stack is merged into `main` at `c18401e`. Main post-merge CI
-is tracked separately from the passing pre-merge suites. Both `spark-7468` and
-`spark-3eb0` have active `VLLM::EngineCore` processes. No inference service has
-been stopped. Permission to temporarily pause/restore the named Spark service
-has been requested before GPU capture. No new GB10 logit or trusted-reference
-results are claimed. Existing kernel and golden files are unchanged.
+The qualification stack is merged into `main` at `c18401e`. Subsequently, all 11
+boundaries were captured on RTX and GB10, with exact prompt and shared-prefix
+validation and unchanged complete outputs. See the
+[measured logit report](gb10-boundary-logits-2026-11-28.md). Only the explicitly
+approved vLLM service on `spark-7468` was paused; it is restored and healthy, with
+Cursus containers and boot enablement unchanged. Independent full-model reference
+comparison remains pending. No kernels or goldens have changed.
 
 Reproduce historical extraction:
 
