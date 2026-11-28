@@ -3,19 +3,9 @@
  * Host binding barrier derived from pinned src/weights.zig and constants.zig.
  * No upload, quantization, device allocation or implicit optional-MTP fallback. */
 #include "inkling.h"
+#include "inkling_geometry.h"
 #include <stdio.h>
 #include <string.h>
-
-enum {
-    IFN_INKLING_LOCAL_H = 2304,
-    IFN_INKLING_LOCAL_Q = 3072,
-    IFN_INKLING_LOCAL_KV = 1024,
-    IFN_INKLING_LOCAL_R = 384,
-    IFN_INKLING_LOCAL_E = 128,
-    IFN_INKLING_LOCAL_I = 1152,
-    IFN_INKLING_LOCAL_V = 201024,
-    IFN_INKLING_LOCAL_M = 9216
-};
 
 struct ifn_inkling_checkpoint {
     ifn_options allocator;
@@ -52,96 +42,97 @@ ifn_status ifn_inkling_visit_specs(uint32_t include_mtp, ifn_spec_fn visit, void
     if (!visit || include_mtp > 1)
         return ifn_error(IFN_INVALID_ARGUMENT, "invalid schema visitor");
     const char *base = "model.llm.";
-    IFN_INKLING_LOCAL_S(0, base, "embed.weight", IFN_BF16, IFN_INKLING_LOCAL_V, IFN_INKLING_LOCAL_H,
-                        0);
-    IFN_INKLING_LOCAL_S(0, base, "embed_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-    IFN_INKLING_LOCAL_S(0, base, "norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-    IFN_INKLING_LOCAL_S(0, base, "unembed.weight", IFN_BF16, IFN_INKLING_LOCAL_V,
-                        IFN_INKLING_LOCAL_H, 0);
+    IFN_INKLING_LOCAL_S(0, base, "embed.weight", IFN_BF16, IFN_INKLING_VOCAB_PADDED,
+                        IFN_INKLING_HIDDEN, 0);
+    IFN_INKLING_LOCAL_S(0, base, "embed_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+    IFN_INKLING_LOCAL_S(0, base, "norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+    IFN_INKLING_LOCAL_S(0, base, "unembed.weight", IFN_BF16, IFN_INKLING_VOCAB_PADDED,
+                        IFN_INKLING_HIDDEN, 0);
     char p[96];
-    for (unsigned l = 0; l < 23; l++) {
+    for (unsigned l = 0; l < IFN_INKLING_LAYERS - 1; l++) {
         (void)snprintf(p, sizeof p, "model.llm.attn_res.attn_queries.%u", l);
-        bool global = (l + 2) % 6 == 0;
-        IFN_INKLING_LOCAL_S(0, p, "", IFN_F32, global ? 3 : IFN_INKLING_LOCAL_H,
-                            global ? IFN_INKLING_LOCAL_H : 0, 0);
+        bool global = (l + 2) % IFN_INKLING_BLOCK_LAYERS == 0;
+        IFN_INKLING_LOCAL_S(0, p, "", IFN_F32, global ? 3 : IFN_INKLING_HIDDEN,
+                            global ? IFN_INKLING_HIDDEN : 0, 0);
     }
-    for (unsigned l = 0; l < 24; l++) {
+    for (unsigned l = 0; l < IFN_INKLING_LAYERS; l++) {
         (void)snprintf(p, sizeof p, "model.llm.attn_res.mlp_queries.%u", l);
-        IFN_INKLING_LOCAL_S(0, p, "", IFN_F32, IFN_INKLING_LOCAL_H, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "", IFN_F32, IFN_INKLING_HIDDEN, 0, 0);
     }
-    IFN_INKLING_LOCAL_S(0, base, "attn_res.output_query", IFN_F32, IFN_INKLING_LOCAL_H, 0, 0);
-    IFN_INKLING_LOCAL_S(0, base, "middle_cycle_cross_pass_queries", IFN_F32, 24,
-                        IFN_INKLING_LOCAL_H, 0);
+    IFN_INKLING_LOCAL_S(0, base, "attn_res.output_query", IFN_F32, IFN_INKLING_HIDDEN, 0, 0);
+    IFN_INKLING_LOCAL_S(0, base, "middle_cycle_cross_pass_queries", IFN_F32, 24, IFN_INKLING_HIDDEN,
+                        0);
     IFN_INKLING_LOCAL_S(0, base, "middle_cycle_cross_pass_kv_queries", IFN_F32, 24,
-                        IFN_INKLING_LOCAL_H, 0);
-    for (unsigned l = 0; l < 24; l++) {
+                        IFN_INKLING_HIDDEN, 0);
+    for (unsigned l = 0; l < IFN_INKLING_LAYERS; l++) {
         (void)snprintf(p, sizeof p, "model.llm.layers.%u.", l);
-        bool global = (l + 1) % 6 == 0;
+        bool global = (l + 1) % IFN_INKLING_BLOCK_LAYERS == 0;
         if (global) {
-            IFN_INKLING_LOCAL_S(0, p, "q_input_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-            IFN_INKLING_LOCAL_S(0, p, "k_input_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-            IFN_INKLING_LOCAL_S(0, p, "v_input_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
+            IFN_INKLING_LOCAL_S(0, p, "q_input_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+            IFN_INKLING_LOCAL_S(0, p, "k_input_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+            IFN_INKLING_LOCAL_S(0, p, "v_input_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
         } else
-            IFN_INKLING_LOCAL_S(0, p, "attn_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-        IFN_INKLING_LOCAL_S(0, p, "mlp_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.wq_du.weight", IFN_BF16, IFN_INKLING_LOCAL_Q,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.wr_du.weight", IFN_BF16, IFN_INKLING_LOCAL_R,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.gate_attn.weight", IFN_BF16, IFN_INKLING_LOCAL_Q,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.attn_sink_proj.weight", IFN_BF16, 24, IFN_INKLING_LOCAL_H,
+            IFN_INKLING_LOCAL_S(0, p, "attn_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "mlp_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wq_du.weight", IFN_BF16, IFN_INKLING_QUERY,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wr_du.weight", IFN_BF16, IFN_INKLING_RELATIVE,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.gate_attn.weight", IFN_BF16, IFN_INKLING_QUERY,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.attn_sink_proj.weight", IFN_BF16, 24, IFN_INKLING_HIDDEN,
                             0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.wk_dv.weight", IFN_BF16, IFN_INKLING_LOCAL_KV,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.wv_dv.weight", IFN_BF16, IFN_INKLING_LOCAL_KV,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(0, p, "attn.wo_ud.weight", IFN_BF16, IFN_INKLING_LOCAL_H,
-                            IFN_INKLING_LOCAL_Q, 0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wk_dv.weight", IFN_BF16, IFN_INKLING_KV, IFN_INKLING_HIDDEN,
+                            0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wv_dv.weight", IFN_BF16, IFN_INKLING_KV, IFN_INKLING_HIDDEN,
+                            0);
+        IFN_INKLING_LOCAL_S(0, p, "attn.wo_ud.weight", IFN_BF16, IFN_INKLING_HIDDEN,
+                            IFN_INKLING_QUERY, 0);
         if (global) {
-            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.static_w", IFN_BF16, 4, IFN_INKLING_LOCAL_KV,
+            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.static_w", IFN_BF16, 4, IFN_INKLING_KV, 0);
+            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.static_w", IFN_BF16, 4, IFN_INKLING_KV, 0);
+            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.weight_proj", IFN_BF16, 32, IFN_INKLING_HIDDEN,
                                 0);
-            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.static_w", IFN_BF16, 4, IFN_INKLING_LOCAL_KV,
-                                0);
-            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.weight_proj", IFN_BF16, 32, IFN_INKLING_LOCAL_H,
-                                0);
-            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.weight_proj", IFN_BF16, 32, IFN_INKLING_LOCAL_H,
+            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.weight_proj", IFN_BF16, 32, IFN_INKLING_HIDDEN,
                                 0);
         } else {
-            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.weight", IFN_BF16, IFN_INKLING_LOCAL_KV, 1, 4);
-            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.weight", IFN_BF16, IFN_INKLING_LOCAL_KV, 1, 4);
+            IFN_INKLING_LOCAL_S(0, p, "attn.k_sconv.weight", IFN_BF16, IFN_INKLING_KV, 1, 4);
+            IFN_INKLING_LOCAL_S(0, p, "attn.v_sconv.weight", IFN_BF16, IFN_INKLING_KV, 1, 4);
         }
-        IFN_INKLING_LOCAL_S(0, p, "attn_sconv.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 1, 4);
-        IFN_INKLING_LOCAL_S(0, p, "mlp_sconv.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 1, 4);
+        IFN_INKLING_LOCAL_S(0, p, "attn_sconv.weight", IFN_BF16, IFN_INKLING_HIDDEN, 1, 4);
+        IFN_INKLING_LOCAL_S(0, p, "mlp_sconv.weight", IFN_BF16, IFN_INKLING_HIDDEN, 1, 4);
         IFN_INKLING_LOCAL_S(0, p, "attn.q_l2_clip.scale", IFN_BF16, 24, 128, 0);
         IFN_INKLING_LOCAL_S(0, p, "attn.rel_l2_clip.scale", IFN_BF16, 24, 16, 0);
         IFN_INKLING_LOCAL_S(0, p, "attn.rel_logits_proj.proj", IFN_BF16, 16, 1024, 0);
-        if (l >= 6 && l < 18) {
+        if (l >= IFN_INKLING_LOOP_START && l < IFN_INKLING_LOOP_END) {
             const char *stems[] = {"attn", "k", "v", "mlp"};
             char cpre[112];
             for (size_t j = 0; j < 4; j++) {
                 (void)snprintf(cpre, sizeof cpre, "%scontrollers.%s.", p, stems[j]);
-                IFN_INKLING_LOCAL_S(0, cpre, "down_weight", IFN_BF16, 64, 2 * IFN_INKLING_LOCAL_H,
+                IFN_INKLING_LOCAL_S(0, cpre, "down_weight", IFN_BF16, 64, 2 * IFN_INKLING_HIDDEN,
                                     0);
-                IFN_INKLING_LOCAL_S(0, cpre, "forget_weight", IFN_BF16, IFN_INKLING_LOCAL_H, 64, 0);
-                IFN_INKLING_LOCAL_S(0, cpre, "gain_weight", IFN_BF16, IFN_INKLING_LOCAL_H, 64, 0);
+                IFN_INKLING_LOCAL_S(0, cpre, "forget_weight", IFN_BF16, IFN_INKLING_HIDDEN, 64, 0);
+                IFN_INKLING_LOCAL_S(0, cpre, "gain_weight", IFN_BF16, IFN_INKLING_HIDDEN, 64, 0);
             }
         }
-        IFN_INKLING_LOCAL_S(0, p, "mlp.gate.weight", IFN_BF16, IFN_INKLING_LOCAL_E,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(0, p, "mlp.gate.bias", IFN_F32, IFN_INKLING_LOCAL_E, 0, 0);
+        IFN_INKLING_LOCAL_S(0, p, "mlp.gate.weight", IFN_BF16, IFN_INKLING_EXPERTS,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(0, p, "mlp.gate.bias", IFN_F32, IFN_INKLING_EXPERTS, 0, 0);
         const char *banks[] = {"w13", "w2"};
         for (size_t j = 0; j < 2; j++) {
-            unsigned rows = j ? IFN_INKLING_LOCAL_H : 2 * IFN_INKLING_LOCAL_I,
-                     cols = j ? IFN_INKLING_LOCAL_I : IFN_INKLING_LOCAL_H;
+            unsigned rows = j ? IFN_INKLING_HIDDEN : 2 * IFN_INKLING_INTERMEDIATE,
+                     cols = j ? IFN_INKLING_INTERMEDIATE : IFN_INKLING_HIDDEN;
             char n[128];
             (void)snprintf(n, sizeof n, "%smlp.experts.%s_weight", p, banks[j]);
-            IFN_INKLING_LOCAL_S(0, n, "", l < 20 ? IFN_U8 : IFN_F8_E4M3, IFN_INKLING_LOCAL_E, rows,
-                                l < 20 ? cols / 2 : cols);
-            IFN_INKLING_LOCAL_S(0, n, "_scale", l < 20 ? IFN_F8_E4M3 : IFN_U8, IFN_INKLING_LOCAL_E,
-                                rows, l < 20 ? cols / 16 : cols / 32);
-            if (l < 20) {
-                IFN_INKLING_LOCAL_S(0, n, "_amax", IFN_F32, IFN_INKLING_LOCAL_E, 0, 0);
+            IFN_INKLING_LOCAL_S(
+                0, n, "", l < IFN_INKLING_NVFP4_EXPERT_LAYERS ? IFN_U8 : IFN_F8_E4M3,
+                IFN_INKLING_EXPERTS, rows, l < IFN_INKLING_NVFP4_EXPERT_LAYERS ? cols / 2 : cols);
+            IFN_INKLING_LOCAL_S(0, n, "_scale",
+                                l < IFN_INKLING_NVFP4_EXPERT_LAYERS ? IFN_F8_E4M3 : IFN_U8,
+                                IFN_INKLING_EXPERTS, rows,
+                                l < IFN_INKLING_NVFP4_EXPERT_LAYERS ? cols / 16 : cols / 32);
+            if (l < IFN_INKLING_NVFP4_EXPERT_LAYERS) {
+                IFN_INKLING_LOCAL_S(0, n, "_amax", IFN_F32, IFN_INKLING_EXPERTS, 0, 0);
                 IFN_INKLING_LOCAL_S(0, n, "_outer_scale_denominator", IFN_F32, 1, 0, 0);
             }
         }
@@ -149,44 +140,44 @@ ifn_status ifn_inkling_visit_specs(uint32_t include_mtp, ifn_spec_fn visit, void
     if (!include_mtp)
         return IFN_OK;
     IFN_INKLING_LOCAL_S(1, "", "fuse_weight", IFN_BF16, 4, 4, 0);
-    IFN_INKLING_LOCAL_S(1, "", "mask_embed", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-    IFN_INKLING_LOCAL_S(1, "", "norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-    IFN_INKLING_LOCAL_S(1, "", "markov_head.dflare_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0,
+    IFN_INKLING_LOCAL_S(1, "", "mask_embed", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+    IFN_INKLING_LOCAL_S(1, "", "norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.dflare_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0,
                         0);
-    IFN_INKLING_LOCAL_S(1, "", "markov_head.markov_w1.weight", IFN_BF16, IFN_INKLING_LOCAL_V, 256,
-                        0);
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.markov_w1.weight", IFN_BF16, IFN_INKLING_VOCAB_PADDED,
+                        256, 0);
     IFN_INKLING_LOCAL_S(1, "", "markov_head.rnn_proj.bias", IFN_BF16, 768, 0, 0);
     IFN_INKLING_LOCAL_S(1, "", "markov_head.rnn_proj.weight", IFN_BF16, 768, 5120, 0);
-    IFN_INKLING_LOCAL_S(1, "", "markov_head.hidden_out.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 256,
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.hidden_out.weight", IFN_BF16, IFN_INKLING_HIDDEN, 256,
                         0);
-    IFN_INKLING_LOCAL_S(1, "", "markov_head.hidden_out.bias", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-    for (unsigned l = 0; l < 3; l++) {
+    IFN_INKLING_LOCAL_S(1, "", "markov_head.hidden_out.bias", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+    for (unsigned l = 0; l < IFN_INKLING_MTP_LAYERS; l++) {
         (void)snprintf(p, sizeof p, "layers.%u.", l);
-        IFN_INKLING_LOCAL_S(1, p, "input_layernorm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
-        IFN_INKLING_LOCAL_S(1, p, "post_attention_layernorm.weight", IFN_BF16, IFN_INKLING_LOCAL_H,
+        IFN_INKLING_LOCAL_S(1, p, "input_layernorm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "post_attention_layernorm.weight", IFN_BF16, IFN_INKLING_HIDDEN,
                             0, 0);
-        IFN_INKLING_LOCAL_S(1, p, "dflare_norm.weight", IFN_BF16, IFN_INKLING_LOCAL_H, 0, 0);
+        IFN_INKLING_LOCAL_S(1, p, "dflare_norm.weight", IFN_BF16, IFN_INKLING_HIDDEN, 0, 0);
         IFN_INKLING_LOCAL_S(1, p, "self_attn.q_norm.weight", IFN_BF16, 128, 0, 0);
         IFN_INKLING_LOCAL_S(1, p, "self_attn.k_norm.weight", IFN_BF16, 128, 0, 0);
         IFN_INKLING_LOCAL_S(1, p, "self_attn.k_norm_ctx.weight", IFN_BF16, 128, 0, 0);
-        IFN_INKLING_LOCAL_S(1, p, "self_attn.q_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_Q,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_KV,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(1, p, "self_attn.v_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_KV,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(1, p, "self_attn.o_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_H,
-                            IFN_INKLING_LOCAL_Q, 0);
-        IFN_INKLING_LOCAL_S(1, p, "mlp.gate_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_M,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(1, p, "mlp.up_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_M,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(1, p, "mlp.down_proj.weight", IFN_BF16, IFN_INKLING_LOCAL_H,
-                            IFN_INKLING_LOCAL_M, 0);
-        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_proj_ctx.weight", IFN_BF16, IFN_INKLING_LOCAL_KV,
-                            IFN_INKLING_LOCAL_H, 0);
-        IFN_INKLING_LOCAL_S(1, p, "self_attn.v_proj_ctx.weight", IFN_BF16, IFN_INKLING_LOCAL_KV,
-                            IFN_INKLING_LOCAL_H, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.q_proj.weight", IFN_BF16, IFN_INKLING_QUERY,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_proj.weight", IFN_BF16, IFN_INKLING_KV,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.v_proj.weight", IFN_BF16, IFN_INKLING_KV,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.o_proj.weight", IFN_BF16, IFN_INKLING_HIDDEN,
+                            IFN_INKLING_QUERY, 0);
+        IFN_INKLING_LOCAL_S(1, p, "mlp.gate_proj.weight", IFN_BF16, IFN_INKLING_MTP_INTERMEDIATE,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(1, p, "mlp.up_proj.weight", IFN_BF16, IFN_INKLING_MTP_INTERMEDIATE,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(1, p, "mlp.down_proj.weight", IFN_BF16, IFN_INKLING_HIDDEN,
+                            IFN_INKLING_MTP_INTERMEDIATE, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.k_proj_ctx.weight", IFN_BF16, IFN_INKLING_KV,
+                            IFN_INKLING_HIDDEN, 0);
+        IFN_INKLING_LOCAL_S(1, p, "self_attn.v_proj_ctx.weight", IFN_BF16, IFN_INKLING_KV,
+                            IFN_INKLING_HIDDEN, 0);
     }
     return IFN_OK;
 }

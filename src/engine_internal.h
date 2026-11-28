@@ -4,6 +4,7 @@
 #ifndef IFN_ENGINE_INTERNAL_H
 #define IFN_ENGINE_INTERNAL_H
 #include "weights_internal.h"
+#include "inkling_geometry.h"
 #include "ifn_engine.h"
 #include "engine_control.h"
 #include "cuda_abi.h"
@@ -41,9 +42,9 @@ typedef struct {
 typedef struct {
     void *embed, *embed_norm, *final_norm;
     ifn_cuda_c_linear_weight unembed;
-    float *attn_queries[23], *mlp_queries[24], *output_query;
+    float *attn_queries[IFN_INKLING_LAYERS - 1], *mlp_queries[IFN_INKLING_LAYERS], *output_query;
     float *cross_pass_queries, *cross_pass_kv_queries;
-    ifn_layer layers[24];
+    ifn_layer layers[IFN_INKLING_LAYERS];
     ifn_cuda_c_dspark_weights dspark;
 } ifn_ar_model;
 
@@ -57,7 +58,7 @@ struct ifn_session {
     ifn_session_config config;
     ifn_gpu_weights *weights;
     ifn_ar_model model;
-    ifn_visit schedule[48];
+    ifn_visit schedule[IFN_INKLING_VISITS];
     atomic_flag busy;
     atomic_bool cancelled;
     const ifn_run_control *request_control;
@@ -81,9 +82,11 @@ struct ifn_session {
     float *d_draft_probs, *d_draft_q_sel, *d_conf;
     int32_t *d_width;
     size_t capacity, offset, allocations;
-    int32_t kv_cap[48];
-    void *k_cache[48], *v_cache[48], *k_scale[48], *v_scale[48];
-    float *k_ring[48], *v_ring[48], *attn_ring[48], *mlp_ring[48];
+    int32_t kv_cap[IFN_INKLING_VISITS];
+    void *k_cache[IFN_INKLING_VISITS], *v_cache[IFN_INKLING_VISITS], *k_scale[IFN_INKLING_VISITS],
+        *v_scale[IFN_INKLING_VISITS];
+    float *k_ring[IFN_INKLING_VISITS], *v_ring[IFN_INKLING_VISITS], *attn_ring[IFN_INKLING_VISITS],
+        *mlp_ring[IFN_INKLING_VISITS];
     float *split_buf;
     int32_t *d_pos, *d_tokens, *d_next_tokens;
     float *hidden, *prelude, *partial, *blocks, *saved, *prior_last;
@@ -148,7 +151,7 @@ void ifn_adaptive_drain(ifn_session *);
 void ifn_spec_step(ifn_session *, uint32_t);
 void ifn_spec_commit(ifn_session *, const float *, int32_t, const int32_t *);
 ifn_status ifn_ar_bind(ifn_gpu_weights *, ifn_ar_model *);
-void ifn_ar_schedule(ifn_visit[48]);
+void ifn_ar_schedule(ifn_visit[IFN_INKLING_VISITS]);
 void ifn_ar_layout(ifn_session *, size_t);
 void ifn_ar_prefill(ifn_session *, const int32_t *, int32_t);
 void ifn_ar_forward(ifn_session *, int32_t, bool);

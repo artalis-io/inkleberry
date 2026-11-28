@@ -60,28 +60,28 @@ ifn_status ifn_ar_bind(ifn_gpu_weights *w, ifn_ar_model *m) {
     IFN_ENGINE_BIND_LOCAL_B("cross_pass_kv_queries", m->cross_pass_kv_queries, IFN_WEIGHT_RAW);
     IFN_ENGINE_BIND_LOCAL_B("unembed", m->unembed, IFN_WEIGHT_LINEAR);
     char label[128];
-    for (unsigned i = 0; i < 23; i++) {
+    for (unsigned i = 0; i < IFN_INKLING_LAYERS - 1; i++) {
         (void)snprintf(label, sizeof label, "attn_queries.%u", i);
         IFN_ENGINE_BIND_LOCAL_B(label, m->attn_queries[i], IFN_WEIGHT_RAW);
     }
-    for (unsigned i = 0; i < 24; i++) {
+    for (unsigned i = 0; i < IFN_INKLING_LAYERS; i++) {
         (void)snprintf(label, sizeof label, "mlp_queries.%u", i);
         IFN_ENGINE_BIND_LOCAL_B(label, m->mlp_queries[i], IFN_WEIGHT_RAW);
     }
-    for (unsigned i = 0; i < 24; i++) {
-        if (i % 6 != 5) {
+    for (unsigned i = 0; i < IFN_INKLING_LAYERS; i++) {
+        if ((i + 1) % IFN_INKLING_BLOCK_LAYERS != 0) {
             (void)snprintf(label, sizeof label, "layers.%u.attn_norm", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].attn_norm, IFN_WEIGHT_RAW);
         }
-        if (i % 6 == 5) {
+        if ((i + 1) % IFN_INKLING_BLOCK_LAYERS == 0) {
             (void)snprintf(label, sizeof label, "layers.%u.q_in_norm", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].q_in_norm, IFN_WEIGHT_RAW);
         }
-        if (i % 6 == 5) {
+        if ((i + 1) % IFN_INKLING_BLOCK_LAYERS == 0) {
             (void)snprintf(label, sizeof label, "layers.%u.k_in_norm", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].k_in_norm, IFN_WEIGHT_RAW);
         }
-        if (i % 6 == 5) {
+        if ((i + 1) % IFN_INKLING_BLOCK_LAYERS == 0) {
             (void)snprintf(label, sizeof label, "layers.%u.v_in_norm", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].v_in_norm, IFN_WEIGHT_RAW);
         }
@@ -117,11 +117,11 @@ ifn_status ifn_ar_bind(ifn_gpu_weights *w, ifn_ar_model *m) {
             (void)snprintf(label, sizeof label, "layers.%u.v_sconv_w", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].v_sconv_w, IFN_WEIGHT_RAW);
         }
-        if (i % 6 == 5) {
+        if ((i + 1) % IFN_INKLING_BLOCK_LAYERS == 0) {
             (void)snprintf(label, sizeof label, "layers.%u.k_sconv_proj", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].k_sconv_proj, IFN_WEIGHT_RAW);
         }
-        if (i % 6 == 5) {
+        if ((i + 1) % IFN_INKLING_BLOCK_LAYERS == 0) {
             (void)snprintf(label, sizeof label, "layers.%u.v_sconv_proj", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].v_sconv_proj, IFN_WEIGHT_RAW);
         }
@@ -165,7 +165,7 @@ ifn_status ifn_ar_bind(ifn_gpu_weights *w, ifn_ar_model *m) {
             (void)snprintf(label, sizeof label, "layers.%u.w2", i);
             IFN_ENGINE_BIND_LOCAL_B(label, m->layers[i].w2, IFN_WEIGHT_EXPERT);
         }
-        if (i >= 6 && i < 18)
+        if (i >= IFN_INKLING_LOOP_START && i < IFN_INKLING_LOOP_END)
             for (unsigned j = 0; j < 4; j++) {
                 if (w->config.mode == 2) {
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.down_nvfp4", i, j);
@@ -242,13 +242,13 @@ ifn_status ifn_ar_bind(ifn_gpu_weights *w, ifn_ar_model *m) {
     return IFN_OK;
 }
 
-void ifn_ar_schedule(ifn_visit out[48]) {
+void ifn_ar_schedule(ifn_visit out[IFN_INKLING_VISITS]) {
     unsigned i = 0;
-    for (unsigned l = 0; l < 6; l++)
-        out[i++] = (ifn_visit){l, 0, false, l % 6 == 5};
-    for (unsigned p = 0; p < 3; p++)
-        for (unsigned l = 6; l < 18; l++)
-            out[i++] = (ifn_visit){l, p, true, l % 6 == 5};
-    for (unsigned l = 18; l < 24; l++)
-        out[i++] = (ifn_visit){l, 0, false, l % 6 == 5};
+    for (unsigned l = 0; l < IFN_INKLING_LOOP_START; l++)
+        out[i++] = (ifn_visit){l, 0, false, (l + 1) % IFN_INKLING_BLOCK_LAYERS == 0};
+    for (unsigned p = 0; p < IFN_INKLING_LOOP_PASSES; p++)
+        for (unsigned l = IFN_INKLING_LOOP_START; l < IFN_INKLING_LOOP_END; l++)
+            out[i++] = (ifn_visit){l, p, true, (l + 1) % IFN_INKLING_BLOCK_LAYERS == 0};
+    for (unsigned l = IFN_INKLING_LOOP_END; l < IFN_INKLING_LAYERS; l++)
+        out[i++] = (ifn_visit){l, 0, false, (l + 1) % IFN_INKLING_BLOCK_LAYERS == 0};
 }

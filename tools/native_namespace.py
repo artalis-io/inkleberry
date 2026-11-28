@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reversible identifier-only transformation for the retained native implementation.
+"""Reversible identifiers and reviewed host adaptations; device math remains pinned.
 SPDX-License-Identifier: Apache-2.0; Copyright (c) 2026 Artalis
 """
 import json
@@ -41,10 +41,51 @@ def translate(text, mapping):
     return ''.join(output)
 
 
-def original_bytes(text, root=ROOT):
+def platform_patches(root=ROOT):
+    value = json.loads((root / 'config/native-platform-adaptations.json').read_text())
+    allowed = {'host-launch-policy': 'cuda/kernels_common.cuh',
+               'host-resource-policy': 'cuda/kernels_prefill.cu'}
+    if (not isinstance(value, dict) or set(value) != {'format_version', 'patches'} or
+            value['format_version'] != 1 or not isinstance(value['patches'], list)):
+        raise ValueError('Invalid platform adaptation manifest')
+    seen = set()
+    for patch in value['patches']:
+        if (not isinstance(patch, dict) or set(patch) != {'path', 'kind', 'before', 'after'} or
+                patch.get('kind') not in allowed or patch['path'] != allowed[patch['kind']] or
+                patch['kind'] in seen or
+                any(not isinstance(patch[k], str) or not patch[k] for k in ('before', 'after')) or
+                any(t in patch['before'] or t in patch['after']
+                    for t in ('__global__', '__device__', '__launch_bounds__'))):
+            raise ValueError('Invalid host-only platform adaptation')
+        if patch['kind'] == 'host-launch-policy':
+            if (not patch['before'].startswith('template <class... KArgs, class... Args>\ninline void ifn_cuda_launch_pdl(') or
+                    patch['after'] != '// Host target policy: config/native-platform-adaptations.json.\n#include "../src/cuda/launch_policy.hpp"\n'):
+                raise ValueError('Platform launch hook escaped its reviewed host scope')
+        else:
+            original = ('    static const cudaError_t attr = cudaFuncSetAttribute(\n'
+                        '        ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);\n'
+                        '    (void)attr;')
+            expected = '    // Resource opt-in is checked per context during ifn_blas_create, before capture.'
+            if patch['before'] != original or patch['after'] != expected:
+                raise ValueError('Platform resource hook escaped its reviewed host scope')
+        seen.add(patch['kind'])
+    if seen != set(allowed):
+        raise ValueError('Incomplete platform adaptation manifest')
+    return value['patches']
+
+
+def original_bytes(text, root=ROOT, path=None):
     if not text.startswith(NATIVE_NOTICE):
         raise ValueError('Missing native modification notice')
     text = text[len(NATIVE_NOTICE):]
+    for patch in reversed(platform_patches(root)):
+        if path is not None and path != patch['path']:
+            continue
+        count = text.count(patch['after'])
+        if count > 1 or (path == patch['path'] and count != 1):
+            raise ValueError('Missing or ambiguous platform adaptation')
+        if count:
+            text = text.replace(patch['after'], patch['before'], 1)
     patches = json.loads((root / 'config/native-host-adaptations.json').read_text())
     # Patches are ordered edits; reverse in the opposite order. Exact strings
     # preserve all unreviewed kernel bytes and arithmetic under original hashes.

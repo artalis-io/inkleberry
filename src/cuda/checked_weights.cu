@@ -3,6 +3,7 @@
  * Original bridge is compiled in this TU, not also linked as a second object.
  * Same launch geometry/math; dedicated stream and recoverable error returns. */
 #include "../../cuda/cuda_abi.cu"
+#include "geometry_contract.hpp"
 #include "../checked_cuda.h"
 #include "capability.h"
 #include <cuda.h>

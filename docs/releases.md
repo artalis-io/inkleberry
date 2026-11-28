@@ -46,3 +46,7 @@ Host libraries carry ABI-major-1 SONAME/install names and versioned real files.
 The GPU SDK includes modular static archives and `inkleberry-static-infer.pc`;
 `pkg-config --static --libs inkleberry-static-infer` supplies native dependencies.
 See [library integration](library-integration.md) for contracts and native release gates.
+
+GPU runtime archives now include `CUDA-PROFILE.json` and a `-sm120a`, `-sm121a`
+or `-sm86-experimental` suffix. Packaging requires the profile emitted by the
+GPU build; metadata describes build identity, not runtime qualification.

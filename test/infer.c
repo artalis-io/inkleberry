@@ -583,6 +583,35 @@ static int ifn_infer_local_load_fixture(const char *directory) {
     return 0;
 }
 
+static int ifn_infer_local_profiles(void) {
+    const char *weights[] = {"exact-ar", "fp8-ar", "nvfp4-ar", "exact-mtp", "fp8-mtp", "nvfp4-mtp"};
+    const char *execution[] = {"bf16-eager", "fp8-eager", "q4-eager",
+                               "bf16-graph", "fp8-graph", "q4-graph"};
+    for (unsigned i = 0; i < 6; i++) {
+        ifn_infer_model_config_v1 c = ifn_infer_local_mc;
+        c.weight_profile = ifn_infer_text(weights[i]);
+        ifn_infer_model *m = NULL;
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_create(&c, &m, NULL) == IFN_OK);
+        IFN_INFER_LOCAL_CHECK(m->weights_config.mode == i % 3 &&
+                              m->weights_config.with_mtp == i / 3 &&
+                              !strcmp(m->profile, weights[i]));
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_close(&m, NULL) == IFN_OK);
+    }
+    ifn_infer_model *m = NULL;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_ready_model(&m, NULL) == IFN_OK);
+    for (unsigned i = 0; i < 6; i++) {
+        ifn_infer_session_config_v1 c = ifn_infer_local_sc;
+        c.execution_profile = ifn_infer_text(execution[i]);
+        ifn_infer_session *s = NULL;
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->session_create(m, &c, &s, NULL) == IFN_OK);
+        IFN_INFER_LOCAL_CHECK(s->config.kv_format == i % 3 && s->config.use_graphs == i / 3 &&
+                              !strcmp(s->profile, execution[i]));
+        IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->session_close(&s, NULL) == IFN_OK);
+    }
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_api->model_close(&m, NULL) == IFN_OK);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     const void *table = (void *)1;
     IFN_INFER_LOCAL_CHECK(ifn_infer_get_api(999, 0, &table) == IFN_INFER_ABI_MISMATCH && !table);
@@ -613,6 +642,7 @@ int main(int argc, char **argv) {
     ifn_infer_local_input.kind = IFN_INPUT_TOKENS;
     ifn_infer_local_input.tokens = ifn_infer_local_prompt;
     ifn_infer_local_input.token_count = 2;
+    IFN_INFER_LOCAL_CHECK(ifn_infer_local_profiles() == 0);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_diagnostics() == 0);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_invalid_inputs() == 0);
     IFN_INFER_LOCAL_CHECK(ifn_infer_local_lifecycle(argc > 1 ? argv[1] : NULL) == 0);

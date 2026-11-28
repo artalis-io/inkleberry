@@ -10,7 +10,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from native_namespace import names, original_bytes, translate, NATIVE_NOTICE, kernel_names
+from native_namespace import names, original_bytes, translate, NATIVE_NOTICE, kernel_names, platform_patches
 
 
 class NativeNamespaceTests(unittest.TestCase):
@@ -55,9 +55,33 @@ class NativeNamespaceTests(unittest.TestCase):
             if name.startswith('cuda/'):
                 text = (ROOT / name).read_text()
                 self.assertTrue(text.startswith(NATIVE_NOTICE), name)
-                self.assertEqual(hashlib.sha256(original_bytes(text)).hexdigest(), digest, name)
+                self.assertEqual(hashlib.sha256(original_bytes(text, path=name)).hexdigest(), digest, name)
                 count += 1
         self.assertEqual(count, 9)
+
+    def test_platform_changes_are_exact_and_required(self):
+        pins = json.loads((ROOT / 'UPSTREAM.json').read_text())
+        for patch in platform_patches():
+            text = (ROOT / patch['path']).read_text()
+            self.assertEqual(text.count(patch['after']), 1)
+            with self.assertRaises(ValueError):
+                original_bytes(text.replace(patch['after'], patch['before']), path=patch['path'])
+            with self.assertRaises(ValueError):
+                original_bytes(text + patch['after'], path=patch['path'])
+            # A device-math change outside the host hook remains visible.
+            if patch['path'].endswith('kernels_prefill.cu'):
+                changed = text.replace('IFN_CUDA_WG_TN = 128', 'IFN_CUDA_WG_TN = 64')
+                self.assertNotEqual(changed, text)
+                self.assertNotEqual(hashlib.sha256(original_bytes(changed, path=patch['path'])).hexdigest(), pins['files'][patch['path']])
+
+    def test_platform_manifest_rejects_device_body_patches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'config').mkdir()
+            value = json.loads((ROOT / 'config/native-platform-adaptations.json').read_text())
+            value['patches'][0]['before'] += '__device__ float ifn_bad();'
+            (root / 'config/native-platform-adaptations.json').write_text(json.dumps(value))
+            with self.assertRaises(ValueError): platform_patches(root)
 
     def test_modified_math_is_rejected(self):
         text = (ROOT / 'cuda/config.hpp').read_text()

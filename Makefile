@@ -32,11 +32,13 @@ CUDA_ROOT ?= $(if $(CUDA_PATH),$(subst \,/,$(CUDA_PATH)),/usr/local/cuda)
 NVCC = $(CUDA_ROOT)/bin/nvcc
 CUDA_ARCH ?= 120a
 CUDAFLAGS = -O3 --use_fast_math -std=c++20 -gencode arch=compute_$(CUDA_ARCH),code=sm_$(CUDA_ARCH) --expt-relaxed-constexpr -Icuda
+CUDA_RUNTIME_PATH ?= $(CUDA_ROOT)/lib64
 CUDA_LIBS = -L$(CUDA_ROOT)/lib64 -lcudart -lcublas -L$(CUDA_ROOT)/lib64/stubs -lcuda -lstdc++ -lm -lpthread
 include config/sources.mk
 OBJ = $(HOST:src/%.c=$(BUILD_DIR)/%.o)
 PIC = $(HOST:src/%.c=$(BUILD_DIR)/%.pic.o)
-CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh)
+IFN_HEADER_DEPS = $(wildcard include/*.h src/*.h)
+CUDA_HEADERS = $(wildcard cuda/*.hpp cuda/*.cuh src/cuda/*.h src/cuda/*.hpp) src/inkling_geometry.h
 CUDA_MATH = kernels_gemv kernels_inkling kernels_dspark kernels_prefill
 CUDA_OBJECTS = $(addprefix $(BUILD_DIR)/,$(addsuffix .cuda.o,$(CUDA_MATH)))
 ifeq ($(shell uname -s),Darwin)
@@ -53,6 +55,7 @@ SHARED_FLAGS = -shared -Wl,-soname,$(SHARED_ABI)
 PLAIN_SHARED_FLAGS = -shared
 endif
 include mk/toolchain.mk
+include mk/cuda-profile.mk
 export CC CXX PYTHON BUILD_DIR IFN_WINDOWS
 
 .PHONY: all check clean sanitize thread-sanitize fuzz-smoke generated-check format lint install install-check cuda-abi-check cuda-check FORCE
@@ -61,7 +64,7 @@ $(BUILD_DIR):
 	mkdir -p $@
 FORCE:
 $(BUILD_DIR)/config: FORCE | $(BUILD_DIR)
-	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) $(CXX_WARNFLAGS) $(CUDA_LIBS) $(IFN_LINKER) $(PROVIDER_FLAGS) $(IFN_VERSION) $(HARDEN) $(PROGRAM_COMPILE) $(PROGRAM_HARDEN)' > $@.tmp
+	@printf '%s\n' '$(CC) $(CXX) $(AR) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(LDFLAGS)' '$(CUDA_ROOT) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) $(CUDA_PIC_FLAGS) $(CXX_WARNFLAGS) $(CUDA_LIBS) $(IFN_LINKER) $(PROVIDER_FLAGS) $(IFN_VERSION) $(HARDEN) $(PROGRAM_COMPILE) $(PROGRAM_HARDEN)' > $@.tmp
 	@cmp -s $@.tmp $@ || mv $@.tmp $@
 	@rm -f $@.tmp
 $(BUILD_DIR)/%.o: src/%.c include/ifn.h src/internal.h $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
@@ -74,8 +77,8 @@ $(SHARED_REAL): $(PIC)
 	$(call ifn_shared,$(CC),,$^,$(SHARED_FLAGS) $(LDFLAGS) $(LDLIBS),$@)
 ifneq ($(SHARED),$(SHARED_REAL))
 $(SHARED): $(SHARED_REAL)
-	ln -sf $(SHARED_REAL) $(SHARED)
-	ln -sf $(SHARED_REAL) $(SHARED_ABI)
+	ln -sf $(notdir $(SHARED_REAL)) $(SHARED)
+	ln -sf $(notdir $(SHARED_REAL)) $(SHARED_ABI)
 endif
 $(CLI): cli/main.c $(CLI_HOST) $(BUILD_DIR)/config
 	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE),$< $(CLI_HOST),$(LDFLAGS) $(PROGRAM_HARDEN) $(LDLIBS),$@)
@@ -153,8 +156,8 @@ install: all infer
 	cp $(PUBLIC_HEADERS) $(DESTDIR)$(INCLUDEDIR)/
 	cp $(INFER_STATIC) $(HOST_STATIC) $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/
 ifneq ($(IFN_WINDOWS),1)
-	ln -sf $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/$(SHARED)
-	ln -sf $(SHARED_REAL) $(DESTDIR)$(LIBDIR)/$(SHARED_ABI)
+	ln -sf $(notdir $(SHARED_REAL)) $(DESTDIR)$(LIBDIR)/$(notdir $(SHARED))
+	ln -sf $(notdir $(SHARED_REAL)) $(DESTDIR)$(LIBDIR)/$(notdir $(SHARED_ABI))
 else
 	cp $(BUILD_DIR)/inkleberry-1.lib $(DESTDIR)$(LIBDIR)/
 	cp $(SHARED_REAL) $(DESTDIR)$(BINDIR)/
@@ -180,9 +183,9 @@ install-check: install
 	$(call ifn_program,$(CC),$(CFLAGS) $(WARNFLAGS) -I$(BUILD_DIR)/stage/usr/local/include,test/installed_consumer.c $(RPATH_STAGE),$(INSTALLED_SHARED_LINK) $(LDFLAGS) $(LDLIBS),$(INSTALLED_SHARED_PROGRAM))
 	$(INSTALLED_SHARED_PROGRAM)
 $(BUILD_DIR)/%.cuda.o: cuda/%.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
 $(BUILD_DIR)/abi-probe.o: test/cuda_abi_probe.cu src/cuda_abi.h cuda/cuda_abi.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -Isrc -c $< -o $@
 $(BUILD_DIR)/abi-c.o: test/cuda_abi_c.c src/cuda_abi.h $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
 $(BUILD_DIR)/abi-probe$(EXE): $(BUILD_DIR)/abi-probe.o $(BUILD_DIR)/abi-c.o $(CUDA_OBJECTS)
@@ -194,16 +197,16 @@ $(BUILD_DIR)/cuda-smoke.o: test/cuda_smoke.c src/cuda_abi.h $(BUILD_DIR)/config
 $(BUILD_DIR)/cuda-smoke$(EXE): $(BUILD_DIR)/cuda-smoke.o $(BUILD_DIR)/cuda_abi.cuda.o $(CUDA_OBJECTS)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 cuda-check: cuda-abi-check $(BUILD_DIR)/cuda-smoke$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/cuda-smoke$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/cuda-smoke$(EXE)
 clean:
-	rm -rf $(BUILD_DIR) $(SHARED_REAL) $(SHARED_ABI) $(CLI) $(HOST_STATIC) libinkleberry.so libinkleberry.dylib $(GPU_STATIC) $(INFER_STATIC) $(PROVIDER) $(CUDA_STATIC) $(WEIGHTS_CLI) $(GENERATE)
+	rm -rf $(BUILD_DIR) $(SHARED_REAL) $(SHARED_ABI) $(CLI) $(HOST_STATIC) $(SHARED) $(GPU_STATIC) $(INFER_STATIC) $(PROVIDER) $(CUDA_STATIC) $(WEIGHTS_CLI) $(GENERATE)
 -include $(wildcard $(BUILD_DIR)/*.d)
 
 # GPU backend is opt-in; the host library still builds without CUDA.
 .PHONY: gpu
 gpu: generated-check $(GPU_STATIC)
 $(BUILD_DIR)/checked-weights.cuda.o: src/cuda/checked_weights.cu src/cuda/capability.h src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
 $(GPU_STATIC): $(BUILD_DIR)/checked-prefill.cuda.o $(BUILD_DIR)/engine_bind.o $(BUILD_DIR)/engine_layout.o $(BUILD_DIR)/engine_forward.o $(BUILD_DIR)/engine_spec.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(BUILD_DIR)/engine_prefill.o $(BUILD_DIR)/engine_runtime.o $(BUILD_DIR)/gpu_cuda.o $(BUILD_DIR)/checked-weights.cuda.o $(filter-out $(BUILD_DIR)/kernels_prefill.cuda.o,$(CUDA_OBJECTS))
 	rm -f $@
 	$(call ifn_archive,$@,$^)
@@ -215,14 +218,14 @@ $(WEIGHTS_CLI): $(BUILD_DIR)/gpu-context.o $(BUILD_DIR)/gpu-weight-main.o $(GPU_
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
 
 $(BUILD_DIR)/gpu-context.o: test/gpu_context.cu include/ifn_gpu.h $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -Iinclude -c $< -o $@
 $(BUILD_DIR)/packing.o: test/packing.cu src/checked_cuda.h $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -Isrc -c $< -o $@
 $(BUILD_DIR)/packing$(EXE): $(BUILD_DIR)/packing.o $(GPU_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: gpu-packing-check install-gpu
 gpu-packing-check: generated-check $(BUILD_DIR)/packing$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/packing$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/packing$(EXE)
 install-gpu: install gpu
 ifneq ($(IFN_WINDOWS),1)
 	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@LIBDIR@|$(LIBDIR)|g' -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' -e 's|@VERSION@|$(IFN_VERSION)|g' -e 's|@CUDA_ROOT@|$(CUDA_ROOT)|g' inkleberry-static-infer.pc.in > $(DESTDIR)$(PKGCONFIGDIR)/inkleberry-static-infer.pc
@@ -234,10 +237,10 @@ gpu-install-check: DESTDIR = $(CURDIR)/$(BUILD_DIR)/gpu-stage
 gpu-install-check: PREFIX = /usr/local
 gpu-install-check: install-gpu
 	$(call ifn_compile,$(CC),$(CFLAGS) $(WARNFLAGS) -I$(BUILD_DIR)/gpu-stage/usr/local/include,test/installed_gpu_consumer.c,$(BUILD_DIR)/installed-gpu.o)
-	$(call ifn_program,$(CXX),,$(BUILD_DIR)/installed-gpu.o $(BUILD_DIR)/gpu-stage/usr/local/lib/$(GPU_STATIC) $(BUILD_DIR)/gpu-stage/usr/local/lib/$(HOST_STATIC),$(CUDA_LIBS),$(BUILD_DIR)/installed-gpu$(EXE))
+	$(call ifn_program,$(CXX),,$(BUILD_DIR)/installed-gpu.o $(BUILD_DIR)/gpu-stage/usr/local/lib/$(notdir $(GPU_STATIC)) $(BUILD_DIR)/gpu-stage/usr/local/lib/$(notdir $(HOST_STATIC)),$(CUDA_LIBS),$(BUILD_DIR)/installed-gpu$(EXE))
 	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' $(BUILD_DIR)/installed-gpu
 	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -I$(BUILD_DIR)/gpu-stage/usr/local/include $(CXX_LANGUAGE),test/installed_gpu_consumer.c,$(BUILD_DIR)/installed-gpu-cpp.o)
-	$(call ifn_program,$(CXX),,$(BUILD_DIR)/installed-gpu-cpp.o $(BUILD_DIR)/gpu-stage/usr/local/lib/$(GPU_STATIC) $(BUILD_DIR)/gpu-stage/usr/local/lib/$(HOST_STATIC),$(CUDA_LIBS),$(BUILD_DIR)/installed-gpu-cpp$(EXE))
+	$(call ifn_program,$(CXX),,$(BUILD_DIR)/installed-gpu-cpp.o $(BUILD_DIR)/gpu-stage/usr/local/lib/$(notdir $(GPU_STATIC)) $(BUILD_DIR)/gpu-stage/usr/local/lib/$(notdir $(HOST_STATIC)),$(CUDA_LIBS),$(BUILD_DIR)/installed-gpu-cpp$(EXE))
 	LD_LIBRARY_PATH='$(CUDA_ROOT)/lib64' $(BUILD_DIR)/installed-gpu-cpp
 $(BUILD_DIR)/generate.o: cli/generate.c include/ifn_engine.h $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PROGRAM_COMPILE),$<,$@)
@@ -245,25 +248,25 @@ $(BUILD_DIR)/ar-compare.o: test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/c
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
 
 $(BUILD_DIR)/checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
 
 $(BUILD_DIR)/engine-test$(EXE): test/engine.c test/mock_gpu.h $(BUILD_DIR)/engine_bind.o $(BUILD_DIR)/engine_layout.o $(BUILD_DIR)/engine_runtime.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(HOST_STATIC) $(BUILD_DIR)/config
 	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),test/engine.c $(BUILD_DIR)/engine_bind.o $(BUILD_DIR)/engine_layout.o $(BUILD_DIR)/engine_runtime.o $(BUILD_DIR)/engine_adaptive.o $(BUILD_DIR)/engine_prefix.o $(HOST_STATIC),$(THREAD_LIBS) $(LDFLAGS) $(LDLIBS),$@)
 
 $(BUILD_DIR)/session-context.o: test/session_context.cu include/ifn_engine.h $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -Iinclude -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -Iinclude -c $< -o $@
 
 $(BUILD_DIR)/check-ar-cpp.o: test/installed_gpu_consumer.c include/ifn_engine.h $(BUILD_DIR)/config
 	$(call ifn_compile,$(CXX),$(CXX_WARNFLAGS) -Iinclude $(CXX_LANGUAGE),$<,$@)
 $(BUILD_DIR)/decode-compare.o: test/decode_compare.c test/ar_compare.c include/ifn_engine.h $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$<,$@)
 $(BUILD_DIR)/sampling-kernels.o: test/sampling_kernels.cu cuda/kernels_gemv.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
 $(BUILD_DIR)/sampling-kernels$(EXE): $(BUILD_DIR)/sampling-kernels.o
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 .PHONY: sampling-kernel-check
 sampling-kernel-check: generated-check $(BUILD_DIR)/sampling-kernels$(EXE)
-	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_ROOT)/lib64' $(BUILD_DIR)/sampling-kernels$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/sampling-kernels$(EXE)
 
 $(BUILD_DIR)/sampling-test$(EXE): test/sampling.c $(HOST_STATIC) $(BUILD_DIR)/config
 	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
@@ -277,7 +280,7 @@ $(BUILD_DIR)/adaptive-compare.o: test/adaptive_compare.c test/decode_compare.c t
 $(BUILD_DIR)/lookup-test$(EXE): test/lookup.c $(HOST_STATIC) $(BUILD_DIR)/config
 	$(call ifn_program,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS),$< $(HOST_STATIC),$(LDFLAGS) $(LDLIBS),$@)
 $(BUILD_DIR)/adaptive-graph.o: test/adaptive_graph.cu src/checked_cuda.h $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) -Isrc -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -Isrc -c $< -o $@
 $(BUILD_DIR)/adaptive-graph$(EXE): $(BUILD_DIR)/adaptive-graph.o $(GPU_STATIC) $(HOST_STATIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
 
@@ -321,11 +324,11 @@ BACKEND_CUDA = $(addprefix $(BUILD_DIR)/backend-,$(addsuffix .cuda.o,kernels_gem
 $(BUILD_DIR)/backend-%.o: src/%.c $(IFN_HEADER_DEPS) $(BUILD_DIR)/config
 	$(call ifn_compile,$(CC),$(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(PIC_FLAGS) $(HIDDEN_FLAGS) $(BACKEND_DEFS) $(DEPFLAGS),$<,$@)
 $(BUILD_DIR)/backend-%.cuda.o: cuda/%.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
 $(BUILD_DIR)/backend-checked-weights.cuda.o: src/cuda/checked_weights.cu src/checked_cuda.h cuda/cuda_abi.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
 $(BUILD_DIR)/backend-checked-prefill.cuda.o: src/cuda/checked_prefill.cu src/checked_prefill.h cuda/kernels_prefill.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
-	$(NVCC) $(CUDAFLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) $(CUDA_PIC_FLAGS) -c $< -o $@
 # Reuse the existing PIC host/kernel objects; static SDK code generation is unchanged.
 $(GENERATE): $(BUILD_DIR)/generate.o $(GPU_HOST:src/%.c=$(BUILD_DIR)/backend-%.o) $(BACKEND_CUDA) $(PIC)
 	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS) $(PROGRAM_HARDEN),$@)
@@ -372,7 +375,7 @@ infer-provider-check: infer-shared
 
 .PHONY: cuda-abi-negative-check reference-free-check
 cuda-abi-negative-check: cuda-abi-check
-	$(PYTHON) test/cuda_abi_negative.py --cc '$(CC)' --cxx '$(CXX)' --nvcc '$(NVCC)' --cuda-root '$(CUDA_ROOT)' --cuda-flags '$(CUDAFLAGS)' --cuda-objects '$(CUDA_OBJECTS)'
+	$(PYTHON) test/cuda_abi_negative.py --cc '$(CC)' --cxx '$(CXX)' --nvcc '$(NVCC)' --cuda-root '$(CUDA_ROOT)' --cuda-flags '$(CUDAFLAGS) $(CUDA_TARGET_FLAGS)' --cuda-objects '$(CUDA_OBJECTS)'
 reference-free-check:
 	$(PYTHON) test/reference_free.py --cc '$(CC)' --cxx '$(CXX)'
 
@@ -422,9 +425,9 @@ source-package: generated-check amalgamation-check
 embedding-package: amalgamation-check
 	$(PYTHON) tools/release.py embedding --version '$(VERSION)'
 runtime-package: all
-	$(PYTHON) tools/release.py runtime --version '$(VERSION)'
+	$(PYTHON) tools/release.py runtime --build-root '$(IFN_PACKAGE_BUILD_ROOT)' --version '$(VERSION)'
 runtime-gpu-package: all $(GENERATE) infer-shared $(CUDA_STATIC) $(GPU_STATIC) $(INFER_STATIC)
-	$(PYTHON) tools/release.py runtime --gpu --version '$(VERSION)'
+	$(PYTHON) tools/release.py runtime --gpu --build-root '$(IFN_PACKAGE_BUILD_ROOT)' --cuda-profile '$(BUILD_DIR)/cuda-profile.json' --version '$(VERSION)'
 packages: source-package embedding-package runtime-package
 release-check: all amalgamation-check
 	$(PYTHON) test/package_policy.py
@@ -495,7 +498,7 @@ else
 	$(PYTHON) test/install_contract.py
 endif
 harden-check: all
-	$(PYTHON) tools/check_hardening.py $(CLI) libinkleberry.so
+	$(PYTHON) tools/check_hardening.py $(CLI) $(SHARED)
 performance-gate-check:
 	$(PYTHON) test/performance_gate.py
 check: abi-contract-check performance-gate-check release-gate-check
@@ -536,3 +539,58 @@ windows-cuda-build-check: gpu infer-shared $(GENERATE) $(CUDA_STATIC) $(BUILD_DI
 	$(PYTHON) test/infer_ffi.py $(PROVIDER)
 	PATH="$$(cygpath -u '$(CUDA_ROOT)/bin/x64'):$$(cygpath -u '$(CUDA_ROOT)/bin'):$$PATH" $(BUILD_DIR)/abi-probe$(EXE)
 endif
+
+.PHONY: gpu-build
+gpu-build: all gpu infer-shared $(GENERATE) $(CUDA_STATIC) $(INFER_STATIC)
+$(BUILD_DIR)/cuda-profile.json: tools/cuda_profile.py $(BUILD_DIR)/config
+	$(PYTHON) tools/cuda_profile.py --arch '$(CUDA_ARCH)' $(if $(filter 1,$(EXPERIMENTAL_AMPERE)),--experimental,) --out $@
+$(GPU_STATIC) $(CUDA_STATIC) $(PROVIDER): | $(BUILD_DIR)/cuda-profile.json
+
+$(BUILD_DIR)/cuda-policy-120$(EXE): test/cuda_policy.cpp src/cuda/geometry_contract.hpp src/inkling_geometry.h test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
+	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) $(filter -fsanitize% -fno-sanitize% -fno-omit-frame-pointer -g,$(CFLAGS)) -Itest/cuda-stubs -Icuda -DIFN_CUDA_TARGET_SM=120,$<,$(THREAD_LIBS) $(LDFLAGS),$@)
+$(BUILD_DIR)/cuda-policy-121$(EXE): test/cuda_policy.cpp src/cuda/geometry_contract.hpp src/inkling_geometry.h test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
+	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) $(filter -fsanitize% -fno-sanitize% -fno-omit-frame-pointer -g,$(CFLAGS)) -Itest/cuda-stubs -Icuda -DIFN_CUDA_TARGET_SM=121,$<,$(THREAD_LIBS) $(LDFLAGS),$@)
+$(BUILD_DIR)/cuda-policy-86$(EXE): test/cuda_policy.cpp src/cuda/geometry_contract.hpp src/inkling_geometry.h test/cuda-stubs/cuda_runtime.h src/cuda/launch_policy.hpp src/cuda/resource_policy.hpp src/cuda/prefill_resources.hpp src/cuda/target_profile.h $(BUILD_DIR)/config
+	$(call ifn_program,$(CXX),$(CXX20_WARNFLAGS) $(filter -fsanitize% -fno-sanitize% -fno-omit-frame-pointer -g,$(CFLAGS)) -Itest/cuda-stubs -Icuda -DIFN_CUDA_TARGET_SM=86 -DIFN_CUDA_ENABLE_EXPERIMENTAL_AMPERE=1,$<,$(THREAD_LIBS) $(LDFLAGS),$@)
+.PHONY: cuda-policy-check
+cuda-policy-check: $(BUILD_DIR)/cuda-policy-120$(EXE) $(BUILD_DIR)/cuda-policy-121$(EXE) $(BUILD_DIR)/cuda-policy-86$(EXE)
+	$(BUILD_DIR)/cuda-policy-120$(EXE) 12 0 1
+	$(BUILD_DIR)/cuda-policy-121$(EXE) 12 1 1
+	$(BUILD_DIR)/cuda-policy-86$(EXE) 8 6 0
+	$(PYTHON) test/cuda_profiles.py --cxx '$(CXX)' --flags '$(CXX20_WARNFLAGS)'
+check: cuda-policy-check
+.PHONY: print-build-dir
+print-build-dir:
+	@printf '%s\n' '$(BUILD_DIR)'
+
+# Compile the real native acceptance fixture in CPU CI; execution stays GPU-only.
+check: $(BUILD_DIR)/infer-native.o
+
+$(BUILD_DIR)/conversion-oracles.o: test/conversion_oracles.cu $(CUDA_HEADERS) $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
+$(BUILD_DIR)/conversion-oracles$(EXE): $(BUILD_DIR)/conversion-oracles.o
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS),$@)
+.PHONY: conversion-oracle-check
+conversion-oracle-check: generated-check $(BUILD_DIR)/conversion-oracles$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/conversion-oracles$(EXE)
+
+.PHONY: release-build-info
+release-build-info:
+	@$(info IFN_RELEASE_BUILD_DIR=$(BUILD_DIR))
+	@$(info IFN_RELEASE_EXE=$(EXE))
+	@$(info IFN_RELEASE_PROVIDER=$(abspath $(PROVIDER)))
+	@$(info IFN_RELEASE_CC=$(CC))
+	@$(info IFN_RELEASE_NVCC=$(NVCC))
+	@$(info IFN_RELEASE_CUDA_RUNTIME_PATH=$(CUDA_RUNTIME_PATH))
+	@:
+
+$(BUILD_DIR)/linear-shapes.o: test/linear_shapes.cu $(CUDA_HEADERS) src/checked_prefill.h $(BUILD_DIR)/config
+	$(NVCC) $(CUDAFLAGS) $(CUDA_TARGET_FLAGS) -c $< -o $@
+$(BUILD_DIR)/linear-shapes$(EXE): $(BUILD_DIR)/linear-shapes.o $(CUDA_STATIC)
+	$(call ifn_program,$(CXX),,$^,$(CUDA_LIBS) $(LDFLAGS),$@)
+.PHONY: linear-shape-check
+linear-shape-check: generated-check $(BUILD_DIR)/linear-shapes$(EXE)
+	$(PYTHON) tools/run_cuda_smoke.py '$(CUDA_RUNTIME_PATH)' $(BUILD_DIR)/linear-shapes$(EXE)
+
+# Compile both benchmark clients in CPU CI; linking/execution remains GPU-only.
+check: $(BUILD_DIR)/native-benchmark.o $(BUILD_DIR)/facade-benchmark.o

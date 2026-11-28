@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     ifn_infer_model *model = NULL;
     ifn_infer_session *session = NULL;
     ifn_infer_request *requests[6] = {0};
-    ifn_test_thread thread;
+    ifn_test_thread thread = 0;
     int thread_live = 0;
     ifn_infer_native_local_output outputs[6];
     for (size_t i = 0; i < 6; i++)

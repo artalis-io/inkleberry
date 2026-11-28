@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import re
 import tarfile
+from cuda_profile import validate as validate_cuda_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,7 +43,7 @@ def read_file(path, base=ROOT):
     return path.read_bytes()
 
 
-def package(kind, output, version=None, gpu=False, build_root=ROOT):
+def package(kind, output, version=None, gpu=False, build_root=ROOT, cuda_profile=None):
     expected_version = (ROOT / 'VERSION').read_text().strip()
     version = expected_version if version is None else version
     if version != expected_version: raise ValueError('Package version must match VERSION and the compiled header')
@@ -50,6 +51,14 @@ def package(kind, output, version=None, gpu=False, build_root=ROOT):
         raise ValueError('Invalid package version')
     if gpu and (kind != 'runtime' or platform.system() not in ('Linux', 'Windows')):
         raise ValueError('GPU runtime packaging requires Linux or native Windows')
+    profile = None
+    if cuda_profile is not None and not gpu:
+        raise ValueError('CUDA identity is only valid for GPU runtime packages')
+    if gpu:
+        if cuda_profile is None:
+            direct = build_root / 'cuda-profile.json'
+            cuda_profile = direct if direct.is_file() else build_root / '.build/cuda-profile.json'
+        profile = validate_cuda_profile(json.loads(read_file(cuda_profile, build_root)))
     policy = json.loads((ROOT / 'config/package.json').read_text())
     entries = {}
     modes = {}
@@ -145,9 +154,16 @@ def package(kind, output, version=None, gpu=False, build_root=ROOT):
         'files': {n: hashlib.sha256(data).hexdigest() for n, data in sorted(entries.items())},
         'symlinks': links,
     }
+    if profile is not None:
+        metadata['cuda_profile'] = profile
+        entries['CUDA-PROFILE.json'] = (json.dumps(profile, sort_keys=True, indent=2) + '\n').encode()
+        modes['CUDA-PROFILE.json'] = 0o644
+        metadata['files']['CUDA-PROFILE.json'] = hashlib.sha256(entries['CUDA-PROFILE.json']).hexdigest()
     entries['MANIFEST.json'] = (json.dumps(metadata, sort_keys=True, indent=2) + '\n').encode()
     modes['MANIFEST.json'] = 0o644
     suffix = ('-' + metadata['platform'] + ('-cuda' if gpu else '')) if kind == 'runtime' else ''
+    if profile is not None:
+        suffix += '-sm' + profile['cuda_arch'] + ('-experimental' if profile['experimental'] else '')
     prefix = 'inkleberry-' + kind + '-' + version + suffix
     output.mkdir(parents=True, exist_ok=True)
     path = output / (prefix + '.tar.gz')
@@ -182,10 +198,11 @@ def main():
     parser.add_argument('--out', type=Path, default=ROOT / '.build/releases')
     parser.add_argument('--version')
     parser.add_argument('--gpu', action='store_true')
+    parser.add_argument('--cuda-profile', type=Path)
     parser.add_argument('--build-root', type=Path, default=ROOT)
     args = parser.parse_args()
     try:
-        path = package(args.kind, args.out, args.version, args.gpu, args.build_root)
+        path = package(args.kind, args.out, args.version, args.gpu, args.build_root, args.cuda_profile)
     except (ValueError, OSError) as error:
         parser.exit(1, str(error) + '\n')
     print(path)

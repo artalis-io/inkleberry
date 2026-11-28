@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,7 @@ def publish(report, manifest):
 
 def query(args):
     try:
-        return subprocess.check_output(args, cwd=ROOT, text=True, timeout=30).strip()
+        return subprocess.check_output(args, cwd=ROOT, text=True, stderr=subprocess.STDOUT, timeout=30).strip()
     except (subprocess.SubprocessError, OSError):
         return None
 
@@ -81,26 +82,45 @@ def main():
         actual = {name: digest(a.model / name) for name in FILES}
         if actual != expected['files']:
             raise SystemExit('Model/tokenizer/MTP identity mismatch; no inference started')
-        revision = a.source_revision or query(['git', 'rev-parse', 'HEAD'])
+        revision = query(['git', 'rev-parse', 'HEAD'])
         if not revision or not re.fullmatch(r'[0-9a-fA-F]{40}', revision):
-            raise SystemExit('Supply exact --source-revision for an extracted source tree')
-        status = query(['git', 'status', '--porcelain'])
-        manifest.update(source_revision=revision, dirty=None if status is None else bool(status),
+            raise SystemExit('Release provenance requires a Git checkout; extracted packages have separate qualification')
+        if a.source_revision and a.source_revision.lower() != revision.lower():
+            raise SystemExit('Claimed source revision differs from checked-out HEAD')
+        status = query(['git', 'status', '--porcelain', '--untracked-files=all'])
+        if status is None or status:
+            raise SystemExit('Release provenance requires a clean source checkout')
+        top = query(['git', 'rev-parse', '--show-toplevel'])
+        if not top or Path(top).resolve() != ROOT.resolve():
+            raise SystemExit('Release checkout root mismatch')
+        info_text = query(['make', '--no-print-directory', '-s', 'release-build-info'])
+        if info_text is None:
+            raise SystemExit('Cannot resolve selected Make build contract')
+        info = dict(line.removeprefix('IFN_RELEASE_').split('=', 1)
+                    for line in info_text.splitlines() if line.startswith('IFN_RELEASE_'))
+        build = Path(info['BUILD_DIR'])
+        suffix = info['EXE']
+        names = [str(build / (n + suffix)) for n in ('native-benchmark', 'facade-benchmark', 'verify')]
+        cc = shlex.split(info['CC'])
+        nvcc = shlex.split(info['NVCC'])
+        manifest.update(source_revision=revision, dirty=False,
                         version=(ROOT / 'VERSION').read_text().strip(), model_files=actual,
+                        source_files={name: digest(ROOT/name) for name in
+                                      json.loads((ROOT/'config/package.json').read_text())['source_files']},
                         gpu=query(['nvidia-smi', '-i', a.gpu,
                                    '--query-gpu=uuid,name,driver_version,compute_cap,power.limit',
                                    '--format=csv,noheader']), platform=platform.platform(),
-                        compiler=query(['cc', '--version']),
-                        cuda=query(['/usr/local/cuda/bin/nvcc', '--version']))
+                        compiler=query(cc + (['/?'] if Path(cc[0]).name.lower() in ('cl','cl.exe') else ['--version'])),
+                        cuda=query(nvcc + ['--version']), build_contract=info)
+        if not manifest['compiler'] or not manifest['cuda'] or not manifest['gpu']:
+            raise SystemExit('Required compiler/CUDA/device provenance unavailable')
         manifest['checks']['preflight'] = True
-        run(['make', '-j8', 'check', 'install-check', 'native-namespace-check',
-             '.build/native-benchmark', '.build/facade-benchmark', '.build/verify'])
-        manifest['build_flags'] = (ROOT / '.build/config').read_text()
-        manifest['binaries'] = {str(f): digest(ROOT / f) for f in [
-            '.build/native-benchmark', '.build/facade-benchmark', 'libinkleberry_backend.so.1']}
-        guard = [sys.executable, str(ROOT / 'tools/run_cuda_smoke.py'), '/usr/local/cuda/lib64']
+        run(['make', '-j8', 'check', 'install-check', 'native-namespace-check', *names])
+        manifest['build_flags'] = (ROOT / build / 'config').read_text()
+        manifest['binaries'] = {f: digest(ROOT / f) for f in names + [info['PROVIDER']]}
+        guard = [sys.executable, str(ROOT / 'tools/run_cuda_smoke.py'), info['CUDA_RUNTIME_PATH']]
         identity_log = a.out / 'identity.log'
-        run(guard + [str(ROOT / '.build/verify'), str(a.model)] +
+        run(guard + [str(ROOT / names[2]), str(a.model)] +
             [actual[n] for n in FILES], identity_log)
         if expected['artifact_fingerprint'] not in identity_log.read_text():
             raise RuntimeError('C/Python artifact fingerprints differ')
@@ -109,9 +129,10 @@ def main():
                 ('engine', 'native-benchmark', a.baseline_engine),
                 ('facade', 'facade-benchmark', a.baseline_facade)]:
             output = a.out / (kind + '.jsonl')
-            run(guard + [str(ROOT / '.build' / binary), str(a.model)], output)
+            run(guard + [str(ROOT / build / (binary + suffix)), str(a.model)], output)
             run([sys.executable, 'tools/model_release.py', 'verify', str(output),
                  '--golden', 'test/fixtures/inkling-golden-v1.json'])
+            records(output, require_identity=True)
             comparison = compare(baseline, output)
             (a.out / (kind + '-comparison.json')).write_text(json.dumps(comparison, indent=2) + '\n')
             if not comparison['performance_passed']:
@@ -120,6 +141,10 @@ def main():
         if not a.skip_package:
             run(['make', 'native-release-check', 'MODEL_DIR=' + str(a.model)], a.out / 'packages.log')
             manifest['checks']['extracted_packages'] = True
+        if query(['git', 'rev-parse', 'HEAD']) != revision or query(['git', 'status', '--porcelain', '--untracked-files=all']):
+            raise RuntimeError('Source changed during qualification')
+        if any(digest(ROOT/name)!=sha for name,sha in manifest['source_files'].items()):
+            raise RuntimeError('Source contents changed during qualification')
         manifest['passed'] = True
     except BaseException as error:
         manifest['failure'] = type(error).__name__ + ': ' + str(error)

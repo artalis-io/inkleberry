@@ -13,5 +13,5 @@
     "cuda/kernels_prefill.cu": "69320ec051750aef4341ac61c4f443e1c526ea4275b51963ddaba3e72beacc21",
     "cuda/weights.hpp": "56caa3100339f6065bfaac77899109e32b102836f551bc1a98a90da23aee74c9"
   },
-  "policy": "Retained CUDA mathematics remain pinned. Reversing config/native-namespace.json and the reviewed host-only adapters in config/native-host-adaptations.json must reproduce the original hashes. C is the sole maintained host; the retired Zig implementation is not required."
+  "policy": "Retained CUDA mathematics remain pinned. Reversing config/native-namespace.json, the reviewed host-only adapters in config/native-host-adaptations.json and target-launch/resource hooks in config/native-platform-adaptations.json must reproduce the original hashes. C is the sole maintained host; the retired Zig implementation is not required."
 }

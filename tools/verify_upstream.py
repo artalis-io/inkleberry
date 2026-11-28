@@ -8,7 +8,7 @@ manifest=json.loads((root/'UPSTREAM.json').read_text())
 for name,expected in manifest['files'].items():
     payload=(root / name).read_bytes()
     if name.startswith('cuda/'):
-        payload=original_bytes(payload.decode(), root)
+        payload=original_bytes(payload.decode(), root, name)
     actual=hashlib.sha256(payload).hexdigest()
     if actual!=expected:raise SystemExit('Unreviewed upstream drift: '+name)
 print('Pinned dependency sources verified:',manifest['revision'])

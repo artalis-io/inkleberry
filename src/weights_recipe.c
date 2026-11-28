@@ -5,19 +5,9 @@
  * Checked arena arithmetic and recoverable failures replace assertions. */
 #include "weights_internal.h"
 #include <math.h>
+#include "inkling_quant.h"
 #include <stdio.h>
 #include <string.h>
-
-enum {
-    IFN_WEIGHTS_RECIPE_LOCAL_H = 2304,
-    IFN_WEIGHTS_RECIPE_LOCAL_Q = 3072,
-    IFN_WEIGHTS_RECIPE_LOCAL_KV = 1024,
-    IFN_WEIGHTS_RECIPE_LOCAL_E = 128,
-    IFN_WEIGHTS_RECIPE_LOCAL_I = 1152,
-    IFN_WEIGHTS_RECIPE_LOCAL_V = 201024,
-    IFN_WEIGHTS_RECIPE_LOCAL_VU = 200058,
-    IFN_WEIGHTS_RECIPE_LOCAL_M = 9216
-};
 
 static void *ifn_weights_recipe_local_pointer(ifn_gpu_weights *w, uint64_t offset) {
     return w->execute && offset != UINT64_MAX ? (unsigned char *)w->arena + (size_t)offset : NULL;
@@ -185,23 +175,23 @@ static void ifn_weights_recipe_local_expert(ifn_gpu_weights *w, const char *labe
     ifn_weight_view *v = ifn_weights_recipe_local_view(w, label, IFN_WEIGHT_EXPERT);
     if (!v)
         return;
-    v->rows = IFN_WEIGHTS_RECIPE_LOCAL_H;
+    v->rows = IFN_INKLING_HIDDEN;
     v->cols = cols;
-    v->experts = IFN_WEIGHTS_RECIPE_LOCAL_E;
-    v->precision = layer < 20 || w->config.mode == 2 ? 2 : 1;
-    size_t elements = (size_t)IFN_WEIGHTS_RECIPE_LOCAL_E * IFN_WEIGHTS_RECIPE_LOCAL_H * cols;
+    v->experts = IFN_INKLING_EXPERTS;
+    v->precision = ifn_inkling_expert_precision(w->config.mode, layer);
+    size_t elements = (size_t)IFN_INKLING_EXPERTS * IFN_INKLING_HIDDEN * cols;
     char wn[160], sn[192], an[192], dn[192];
     (void)snprintf(wn, sizeof wn, "%smlp.experts.%s_weight", prefix, bank);
     (void)snprintf(sn, sizeof sn, "%s_scale", wn);
-    if (layer < 20) {
+    if (layer < IFN_INKLING_NVFP4_EXPERT_LAYERS) {
         v->data = ifn_weights_recipe_local_block(w, label, ".data", elements / 2);
         v->scales = ifn_weights_recipe_local_block(w, label, ".scales", elements / 16);
         ifn_weights_recipe_local_copy_tensor(w, 0, wn, ifn_weights_recipe_local_pointer(w, v->data),
                                              elements / 2, false);
         ifn_weights_recipe_local_copy_tensor(
             w, 0, sn, ifn_weights_recipe_local_pointer(w, v->scales), elements / 16, false);
-        v->expert_scale = ifn_weights_recipe_local_block(w, label, ".expert_scale",
-                                                         IFN_WEIGHTS_RECIPE_LOCAL_E * 4);
+        v->expert_scale =
+            ifn_weights_recipe_local_block(w, label, ".expert_scale", IFN_INKLING_EXPERTS * 4);
         if (w->execute && w->status == IFN_OK) {
             (void)snprintf(an, sizeof an, "%s_amax", wn);
             (void)snprintf(dn, sizeof dn, "%s_outer_scale_denominator", wn);
@@ -209,17 +199,17 @@ static void ifn_weights_recipe_local_expert(ifn_gpu_weights *w, const char *labe
             size_t as = 0, ds = 0;
             if (ifn_inkling_lookup(w->checkpoint, 0, an, &ap, &as) != IFN_OK ||
                 ifn_inkling_lookup(w->checkpoint, 0, dn, &dp, &ds) != IFN_OK ||
-                as != IFN_WEIGHTS_RECIPE_LOCAL_E * 4 || ds != 4) {
+                as != IFN_INKLING_EXPERTS * 4 || ds != 4) {
                 ifn_weight_fail(w, IFN_FORMAT, "invalid expert scale metadata");
                 return;
             }
-            float denom = ifn_weights_recipe_local_f32le(dp), scales[IFN_WEIGHTS_RECIPE_LOCAL_E];
+            float denom = ifn_weights_recipe_local_f32le(dp), scales[IFN_INKLING_EXPERTS];
             if (!isfinite(denom) || denom <= 0 || !isfinite(1.0f / denom)) {
                 ifn_weight_fail(w, IFN_FORMAT, "invalid expert scale denominator");
                 return;
             }
             float inverse = 1.0f / denom;
-            for (size_t i = 0; i < IFN_WEIGHTS_RECIPE_LOCAL_E; i++) {
+            for (size_t i = 0; i < IFN_INKLING_EXPERTS; i++) {
                 float amax = ifn_weights_recipe_local_f32le((const unsigned char *)ap + i * 4);
                 scales[i] = amax * inverse;
                 if (!isfinite(amax) || amax < 0 || !isfinite(scales[i])) {
@@ -244,19 +234,19 @@ static void ifn_weights_recipe_local_expert(ifn_gpu_weights *w, const char *labe
     } else {
         ifn_weights_recipe_local_stage(w, 0, wn, 0, elements, false);
         ifn_weights_recipe_local_stage(w, 0, sn, elements, elements / 32, false);
-        v->expert_scale = ifn_weights_recipe_local_block(w, label, ".expert_scale",
-                                                         IFN_WEIGHTS_RECIPE_LOCAL_E * 4);
+        v->expert_scale =
+            ifn_weights_recipe_local_block(w, label, ".expert_scale", IFN_INKLING_EXPERTS * 4);
         v->data = ifn_weights_recipe_local_block(w, label, ".data", elements / 2);
         v->scales = ifn_weights_recipe_local_block(w, label, ".scales", elements / 16);
         if (w->execute && w->status == IFN_OK)
             ifn_weight_backend_check(
                 w,
-                w->backend.expert(
-                    w->backend.context, w->stage, (unsigned char *)w->stage + elements,
-                    ifn_weights_recipe_local_pointer(w, v->data),
-                    ifn_weights_recipe_local_pointer(w, v->scales),
-                    ifn_weights_recipe_local_pointer(w, v->expert_scale),
-                    IFN_WEIGHTS_RECIPE_LOCAL_E, IFN_WEIGHTS_RECIPE_LOCAL_H, (int)cols, w->stream),
+                w->backend.expert(w->backend.context, w->stage,
+                                  (unsigned char *)w->stage + elements,
+                                  ifn_weights_recipe_local_pointer(w, v->data),
+                                  ifn_weights_recipe_local_pointer(w, v->scales),
+                                  ifn_weights_recipe_local_pointer(w, v->expert_scale),
+                                  IFN_INKLING_EXPERTS, IFN_INKLING_HIDDEN, (int)cols, w->stream),
                 "convert MXFP8 experts");
     }
 }
@@ -333,38 +323,38 @@ static void ifn_weights_recipe_local_alias(ifn_gpu_weights *w, const char *label
 
 void ifn_weights_recipe(ifn_gpu_weights *w) {
     w->offset = w->span_count = w->view_count = 0;
-    unsigned kind = w->config.mode, mtp_kind = kind == 0 || w->config.mtp_bf16 ? 0 : 2;
+    unsigned kind = w->config.mode,
+             mtp_kind = ifn_inkling_mtp_precision(w->config.mode, w->config.mtp_bf16);
     ifn_weights_recipe_local_raw(w, "embed", 0, "model.llm.embed.weight",
-                                 (size_t)IFN_WEIGHTS_RECIPE_LOCAL_V * IFN_WEIGHTS_RECIPE_LOCAL_H *
-                                     2);
+                                 (size_t)IFN_INKLING_VOCAB_PADDED * IFN_INKLING_HIDDEN * 2);
     ifn_weights_recipe_local_raw(w, "embed_norm", 0, "model.llm.embed_norm.weight",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                 IFN_INKLING_HIDDEN * 2);
     ifn_weights_recipe_local_raw(w, "final_norm", 0, "model.llm.norm.weight",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                 IFN_INKLING_HIDDEN * 2);
     ifn_weights_recipe_local_staged_linear(w, "unembed", 0, "model.llm.unembed.weight",
-                                           IFN_WEIGHTS_RECIPE_LOCAL_VU, IFN_WEIGHTS_RECIPE_LOCAL_H,
-                                           kind, true);
+                                           IFN_INKLING_VOCAB, IFN_INKLING_HIDDEN, kind, true);
     char name[160], label[128], prefix[96];
-    for (unsigned i = 0; i < 23; i++) {
+    for (unsigned i = 0; i < IFN_INKLING_LAYERS - 1; i++) {
         (void)snprintf(name, sizeof name, "model.llm.attn_res.attn_queries.%u", i);
         (void)snprintf(label, sizeof label, "attn_queries.%u", i);
         ifn_weights_recipe_local_raw(w, label, 0, name,
-                                     ((i + 2) % 6 == 0 ? 3u : 1u) * IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
+                                     ((i + 2) % IFN_INKLING_BLOCK_LAYERS == 0 ? 3u : 1u) *
+                                         IFN_INKLING_HIDDEN * 4);
     }
-    for (unsigned i = 0; i < 24; i++) {
+    for (unsigned i = 0; i < IFN_INKLING_LAYERS; i++) {
         (void)snprintf(name, sizeof name, "model.llm.attn_res.mlp_queries.%u", i);
         (void)snprintf(label, sizeof label, "mlp_queries.%u", i);
-        ifn_weights_recipe_local_raw(w, label, 0, name, IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
+        ifn_weights_recipe_local_raw(w, label, 0, name, IFN_INKLING_HIDDEN * 4);
     }
     ifn_weights_recipe_local_raw(w, "output_query", 0, "model.llm.attn_res.output_query",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
+                                 IFN_INKLING_HIDDEN * 4);
     ifn_weights_recipe_local_raw(w, "cross_pass_queries", 0,
                                  "model.llm.middle_cycle_cross_pass_queries",
-                                 24 * IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
+                                 24 * IFN_INKLING_HIDDEN * 4);
     ifn_weights_recipe_local_raw(w, "cross_pass_kv_queries", 0,
                                  "model.llm.middle_cycle_cross_pass_kv_queries",
-                                 24 * IFN_WEIGHTS_RECIPE_LOCAL_H * 4);
-    for (unsigned i = 0; i < 24 && w->status == IFN_OK; i++) {
+                                 24 * IFN_INKLING_HIDDEN * 4);
+    for (unsigned i = 0; i < IFN_INKLING_LAYERS && w->status == IFN_OK; i++) {
         (void)snprintf(prefix, sizeof prefix, "model.llm.layers.%u.", i);
 #define IFN_WEIGHTS_RECIPE_LOCAL_RAW(field, suffix, bytes)                                         \
     do {                                                                                           \
@@ -378,74 +368,70 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
         (void)snprintf(name, sizeof name, "%s%s", prefix, suffix);                                 \
         ifn_weights_recipe_local_staged_linear(w, label, 0, name, rows, cols, k, false);           \
     } while (0)
-        bool global = (i + 1) % 6 == 0;
+        bool global = (i + 1) % IFN_INKLING_BLOCK_LAYERS == 0;
         if (global) {
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_in_norm", "q_input_norm.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                         IFN_INKLING_HIDDEN * 2);
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_in_norm", "k_input_norm.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                         IFN_INKLING_HIDDEN * 2);
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_in_norm", "v_input_norm.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                         IFN_INKLING_HIDDEN * 2);
         } else
-            IFN_WEIGHTS_RECIPE_LOCAL_RAW("attn_norm", "attn_norm.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
-        IFN_WEIGHTS_RECIPE_LOCAL_RAW("mlp_norm", "mlp_norm.weight", IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+            IFN_WEIGHTS_RECIPE_LOCAL_RAW("attn_norm", "attn_norm.weight", IFN_INKLING_HIDDEN * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("mlp_norm", "mlp_norm.weight", IFN_INKLING_HIDDEN * 2);
         const char *qrgs[] = {"attn.wq_du.weight", "attn.wr_du.weight", "attn.gate_attn.weight",
                               "attn.attn_sink_proj.weight"};
-        const unsigned qrgs_rows[] = {IFN_WEIGHTS_RECIPE_LOCAL_Q, 384, IFN_WEIGHTS_RECIPE_LOCAL_Q,
-                                      24};
+        const unsigned qrgs_rows[] = {IFN_INKLING_QUERY, 384, IFN_INKLING_QUERY, 24};
         (void)snprintf(label, sizeof label, "layers.%u.w_qrgs", i);
-        ifn_weights_recipe_local_concat(w, label, 0, prefix, qrgs, qrgs_rows, 4,
-                                        IFN_WEIGHTS_RECIPE_LOCAL_H, kind);
+        ifn_weights_recipe_local_concat(w, label, 0, prefix, qrgs, qrgs_rows, 4, IFN_INKLING_HIDDEN,
+                                        kind);
         const char *kv[] = {"attn.wk_dv.weight", "attn.wv_dv.weight"};
-        const unsigned kv_rows[] = {IFN_WEIGHTS_RECIPE_LOCAL_KV, IFN_WEIGHTS_RECIPE_LOCAL_KV};
+        const unsigned kv_rows[] = {IFN_INKLING_KV, IFN_INKLING_KV};
         (void)snprintf(label, sizeof label, "layers.%u.w_kv", i);
-        ifn_weights_recipe_local_concat(w, label, 0, prefix, kv, kv_rows, 2,
-                                        IFN_WEIGHTS_RECIPE_LOCAL_H, kind);
+        ifn_weights_recipe_local_concat(w, label, 0, prefix, kv, kv_rows, 2, IFN_INKLING_HIDDEN,
+                                        kind);
         ifn_weight_view *v = ifn_weights_recipe_local_named(w, label);
         (void)snprintf(label, sizeof label, "layers.%u.w_k", i);
         ifn_weights_recipe_local_alias(w, label, v);
         ifn_weight_view *k = ifn_weights_recipe_local_named(w, label);
         if (k)
-            k->rows = IFN_WEIGHTS_RECIPE_LOCAL_KV;
+            k->rows = IFN_INKLING_KV;
         (void)snprintf(label, sizeof label, "layers.%u.w_v", i);
         ifn_weights_recipe_local_alias(w, label, v);
         ifn_weight_view *vv = ifn_weights_recipe_local_named(w, label);
         if (vv) {
-            vv->rows = IFN_WEIGHTS_RECIPE_LOCAL_KV;
-            vv->data += (size_t)IFN_WEIGHTS_RECIPE_LOCAL_KV * IFN_WEIGHTS_RECIPE_LOCAL_H *
-                        (kind == 0 ? 2u : 1u) / (kind == 2 ? 2u : 1u);
+            vv->rows = IFN_INKLING_KV;
+            vv->data += (size_t)IFN_INKLING_KV * IFN_INKLING_HIDDEN * (kind == 0 ? 2u : 1u) /
+                        (kind == 2 ? 2u : 1u);
             if (kind == 1)
-                vv->row_scales += IFN_WEIGHTS_RECIPE_LOCAL_KV * 4;
+                vv->row_scales += IFN_INKLING_KV * 4;
             if (kind == 2)
-                vv->scales += (size_t)IFN_WEIGHTS_RECIPE_LOCAL_KV * IFN_WEIGHTS_RECIPE_LOCAL_H / 16;
+                vv->scales += (size_t)IFN_INKLING_KV * IFN_INKLING_HIDDEN / 16;
         }
-        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_o", "attn.wo_ud.weight", IFN_WEIGHTS_RECIPE_LOCAL_H,
-                                        IFN_WEIGHTS_RECIPE_LOCAL_Q, kind);
+        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_o", "attn.wo_ud.weight", IFN_INKLING_HIDDEN,
+                                        IFN_INKLING_QUERY, kind);
         if (global) {
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_sconv_w", "attn.k_sconv.static_w",
-                                         4 * IFN_WEIGHTS_RECIPE_LOCAL_KV * 2);
+                                         4 * IFN_INKLING_KV * 2);
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_sconv_w", "attn.v_sconv.static_w",
-                                         4 * IFN_WEIGHTS_RECIPE_LOCAL_KV * 2);
+                                         4 * IFN_INKLING_KV * 2);
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_sconv_proj", "attn.k_sconv.weight_proj",
-                                         32 * IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                         32 * IFN_INKLING_HIDDEN * 2);
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_sconv_proj", "attn.v_sconv.weight_proj",
-                                         32 * IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                         32 * IFN_INKLING_HIDDEN * 2);
         } else {
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_sconv_w", "attn.k_sconv.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_KV * 4 * 2);
+                                         IFN_INKLING_KV * 4 * 2);
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("v_sconv_w", "attn.v_sconv.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_KV * 4 * 2);
+                                         IFN_INKLING_KV * 4 * 2);
         }
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("attn_sconv_w", "attn_sconv.weight",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_H * 4 * 2);
-        IFN_WEIGHTS_RECIPE_LOCAL_RAW("mlp_sconv_w", "mlp_sconv.weight",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_H * 4 * 2);
-        IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_clip_scale", "attn.q_l2_clip.scale",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_Q * 2);
+                                     IFN_INKLING_HIDDEN * 4 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("mlp_sconv_w", "mlp_sconv.weight", IFN_INKLING_HIDDEN * 4 * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_clip_scale", "attn.q_l2_clip.scale", IFN_INKLING_QUERY * 2);
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("rel_clip_scale", "attn.rel_l2_clip.scale", 384 * 2);
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("rel_logits_proj", "attn.rel_logits_proj.proj", 16 * 1024 * 2);
-        if (i >= 6 && i < 18) {
+        if (i >= IFN_INKLING_LOOP_START && i < IFN_INKLING_LOOP_END) {
             const char *stems[] = {"attn", "k", "v", "mlp"};
             for (unsigned j = 0; j < 4; j++) {
                 const char *parts[] = {"down", "forget", "gain"};
@@ -454,8 +440,8 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
                                    stems[j], parts[part]);
                     (void)snprintf(label, sizeof label, "layers.%u.ctrl.%u.%s_%s", i, j,
                                    parts[part], kind == 2 ? "nvfp4" : "w");
-                    unsigned rows = part ? IFN_WEIGHTS_RECIPE_LOCAL_H : 64,
-                             cols = part ? 64 : 2 * IFN_WEIGHTS_RECIPE_LOCAL_H;
+                    unsigned rows = part ? IFN_INKLING_HIDDEN : 64,
+                             cols = part ? 64 : 2 * IFN_INKLING_HIDDEN;
                     if (kind == 2)
                         ifn_weights_recipe_local_staged_linear(w, label, 0, name, rows, cols, 2,
                                                                false);
@@ -465,38 +451,33 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
             }
         }
         if (kind == 2)
-            IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("router_nvfp4", "mlp.gate.weight",
-                                            IFN_WEIGHTS_RECIPE_LOCAL_E, IFN_WEIGHTS_RECIPE_LOCAL_H,
-                                            2);
+            IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("router_nvfp4", "mlp.gate.weight", IFN_INKLING_EXPERTS,
+                                            IFN_INKLING_HIDDEN, 2);
         else
             IFN_WEIGHTS_RECIPE_LOCAL_RAW("router_w", "mlp.gate.weight",
-                                         IFN_WEIGHTS_RECIPE_LOCAL_E * IFN_WEIGHTS_RECIPE_LOCAL_H *
-                                             2);
-        IFN_WEIGHTS_RECIPE_LOCAL_RAW("router_bias", "mlp.gate.bias",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_E * 4);
+                                         IFN_INKLING_EXPERTS * IFN_INKLING_HIDDEN * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("router_bias", "mlp.gate.bias", IFN_INKLING_EXPERTS * 4);
         (void)snprintf(label, sizeof label, "layers.%u.w13", i);
-        ifn_weights_recipe_local_expert(w, label, prefix, "w13", i, IFN_WEIGHTS_RECIPE_LOCAL_H);
+        ifn_weights_recipe_local_expert(w, label, prefix, "w13", i, IFN_INKLING_HIDDEN);
         (void)snprintf(label, sizeof label, "layers.%u.w2", i);
-        ifn_weights_recipe_local_expert(w, label, prefix, "w2", i, IFN_WEIGHTS_RECIPE_LOCAL_I);
+        ifn_weights_recipe_local_expert(w, label, prefix, "w2", i, IFN_INKLING_INTERMEDIATE);
 #undef IFN_WEIGHTS_RECIPE_LOCAL_LINEAR
 #undef IFN_WEIGHTS_RECIPE_LOCAL_RAW
     }
     if (!w->config.with_mtp || w->status != IFN_OK)
         return;
     ifn_weights_recipe_local_fuse(w);
-    ifn_weights_recipe_local_raw(w, "dspark.mask_embed", 1, "mask_embed",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
-    ifn_weights_recipe_local_raw(w, "dspark.norm_w", 1, "norm.weight",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    ifn_weights_recipe_local_raw(w, "dspark.mask_embed", 1, "mask_embed", IFN_INKLING_HIDDEN * 2);
+    ifn_weights_recipe_local_raw(w, "dspark.norm_w", 1, "norm.weight", IFN_INKLING_HIDDEN * 2);
     ifn_weights_recipe_local_raw(w, "dspark.markov_dflare_norm", 1,
-                                 "markov_head.dflare_norm.weight", IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                 "markov_head.dflare_norm.weight", IFN_INKLING_HIDDEN * 2);
     ifn_weights_recipe_local_raw(w, "dspark.markov_w1", 1, "markov_head.markov_w1.weight",
-                                 (size_t)IFN_WEIGHTS_RECIPE_LOCAL_V * 256 * 2);
+                                 (size_t)IFN_INKLING_VOCAB_PADDED * 256 * 2);
     ifn_weights_recipe_local_raw(w, "dspark.rnn_bias", 1, "markov_head.rnn_proj.bias", 768 * 2);
     ifn_weights_recipe_local_raw(w, "dspark.hidden_out_w", 1, "markov_head.hidden_out.weight",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 256 * 2);
+                                 IFN_INKLING_HIDDEN * 256 * 2);
     ifn_weights_recipe_local_raw(w, "dspark.hidden_out_b", 1, "markov_head.hidden_out.bias",
-                                 IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                 IFN_INKLING_HIDDEN * 2);
     ifn_weights_recipe_local_stage(w, 1, "markov_head.rnn_proj.weight", 0, 768 * 5120 * 2, false);
     ifn_weight_view *sp = ifn_weights_recipe_local_view(w, "dspark.rnn_w_sp", 0);
     if (!sp)
@@ -505,13 +486,11 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
     ifn_weight_view *rh = ifn_weights_recipe_local_view(w, "dspark.rnn_w_h", 0);
     if (!rh)
         return;
-    rh->data =
-        ifn_weights_recipe_local_block(w, rh->label, "", 768 * IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    rh->data = ifn_weights_recipe_local_block(w, rh->label, "", 768 * IFN_INKLING_HIDDEN * 2);
     ifn_weight_view *rf = ifn_weights_recipe_local_view(w, "dspark.rnn_w_f", 0);
     if (!rf)
         return;
-    rf->data =
-        ifn_weights_recipe_local_block(w, rf->label, "", 768 * IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+    rf->data = ifn_weights_recipe_local_block(w, rf->label, "", 768 * IFN_INKLING_HIDDEN * 2);
     if (w->execute && w->status == IFN_OK)
         ifn_weight_backend_check(w,
                                  w->backend.rnn(w->backend.context, w->stage,
@@ -520,16 +499,14 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
                                                 ifn_weights_recipe_local_pointer(w, rf->data),
                                                 w->stream),
                                  "split MTP RNN");
-    ifn_weights_recipe_local_stage(
-        w, 0, "model.llm.unembed.weight", 0,
-        (size_t)IFN_WEIGHTS_RECIPE_LOCAL_VU * IFN_WEIGHTS_RECIPE_LOCAL_H * 2, true);
+    ifn_weights_recipe_local_stage(w, 0, "model.llm.unembed.weight", 0,
+                                   (size_t)IFN_INKLING_VOCAB * IFN_INKLING_HIDDEN * 2, true);
     ifn_weights_recipe_local_alias(w, "dspark.unembed_draft",
                                    ifn_weights_recipe_local_named(w, "unembed"));
     ifn_weight_view *bias = ifn_weights_recipe_local_view(w, "dspark.fold_b", 0);
     if (!bias)
         return;
-    bias->data =
-        ifn_weights_recipe_local_block(w, bias->label, "", IFN_WEIGHTS_RECIPE_LOCAL_VU * 4);
+    bias->data = ifn_weights_recipe_local_block(w, bias->label, "", IFN_INKLING_VOCAB * 4);
     if (w->execute && w->status == IFN_OK) {
         ifn_weight_view *hw = ifn_weights_recipe_local_named(w, "dspark.hidden_out_w"),
                         *hb = ifn_weights_recipe_local_named(w, "dspark.hidden_out_b");
@@ -542,9 +519,9 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
                     ifn_weights_recipe_local_pointer(w, bias->data), w->fold_temp, w->stream),
                 "fold MTP Markov head");
     }
-    (void)ifn_weights_recipe_local_linear(w, "dspark.fold_w", IFN_WEIGHTS_RECIPE_LOCAL_VU, 256,
-                                          mtp_kind, w->fold_temp);
-    for (unsigned i = 0; i < 3 && w->status == IFN_OK; i++) {
+    (void)ifn_weights_recipe_local_linear(w, "dspark.fold_w", IFN_INKLING_VOCAB, 256, mtp_kind,
+                                          w->fold_temp);
+    for (unsigned i = 0; i < IFN_INKLING_MTP_LAYERS && w->status == IFN_OK; i++) {
         (void)snprintf(prefix, sizeof prefix, "layers.%u.", i);
 #define IFN_WEIGHTS_RECIPE_LOCAL_RAW(field, suffix, bytes)                                         \
     do {                                                                                           \
@@ -556,7 +533,7 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
     do {                                                                                           \
         (void)snprintf(label, sizeof label, "dspark.layers.%u.%s", i, field);                      \
         ifn_weights_recipe_local_concat(w, label, 1, prefix, parts, rows, count,                   \
-                                        IFN_WEIGHTS_RECIPE_LOCAL_H, mtp_kind);                     \
+                                        IFN_INKLING_HIDDEN, mtp_kind);                             \
     } while (0)
 #define IFN_WEIGHTS_RECIPE_LOCAL_LINEAR(field, suffix, rows, cols)                                 \
     do {                                                                                           \
@@ -565,28 +542,26 @@ void ifn_weights_recipe(ifn_gpu_weights *w) {
         ifn_weights_recipe_local_staged_linear(w, label, 1, name, rows, cols, mtp_kind, false);    \
     } while (0)
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("input_norm", "input_layernorm.weight",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                     IFN_INKLING_HIDDEN * 2);
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("post_norm", "post_attention_layernorm.weight",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
-        IFN_WEIGHTS_RECIPE_LOCAL_RAW("dflare_norm", "dflare_norm.weight",
-                                     IFN_WEIGHTS_RECIPE_LOCAL_H * 2);
+                                     IFN_INKLING_HIDDEN * 2);
+        IFN_WEIGHTS_RECIPE_LOCAL_RAW("dflare_norm", "dflare_norm.weight", IFN_INKLING_HIDDEN * 2);
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("q_norm", "self_attn.q_norm.weight", 128 * 2);
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_norm", "self_attn.k_norm.weight", 128 * 2);
         IFN_WEIGHTS_RECIPE_LOCAL_RAW("k_norm_ctx", "self_attn.k_norm_ctx.weight", 128 * 2);
         const char *qkv[] = {"self_attn.q_proj.weight", "self_attn.k_proj.weight",
                              "self_attn.v_proj.weight"};
-        const unsigned qr[] = {IFN_WEIGHTS_RECIPE_LOCAL_Q, IFN_WEIGHTS_RECIPE_LOCAL_KV,
-                               IFN_WEIGHTS_RECIPE_LOCAL_KV};
+        const unsigned qr[] = {IFN_INKLING_QUERY, IFN_INKLING_KV, IFN_INKLING_KV};
         IFN_WEIGHTS_RECIPE_LOCAL_CONCAT("w_qkv", qkv, qr, 3);
-        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_o", "self_attn.o_proj.weight",
-                                        IFN_WEIGHTS_RECIPE_LOCAL_H, IFN_WEIGHTS_RECIPE_LOCAL_Q);
+        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_o", "self_attn.o_proj.weight", IFN_INKLING_HIDDEN,
+                                        IFN_INKLING_QUERY);
         const char *gu[] = {"mlp.gate_proj.weight", "mlp.up_proj.weight"};
-        const unsigned gr[] = {IFN_WEIGHTS_RECIPE_LOCAL_M, IFN_WEIGHTS_RECIPE_LOCAL_M};
+        const unsigned gr[] = {IFN_INKLING_MTP_INTERMEDIATE, IFN_INKLING_MTP_INTERMEDIATE};
         IFN_WEIGHTS_RECIPE_LOCAL_CONCAT("w_gu", gu, gr, 2);
-        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_down", "mlp.down_proj.weight",
-                                        IFN_WEIGHTS_RECIPE_LOCAL_H, IFN_WEIGHTS_RECIPE_LOCAL_M);
+        IFN_WEIGHTS_RECIPE_LOCAL_LINEAR("w_down", "mlp.down_proj.weight", IFN_INKLING_HIDDEN,
+                                        IFN_INKLING_MTP_INTERMEDIATE);
         const char *kv[] = {"self_attn.k_proj_ctx.weight", "self_attn.v_proj_ctx.weight"};
-        const unsigned kr[] = {IFN_WEIGHTS_RECIPE_LOCAL_KV, IFN_WEIGHTS_RECIPE_LOCAL_KV};
+        const unsigned kr[] = {IFN_INKLING_KV, IFN_INKLING_KV};
         IFN_WEIGHTS_RECIPE_LOCAL_CONCAT("w_kv_ctx", kv, kr, 2);
 #undef IFN_WEIGHTS_RECIPE_LOCAL_RAW
 #undef IFN_WEIGHTS_RECIPE_LOCAL_CONCAT

@@ -4,8 +4,10 @@
  * Compile this instead of a second kernels_prefill object. Original entrypoints
  * remain available to the Zig oracle but are never used by the C session. */
 #include "../../cuda/kernels_prefill.cu"
+#include "geometry_contract.hpp"
 #include "../checked_prefill.h"
 using namespace ifn_cuda;
+#include "prefill_resources.hpp"
 
 static int ifn_checked_prefill_local_blas_status(cublasStatus_t s) {
     return s == CUBLAS_STATUS_SUCCESS ? 0 : 10000 + (int)s;
@@ -31,6 +33,8 @@ static int ifn_checked_prefill_local_blas_status(cublasStatus_t s) {
     } while (0)
 
 extern "C" int ifn_blas_create(void **out, void *stream) {
+    *out = nullptr;
+    IFN_CHECKED_PREFILL_LOCAL_CALL_TRY(ifn_cuda_prepare_prefill_resources());
     cublasHandle_t handle = nullptr;
     cublasStatus_t status = cublasCreate(&handle);
     *out = handle;

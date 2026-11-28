@@ -1,0 +1,17 @@
+{
+  "format_version": 1,
+  "patches": [
+    {
+      "path": "cuda/kernels_common.cuh",
+      "kind": "host-launch-policy",
+      "before": "template <class... KArgs, class... Args>\ninline void ifn_cuda_launch_pdl(void (*kernel)(KArgs...), dim3 grid, int block, cudaStream_t stream, Args&&... args) {\n    cudaLaunchConfig_t cfg = {};\n    cfg.gridDim = grid;\n    cfg.blockDim = dim3(block);\n    cfg.stream = stream;\n    cudaLaunchAttribute attr[1];\n    attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;\n    attr[0].val.programmaticStreamSerializationAllowed = 1;\n    cfg.attrs = attr;\n    cfg.numAttrs = 1;\n    IFN_CUDA_CUDA_CHECK(cudaLaunchKernelEx(&cfg, kernel, static_cast<KArgs>(args)...));\n}\n",
+      "after": "// Host target policy: config/native-platform-adaptations.json.\n#include \"../src/cuda/launch_policy.hpp\"\n"
+    },
+    {
+      "path": "cuda/kernels_prefill.cu",
+      "kind": "host-resource-policy",
+      "before": "    static const cudaError_t attr = cudaFuncSetAttribute(\n        ifn_cuda_p_wgemm_kernel<FMT, MODE, K, TM>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM);\n    (void)attr;",
+      "after": "    // Resource opt-in is checked per context during ifn_blas_create, before capture."
+    }
+  ]
+}

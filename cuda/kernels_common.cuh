@@ -40,19 +40,8 @@ __device__ __forceinline__ void ifn_cuda_pdl_trigger() {
 #endif
 }
 
-template <class... KArgs, class... Args>
-inline void ifn_cuda_launch_pdl(void (*kernel)(KArgs...), dim3 grid, int block, cudaStream_t stream, Args&&... args) {
-    cudaLaunchConfig_t cfg = {};
-    cfg.gridDim = grid;
-    cfg.blockDim = dim3(block);
-    cfg.stream = stream;
-    cudaLaunchAttribute attr[1];
-    attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-    attr[0].val.programmaticStreamSerializationAllowed = 1;
-    cfg.attrs = attr;
-    cfg.numAttrs = 1;
-    IFN_CUDA_CUDA_CHECK(cudaLaunchKernelEx(&cfg, kernel, static_cast<KArgs>(args)...));
-}
+// Host target policy: config/native-platform-adaptations.json.
+#include "../src/cuda/launch_policy.hpp"
 
 __device__ __forceinline__ uint4 ifn_cuda_ld_stream_u4(const void* p) {
     uint4 v;
